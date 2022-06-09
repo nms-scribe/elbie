@@ -1,0 +1,7 @@
+[workspace]
+
+members = [
+  "elbie",
+  "goblin",
+  "rust-term-grid"
+]
