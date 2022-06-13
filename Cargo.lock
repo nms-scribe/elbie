@@ -79,6 +79,7 @@ dependencies = [
 [[package]]
 name = "term_grid"
 version = "0.2.0"
+source = "git+https://github.com/nms-scribe/rust-term-grid.git#bed9784320d5f78fb6bc2fa820d5f920530a0de0"
 dependencies = [
  "unicode-width",
 ]
