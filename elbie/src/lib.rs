@@ -609,6 +609,21 @@ impl Language {
 
     }
 
+    // will eventually be used over add_difference
+    pub fn _build_difference(&mut self, name: &'static str, base_set: &'static str, exclude_sets: &[&'static str]) -> Result<(),LanguageError> {
+      if let Some(_) = self.sets.get(name) {
+        Err(LanguageError::SetAlreadyExists(name))
+      } else {
+        let mut set = self.get_set(base_set)?.clone();
+        for subset in exclude_sets {
+          let subset = self.get_set(subset)?;
+          set = set._difference(subset);
+        }
+        self.sets.insert(name, set);
+        Ok(())
+      }
+    }
+
     pub fn add_intersection(&mut self, name: &'static str, source_a: &'static str, source_b: &'static str) -> Result<(),LanguageError> {
       
       if let Some(_) = self.sets.get(name) {
@@ -624,6 +639,30 @@ impl Language {
 
     }
 
+    pub fn build_intersection(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),LanguageError> {
+      if let Some(_) = self.sets.get(name) {
+        Err(LanguageError::SetAlreadyExists(name))
+      } else {
+        let set = if sets.len() > 0 {
+          let mut set = self.get_set(sets[0])?.clone();
+          for subset in sets.iter().skip(1) {
+            let subset = self.get_set(subset)?;
+            set = set.intersection(subset);
+          }
+          set
+        } else {
+          Bag::new()
+        };
+        if set.is_empty() {
+          Err(LanguageError::SetIsEmpty(name))
+        } else {
+          self.sets.insert(name, set);
+          Ok(())
+        }
+      }
+
+    }
+
     pub fn add_union(&mut self, name: &'static str, source_a: &'static str, source_b: &'static str) -> Result<(),LanguageError> {
       
       if let Some(_) = self.sets.get(name) {
@@ -635,6 +674,22 @@ impl Language {
         self.sets.insert(name,set);
         Ok(())
 
+      }
+
+    }
+
+    // allows building a union out of multiple sets... FUTURE: The 'add' functions will become obsolete and replace with 'build' functions.
+    pub fn build_union(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),LanguageError> {
+      if let Some(_) = self.sets.get(name) {
+        Err(LanguageError::SetAlreadyExists(name))
+      } else {
+        let mut set = Bag::new();
+        for subset in sets {
+          let subset = self.get_set(subset)?;
+          set = set.union(subset);
+        }
+        self.sets.insert(name, set);
+        Ok(())
       }
 
     }
@@ -655,6 +710,7 @@ impl Language {
       }
 
     }
+
 
     fn get_set(&self, set: &'static str) -> Result<&Bag<Rc<Phoneme>>,LanguageError> {
       match self.sets.get(set) {
