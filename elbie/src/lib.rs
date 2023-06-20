@@ -1283,7 +1283,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
       let mut grid = Vec::new();
 
-      let column_count = 2 + if style.start_with_filling() {
+      let column_count = 1 + self.orthographies.len() + if style.start_with_filling() {
         1
       } else { 
         0 
