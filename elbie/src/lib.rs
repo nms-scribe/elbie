@@ -1434,7 +1434,7 @@ enum Command {
     ShowPhonemes(GridStyle),
     ShowSpelling(GridStyle),
     ShowUsage,
-    ProcessLexicon(String)
+    ProcessLexicon(String,usize)
 }
 
 pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<Language<ORTHOGRAPHIES>,LanguageError>) {
@@ -1467,10 +1467,10 @@ pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<
         "--spelling" => Command::ShowSpelling(GridStyle::Pipes),
         "--spelling=latex" => Command::ShowSpelling(GridStyle::LaTeX),
         "--lexicon" => {
-          if let Some(arg) = args.get(2) {
-            Command::ProcessLexicon(arg.to_owned())
+          if let (Some(path),Some(spelling_index)) = (args.get(2),args.get(3)) {
+            Command::ProcessLexicon(path.to_owned(),spelling_index.parse().expect("orthography index must be a number"))
           } else {
-            panic!("Please specify a filename")
+            panic!("Please specify a filename and an orthography index")
           }
         },
         "--help" => Command::ShowUsage,
@@ -1585,12 +1585,26 @@ pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<
                 }
               }
             },
-            Command::ProcessLexicon(path) => {
+            Command::ProcessLexicon(path,ortho_index) => {
+
+              if ortho_index >= language.orthographies.len() {
+                panic!("Language only has {} orthographies.",language.orthographies.len())
+              }
+        
               match language.process_lexicon(path) {
                 Ok(entries) => {
                   // NOTE: I'm *not* sorting the entries before grouping. The user might have some sort of custom sort in the data, however.
                   for entry in entries {
-                    println!("\\subparagraph{{{}}} (\\ipaq{{{}}}) {}",entry.spelling[0],entry.word,entry.definition);
+                    // NOTE: I'm not formatting because there's no easy way to format the different spellings.
+                    let mut line = String::new();
+                    line.push_str(&format!("\\subparagraph{{{}}} (",entry.spelling[ortho_index]));
+                    for i in 0..entry.spelling.len() {
+                      if i != ortho_index {
+                        line.push_str(&format!("\\textsc{{{}}}: {}; ",language.orthographies[i],entry.spelling[i]));
+                      }
+                    }
+                    line.push_str(&format!("\\ipaq{{{}}}) {}",entry.word,entry.definition));
+                    println!("{}",line);
                   }
     
                 },
