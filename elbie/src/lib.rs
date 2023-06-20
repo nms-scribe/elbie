@@ -1603,7 +1603,7 @@ pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<
                         line.push_str(&format!("\\textsc{{{}}}: {}; ",language.orthographies[i],entry.spelling[i]));
                       }
                     }
-                    line.push_str(&format!("\\ipaq{{{}}}) {}",entry.word,entry.definition));
+                    line.push_str(&format!("\\ipa{{{}}}) {}",entry.word,entry.definition));
                     println!("{}",line);
                   }
     
