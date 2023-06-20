@@ -1597,7 +1597,13 @@ pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<
                       c => c
                     }
                   });
+                  let mut category: Option<String> = None;
                   for entry in entries {
+                    if Some(&entry.category) != category.as_ref() {
+                      println!("\\subsection{{{}}}",entry.category);
+                      println!("");
+                      category = Some(entry.category);
+                    }
                     println!("\\subparagraph{{{}}} (\\ipaq{{{}}}) {}",entry.spelling[0],entry.word,entry.definition);
 // \subparagraph{sope} (\ipaq{sˠo̞pˠe̞}) shame
                     
