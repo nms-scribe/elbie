@@ -8,6 +8,7 @@ use std::fmt::Display;
 // 1. allows for multi-line cells
 // 2. removes the ending linefeed.
 // TODO: If this project ever gets published, put in pull requests for the changes to the original github project, or provide a fork.
+// TODO: Better yet, I'd like to come up with one that works better than this. Something more akin to the structure of an HTML table.
 use term_grid::Grid;
 use term_grid::GridOptions;
 use term_grid::Cell;
@@ -349,38 +350,51 @@ impl Display for Phoneme {
 }
 
 
-type SpellingCallback = fn(&Language, &std::rc::Rc<Phoneme>, &mut std::string::String, &mut std::iter::Peekable<std::slice::Iter<std::rc::Rc<Phoneme>>>);
+type SpellingCallback<const ORTHOGRAPHIES: usize> = fn(&Language<ORTHOGRAPHIES>, &std::rc::Rc<Phoneme>, &mut std::string::String, &mut std::iter::Peekable<std::slice::Iter<std::rc::Rc<Phoneme>>>);
 
-enum SpellingBehavior {
+#[derive(Default)]
+pub enum SpellingBehavior<const ORTHOGRAPHIES: usize> {
+  #[default]
+  Default, // default behavior is to spell the phoneme
   Text(&'static str),
-  Callback(SpellingCallback)
+  Callback(SpellingCallback<ORTHOGRAPHIES>)
 }
 
-impl std::fmt::Debug for SpellingBehavior {
+impl<const ORTHOGRAPHIES: usize> std::fmt::Debug for SpellingBehavior<ORTHOGRAPHIES> {
 
   fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(),std::fmt::Error> {
     write!(f,"PhonemeBehavior::")?;
     match self {
-      SpellingBehavior::Text(text) => write!(f,"Text({})",text)?,
-      SpellingBehavior::Callback(_) => write!(f,"Callback(<...>)")?,
+      SpellingBehavior::Default => write!(f,"Default"),
+      SpellingBehavior::Text(text) => write!(f,"Text({})",text),
+      SpellingBehavior::Callback(_) => write!(f,"Callback(<...>)"),
     }
-    Ok(())
 
   }
 }
 
 #[derive(Debug)]
-struct PhonemeBehavior {
-  spelling: SpellingBehavior
+struct PhonemeBehavior<const ORTHOGRAPHIES: usize> {
+  spelling: [SpellingBehavior<ORTHOGRAPHIES>; ORTHOGRAPHIES]
 }
 
-impl PhonemeBehavior {
+impl<const ORTHOGRAPHIES: usize> Default for PhonemeBehavior<ORTHOGRAPHIES> {
 
-  fn new(spelling: SpellingBehavior) -> Self {
+  fn default() -> Self {
+    Self {
+      spelling: [(); ORTHOGRAPHIES].map(|_| SpellingBehavior::default())
+    }
+  }
+}
+
+impl<const ORTHOGRAPHIES: usize> PhonemeBehavior<ORTHOGRAPHIES> {
+
+  fn new(spelling: [SpellingBehavior<ORTHOGRAPHIES>; ORTHOGRAPHIES]) -> Self {
     Self {
       spelling
     }
   }
+
 }
 
 #[derive(Debug)]
@@ -465,6 +479,69 @@ impl Table {
   }
 }
 
+pub enum GridStyle {
+  Plain, // uses spaces to delimit grids
+  Pipes, // uses '|' to delimit cells, no other styling
+  LaTeX, // custom for my own use
+}
+
+impl GridStyle {
+
+  fn show_headers(&self) -> bool {
+    match self {
+      Self::Plain => false,
+      Self::Pipes |
+      Self::LaTeX => true
+    }
+  }
+
+  fn ellide_empty_rows(&self) -> bool {
+    match self {
+      Self::Plain => true,
+      Self::Pipes |
+      Self::LaTeX => false
+    }
+
+  }
+
+  fn get_filling(&self) -> term_grid::Filling {
+    match self {
+      GridStyle::Plain => term_grid::Filling::Spaces(1),
+      GridStyle::Pipes => term_grid::Filling::Text(" │ ".to_string()),
+      GridStyle::LaTeX => term_grid::Filling::Text(" & ".to_string()),
+    }    
+  }
+
+// TODO: If true, then we need to add a dummy "empty" column before the table
+  fn start_with_filling(&self) -> bool {
+    match self {
+      Self::Plain => false,
+      Self::Pipes => true,
+      Self::LaTeX => false
+    }
+  }
+
+// TODO: If true, then we need to add a dummy "empty" column after the table
+  fn end_with_filling(&self) -> bool {
+    match self {
+      Self::Plain => false,
+      Self::Pipes => true,
+      Self::LaTeX => false
+    }
+  }
+
+// TODO: If set, then we need to append this to the last column
+  fn end_delimiter(&self) -> Option<String> {
+    match self {
+      Self::Plain => None,
+      Self::Pipes => None,
+      Self::LaTeX => Some("\\\\".to_string()),
+    }
+
+  }
+
+}
+
 #[derive(Clone)]
 pub enum ValidWordElement {
   Done(usize,&'static str), // environment
@@ -504,20 +581,21 @@ pub type ValidationTraceCallback = dyn Fn(usize, ValidationTraceMessage);
 
 
 #[derive(Debug)]
-pub struct Language {
+pub struct Language<const ORTHOGRAPHIES: usize> {
   name: &'static str, 
   initial_environment: &'static str,
   initial_phoneme_set: &'static str,
   phonemes: HashMap<&'static str,Rc<Phoneme>>,
-  phoneme_behavior: HashMap<Rc<Phoneme>,PhonemeBehavior>,
+  phoneme_behavior: HashMap<Rc<Phoneme>,PhonemeBehavior<ORTHOGRAPHIES>>,
+  orthographies: [&'static str; ORTHOGRAPHIES],
   environments: HashMap<&'static str,Vec<EnvironmentBranch>>,
   sets: HashMap<&'static str,Bag<Rc<Phoneme>>>, // It seems like a hashset would be better, but I can't pick randomly from it without converting to vec anyway.
   tables: Vec<(&'static str,&'static str,Table)> // (caption, set name, table axes)
 }
 
-impl Language {
+impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
-    pub fn new(name: &'static str, initial_phoneme_set: &'static str, initial_environment: &'static str) -> Self {
+    pub fn new(name: &'static str, initial_phoneme_set: &'static str, initial_environment: &'static str, orthographies: [&'static str; ORTHOGRAPHIES]) -> Self {
       let mut sets = HashMap::new();
       sets.insert(PHONEME, Bag::new());
       sets.insert(EMPTY, Bag::new());
@@ -531,6 +609,7 @@ impl Language {
         initial_phoneme_set,
         phonemes,
         phoneme_behavior,
+        orthographies,
         environments,
         sets,
         tables
@@ -545,14 +624,12 @@ impl Language {
       }
     }
 
-    fn add_phoneme_object(&mut self, phoneme: Rc<Phoneme>, classes: &[&'static str], behavior: Option<PhonemeBehavior>) -> Result<Rc<Phoneme>,LanguageError> {
+    fn add_phoneme_object(&mut self, phoneme: Rc<Phoneme>, classes: &[&'static str], behavior: PhonemeBehavior<ORTHOGRAPHIES>) -> Result<Rc<Phoneme>,LanguageError> {
       if let Some(_) = self.phonemes.get(phoneme.name) {
         Err(LanguageError::PhonemeAlreadyExists(phoneme.name))
       } else {
         self.phonemes.insert(phoneme.name, phoneme.clone());
-        if let Some(behavior) = behavior {
-          self.phoneme_behavior.insert(phoneme.clone(), behavior);
-        }
+        self.phoneme_behavior.insert(phoneme.clone(), behavior);
         self.add_phoneme_to_class(PHONEME,phoneme.clone());
         for class in classes {
           self.add_phoneme_to_class(class,phoneme.clone())
@@ -563,33 +640,41 @@ impl Language {
     }
 
     pub fn add_phoneme(&mut self, phoneme: &'static str, classes: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
-      self.add_phoneme_object(Phoneme::new(phoneme),classes,None)
+      self.add_phoneme_object(Phoneme::new(phoneme),classes,PhonemeBehavior::default())
     }
 
-    pub fn add_phoneme_with_spelling(&mut self, phoneme: &'static str, orthography: &'static str, classes: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
-      self.add_phoneme_object(Phoneme::new(phoneme),classes,Some(PhonemeBehavior::new(SpellingBehavior::Text(orthography))))
+    pub fn add_phoneme_with_spelling(&mut self, phoneme: &'static str, orthography: [&'static str; ORTHOGRAPHIES], classes: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
+      let behaviors = orthography.map(|t| SpellingBehavior::Text(t));
+      self.add_phoneme_with_spelling_behavior(phoneme, behaviors, classes)
     }
 
-    pub fn add_phoneme_with_spelling_fn(&mut self, phoneme: &'static str, callback: SpellingCallback, classes: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
-      self.add_phoneme_object(Phoneme::new(phoneme),classes,Some(PhonemeBehavior::new(SpellingBehavior::Callback(callback))))
+    pub fn add_phoneme_with_spelling_fn(&mut self, phoneme: &'static str, callbacks: [SpellingCallback<ORTHOGRAPHIES>; ORTHOGRAPHIES], classes: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
+      let behaviors = callbacks.map(|f| SpellingBehavior::Callback(f));
+      self.add_phoneme_with_spelling_behavior(phoneme, behaviors, classes)
     }
 
-    pub fn spell_phoneme(&self, phoneme: &Rc<Phoneme>, result: &mut String, next: &mut std::iter::Peekable<std::slice::Iter<Rc<Phoneme>>>) {
-      if let Some(behavior) = self.phoneme_behavior.get(phoneme) {
-        match behavior.spelling {
-          SpellingBehavior::Text(text) => result.push_str(text),
-          SpellingBehavior::Callback(callback) => callback(self,phoneme,result,next)
-        }
-      } else {
-        result.push_str(phoneme.name)
+    pub fn add_phoneme_with_spelling_behavior(&mut self, phoneme: &'static str, behaviors: [SpellingBehavior<ORTHOGRAPHIES>; ORTHOGRAPHIES], classes: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
+      self.add_phoneme_object(Phoneme::new(phoneme),classes,PhonemeBehavior::new(behaviors))
+    }
+
+    pub fn spell_phoneme(&self, phoneme: &Rc<Phoneme>, orthography: usize, result: &mut String, next: &mut std::iter::Peekable<std::slice::Iter<Rc<Phoneme>>>) {
+      if orthography >= ORTHOGRAPHIES {
+        panic!("Language only has {} orthographies.",ORTHOGRAPHIES)
       }
+
+      match self.phoneme_behavior.get(phoneme).map(|b| &b.spelling[orthography]) {
+        None | Some(SpellingBehavior::Default) => result.push_str(phoneme.name),
+        Some(SpellingBehavior::Text(text)) => result.push_str(text),
+        Some(SpellingBehavior::Callback(callback)) => callback(self,phoneme,result,next)
+      }
+
     }
 
-    pub fn spell_word(&self, word: &Word) -> String {
+    pub fn spell_word(&self, word: &Word, orthography: usize) -> String {
       let mut result = String::new();
       let mut iter = word.phonemes.iter().peekable();
       while let Some(phoneme) = iter.next() {
-        self.spell_phoneme(phoneme,&mut result,&mut iter)
+        self.spell_phoneme(phoneme,orthography,&mut result,&mut iter)
       }
       result
     }
@@ -1006,21 +1091,14 @@ impl Language {
     }
 
 
-    fn build_grid(&self, master_set: &Bag<Rc<Phoneme>>, axisses: &Vec<Vec<(&'static str,&'static str)>>, fancy: bool, unprinted_phonemes: &mut Bag<Rc<Phoneme>>) -> Result<(Grid,usize),LanguageError> {
+    fn build_grid(&self, master_set: &Bag<Rc<Phoneme>>, axisses: &Vec<Vec<(&'static str,&'static str)>>, style: &GridStyle, unprinted_phonemes: &mut Bag<Rc<Phoneme>>) -> Result<(Grid,usize),LanguageError> {
       // if we have two axises, then the first is the vertical and the second is horizontal.
       // if we have one axis, then it is horizontal.
       // if there are more axes, they create "sub-tables" inside the cell.
 
-      let mut grid = Grid::new(GridOptions {
-        direction: term_grid::Direction::LeftToRight,
-        filling: if fancy {
-          term_grid::Filling::Text(" │ ".to_string())
-        } else {
-          term_grid::Filling::Spaces(1)
-        }
-      });
+      let mut grid = Vec::new();
 
-      if axisses.len() > 0 {
+      let column_count = if axisses.len() > 0 {
           let first_axis = &axisses[0];
           let second_axis = &axisses.get(1); // we might not have a second axis.
           let remaining_axisses = if axisses.len() > 2 {
@@ -1030,12 +1108,17 @@ impl Language {
             vec![]
           };
 
-          let column_count = if let Some(second_axis) = second_axis {
-            if fancy {
+          let column_count = if style.start_with_filling() {
+            grid.push(Cell::from(""));
+            1
+          } else { 
+            0 
+          } + if let Some(second_axis) = second_axis {
+            if style.show_headers() {
               // add column headers including an extra one for the row header column
-              grid.add(Cell::from(String::new()));
+              grid.push(Cell::from(String::new()));
               for column in second_axis.iter() {
-                grid.add(Cell::from(column.0.to_owned()))
+                grid.push(Cell::from(column.0.to_owned()))
               }
 
               second_axis.len() + 1
@@ -1044,15 +1127,32 @@ impl Language {
               second_axis.len()
             }
           } else {
-            if fancy {
+            if style.show_headers() {
               // add column headers including an extra one for the row header column
               for column in first_axis.iter() {
-                grid.add(Cell::from(column.0.to_owned()))
+                grid.push(Cell::from(column.0.to_owned()))
               }
             }
             first_axis.len()
 
+          } + if style.end_with_filling() {
+            grid.push(Cell::from(""));
+            1
+          } else { 
+            0 
           };
+
+          if let Some(filling) = style.end_delimiter() {
+            if let Some(cell) = grid.last_mut() {
+              if let Some(text) = cell.contents.last_mut() {
+                text.push_str(&filling)
+              } else {
+                cell.contents.push(filling)
+              }
+            } else {
+              grid.push(Cell::from(filling))
+            }
+          }
 
           for row_def in first_axis.iter() {
             // get the set of phonemes in the row
@@ -1061,14 +1161,18 @@ impl Language {
             let row = master_set.intersection(row);
 
             // empty rows get ellided if the table is not fancy...
-            if !fancy && row.is_empty() {
+            if style.ellide_empty_rows() && row.is_empty() {
               continue;
             }
 
+            if style.start_with_filling() {
+              grid.push(Cell::from(""))
+            }
+
             if let Some(second_axis) = second_axis {
-              if fancy {
+              if style.show_headers() {
                 // add a row header
-                grid.add(Cell::from(row_def.0.to_owned()));
+                grid.push(Cell::from(row_def.0.to_owned()));
               }
 
               for col_def in second_axis.iter() {
@@ -1080,7 +1184,7 @@ impl Language {
   
                 let cell_str = if remaining_axisses.len() > 0 {
                   // build a tiny grid in the cell and print it to text.
-                  let (cell_grid,columns) = self.build_grid(&column, &remaining_axisses, false, unprinted_phonemes)?;
+                  let (cell_grid,columns) = self.build_grid(&column, &remaining_axisses, &GridStyle::Plain, unprinted_phonemes)?;
                   // TODO: There are still some problems, for example, /m/ isn't pulling to the right. I wonder if I have to fit into width 
                   // instead of columns? However, I can't do that until the whole thing is printed. Another alternative is to align right,
                   // but that won't work for ones that only have voiceless.
@@ -1091,7 +1195,7 @@ impl Language {
                   Self::print_phonemes_once(&column,unprinted_phonemes)
                 };
   
-                grid.add(Cell::from(cell_str))
+                grid.push(Cell::from(cell_str))
               }
   
             } else {
@@ -1099,22 +1203,57 @@ impl Language {
               let column = row;
 
               let cell_str = Self::print_phonemes_once(&column,unprinted_phonemes);
-              grid.add(Cell::from(cell_str))
+              grid.push(Cell::from(cell_str))
             }
+
+            if style.end_with_filling() {
+              grid.push(Cell::from(""))
+            }
+
+            if let Some(filling) = style.end_delimiter() {
+              if let Some(cell) = grid.last_mut() {
+                if let Some(text) = cell.contents.last_mut() {
+                  text.push_str(&filling)
+                } else {
+                  cell.contents.push(filling)
+                }
+              } else {
+                grid.push(Cell::from(filling))
+              }
+            }
+  
+  
+
 
           }
 
-          Ok((grid,column_count))
+          column_count
         
       } else {
         let cell_str = Self::print_phonemes_once(&master_set, unprinted_phonemes);
-        grid.add(Cell::from(cell_str));
-        Ok((grid,1))
-      }
+        if style.start_with_filling() {
+          grid.push(Cell::from(""))
+        }
+
+        grid.push(Cell::from(cell_str));
+
+        if style.end_with_filling() {
+          grid.push(Cell::from(""))
+        }
+
+        grid.len()
+      };
+
+      let grid = Grid::new_with_cells(GridOptions {
+        direction: term_grid::Direction::LeftToRight,
+        filling: style.get_filling()
+      },grid);
+
+      Ok((grid,column_count))
 
     }
 
-    pub fn display_phonemes(&self) -> Result<Vec<(String,Grid,usize)>,LanguageError> {
+    pub fn display_phonemes(&self, style: &GridStyle) -> Result<Vec<(String,Grid,usize)>,LanguageError> {
 
       let mut result = vec![];
 
@@ -1122,7 +1261,7 @@ impl Language {
 
       for (name,set,table) in &self.tables {
 
-        let (grid,column_count) = self.build_grid(self.get_set(set)?, &table.axisses, true, &mut unprinted_phonemes)?;
+        let (grid,column_count) = self.build_grid(self.get_set(set)?, &table.axisses, style, &mut unprinted_phonemes)?;
 
         result.push((name.to_owned().to_string(),grid,column_count));
 
@@ -1130,13 +1269,103 @@ impl Language {
       } 
 
       if !unprinted_phonemes.is_empty() {
-        let (grid, column_count) = self.build_grid(&unprinted_phonemes.clone(), &vec![], false, &mut unprinted_phonemes)?;
+        let (grid, column_count) = self.build_grid(&unprinted_phonemes.clone(), &vec![], &GridStyle::Plain, &mut unprinted_phonemes)?;
         result.push(("uncategorized phonemes".to_owned(),grid,column_count));
       }
 
       Ok(result)
 
     }
+
+    pub fn display_spelling(&self, style: GridStyle) -> Result<(String,Grid,usize),LanguageError> {
+
+      let phonemes: Bag<Rc<Phoneme>> = self.get_set(PHONEME)?.clone();
+
+      let mut grid = Vec::new();
+
+      let column_count = 2 + if style.start_with_filling() {
+        1
+      } else { 
+        0 
+      } + if style.end_with_filling() {
+        1
+      } else { 
+        0 
+      };
+
+      if style.show_headers() {
+
+        if style.start_with_filling() {
+          grid.push(Cell::from(""));
+        }
+
+        grid.push(Cell::from("Phoneme"));
+        for orthography in self.orthographies {
+          grid.push(Cell::from(orthography))
+        }
+  
+        if style.end_with_filling() {
+          grid.push(Cell::from(""));
+        }
+
+        if let Some(filling) = style.end_delimiter() {
+          if let Some(cell) = grid.last_mut() {
+            if let Some(text) = cell.contents.last_mut() {
+              text.push_str(&filling)
+            } else {
+              cell.contents.push(filling)
+            }
+          } else {
+            grid.push(Cell::from(filling))
+          }
+        }
+
+
+
+      }
+
+      
+      for phoneme in phonemes.list() {
+        if style.start_with_filling() {
+          grid.push(Cell::from(""));
+        }
+
+        grid.push(Cell::from(format!("{}",phoneme)));
+        for i in 0..ORTHOGRAPHIES {
+          let mut cell = String::new();
+          self.spell_phoneme(&phoneme, i, &mut cell, &mut [].iter().peekable());
+          grid.push(Cell::from(cell));
+        }
+
+        if style.end_with_filling() {
+          grid.push(Cell::from(""));
+        }
+
+        if let Some(filling) = style.end_delimiter() {
+          if let Some(cell) = grid.last_mut() {
+            if let Some(text) = cell.contents.last_mut() {
+              text.push_str(&filling)
+            } else {
+              cell.contents.push(filling)
+            }
+          } else {
+            grid.push(Cell::from(filling))
+          }
+        }
+
+
+
+      }
+
+      let grid = Grid::new_with_cells(GridOptions {
+        direction: term_grid::Direction::LeftToRight,
+        filling: style.get_filling()
+      },grid);
+
+      Ok(("Orthography".to_owned(),grid,column_count))
+
+    }
+
 }
 
 fn sort_phonemes_by_length_descending(a: &&Rc<Phoneme>, b: &&Rc<Phoneme>)  -> std::cmp::Ordering {
@@ -1160,11 +1389,12 @@ enum ValidateOption {
 enum Command {
     GenerateWords(usize),
     ValidateWords(Vec<String>,ValidateOption), // words to validate, whether to trace
-    ShowPhonemes,
+    ShowPhonemes(GridStyle),
+    ShowSpelling(GridStyle),
     ShowUsage
 }
 
-pub fn run_main(args: Vec<String>, language: Result<Language,LanguageError>) {
+pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<Language<ORTHOGRAPHIES>,LanguageError>) {
   let command = if args.len() > 1 {
     match args[1].as_str() {
         "--generate" => Command::GenerateWords(args.get(2).expect("Generate count required").parse().expect("Argument should be a number")),
@@ -1189,7 +1419,10 @@ pub fn run_main(args: Vec<String>, language: Result<Language,LanguageError>) {
               panic!("No words to validate.")
           }
         },
-        "--phonemes" => Command::ShowPhonemes,
+        "--phonemes" => Command::ShowPhonemes(GridStyle::Pipes),
+        "--phonemes=latex" => Command::ShowPhonemes(GridStyle::LaTeX),
+        "--spelling" => Command::ShowSpelling(GridStyle::Pipes),
+        "--spelling=latex" => Command::ShowSpelling(GridStyle::LaTeX),
         "--help" => Command::ShowUsage,
         _ => panic!("Unknown command {}",args[1])
     }
@@ -1210,7 +1443,9 @@ pub fn run_main(args: Vec<String>, language: Result<Language,LanguageError>) {
               for _ in 0..count {
                     match language.make_word() {
                       Ok(word) => {
-                        grid.add(Cell::from(language.spell_word(&word)));
+                        for orthography in 0..language.orthographies.len() {
+                          grid.add(Cell::from(language.spell_word(&word,orthography)));
+                        }
                         grid.add(Cell::from(&word));
                         // the following is a sanity check. It might catch some logic errors, but really it's just GIGO.
                         if let Err(err) = language.check_word(&word,&|_,_| { /* eat message, no need to report */}) {
@@ -1255,7 +1490,10 @@ pub fn run_main(args: Vec<String>, language: Result<Language,LanguageError>) {
                                       println!("{}",valid)
                                     }                                      
                                   };
-                                  println!("{} {}",language.spell_word(&word),word);
+                                  for orthography in 0..language.orthographies.len() {
+                                    print!("{} ",language.spell_word(&word,orthography));
+                                  }
+                                  println!("{}",word);
                                 }
                             }
                         },
@@ -1269,8 +1507,8 @@ pub fn run_main(args: Vec<String>, language: Result<Language,LanguageError>) {
                   std::process::exit(1);
                 }
             }
-            Command::ShowPhonemes => {
-              match language.display_phonemes() {
+            Command::ShowPhonemes(style) => {
+              match language.display_phonemes(&style) {
                 Ok(grids) => {
                   for grid in grids {
                     println!("{}:",grid.0);
@@ -1284,6 +1522,19 @@ pub fn run_main(args: Vec<String>, language: Result<Language,LanguageError>) {
                 }
               }
             },
+            Command::ShowSpelling(style) => {
+              match language.display_spelling(style) {
+                Ok(grid) => {
+                  println!("{}:",grid.0);
+                  println!("{}",grid.1.fit_into_columns(grid.2));
+                  println!();
+                },
+                Err(err) => {
+                  eprintln!("!!! Couldn't display spelling: {}",err);
+                  std::process::exit(1)
+                }
+              }
+            }
             Command::ShowUsage => {
               println!("usage: {} [command]",language.name);
               println!("default command: --generate 1");
@@ -1298,6 +1549,8 @@ pub fn run_main(args: Vec<String>, language: Result<Language,LanguageError>) {
               println!("      same as --validate, but provides detailed explanation of valid phonemes on success.");
               println!("   --phonemes");
               println!("      prints out the phonemes of the language.");
+              println!("   --spelling");
+              println!("      prints out the orthographies of the language.");
               println!("   --help");
               println!("      display this information.");
             }
