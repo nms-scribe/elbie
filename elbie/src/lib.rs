@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::error::Error;
 use rand::Rng;
 use rand::seq::SliceRandom; 
 use rand::prelude::ThreadRng;
+use csv::Reader;
 use std::fmt::Display;
 // NOTE: The term_grid that is used here is a modified variant of the original that
 // 1. allows for multi-line cells
@@ -76,6 +78,10 @@ impl Display for LanguageError {
     }
 
   }
+}
+
+impl Error for LanguageError {
+
 }
 
 // A set that I can random access. It's more efficient than random access of a HashSet, but probably could be better.
@@ -382,7 +388,7 @@ impl<const ORTHOGRAPHIES: usize> Default for PhonemeBehavior<ORTHOGRAPHIES> {
 
   fn default() -> Self {
     Self {
-      spelling: [(); ORTHOGRAPHIES].map(|_| SpellingBehavior::default())
+      spelling: std::array::from_fn(|_| SpellingBehavior::default())
     }
   }
 }
@@ -578,6 +584,13 @@ impl std::fmt::Display for ValidationTraceMessage<'_> {
 
 
 pub type ValidationTraceCallback = dyn Fn(usize, ValidationTraceMessage);
+
+pub struct LexiconEntry<const ORTHOGRAPHIES: usize> {
+  word: Word,
+  spelling: [String; ORTHOGRAPHIES],
+  category: String,
+  definition: String
+}
 
 
 #[derive(Debug)]
@@ -1366,6 +1379,38 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
+    pub fn process_lexicon(&self, path: String) -> Result<Vec<LexiconEntry<ORTHOGRAPHIES>>,Box<dyn Error>> {
+
+      const WORD_FIELD: usize = 0;
+      const CATEGORY_FIELD: usize = 1;
+      const DEFINITION_FIELD: usize = 2;
+
+
+      let reader = Reader::from_path(path)?;
+
+      let mut result: Vec<LexiconEntry<ORTHOGRAPHIES>> = Vec::new();
+
+      for (row,record) in reader.into_records().enumerate() {
+        let record = record.map_err(|e| format!("Error reading record {}: {}",row,e))?;
+        let word = record.get(WORD_FIELD).ok_or_else(|| format!("No word found at entry {}",row))?;
+        let word = self.read_word(word).map_err(|e| format!("Error parsing word {}: {}",row,e))?;
+        let spelling = std::array::from_fn(|i| self.spell_word(&word, i));
+        let entry: LexiconEntry<ORTHOGRAPHIES> = LexiconEntry {
+          word,
+          spelling,
+          category: record.get(CATEGORY_FIELD).ok_or_else(|| format!("No category found at row {}",row))?.to_owned(),
+          definition: record.get(DEFINITION_FIELD).ok_or_else(|| format!("No category found at row {}",row))?.to_owned(),
+        };
+
+        result.push(entry);
+
+      }
+
+      Ok(result)
+
+
+    }
+
 }
 
 fn sort_phonemes_by_length_descending(a: &&Rc<Phoneme>, b: &&Rc<Phoneme>)  -> std::cmp::Ordering {
@@ -1391,7 +1436,8 @@ enum Command {
     ValidateWords(Vec<String>,ValidateOption), // words to validate, whether to trace
     ShowPhonemes(GridStyle),
     ShowSpelling(GridStyle),
-    ShowUsage
+    ShowUsage,
+    ProcessLexicon(String)
 }
 
 pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<Language<ORTHOGRAPHIES>,LanguageError>) {
@@ -1423,6 +1469,13 @@ pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<
         "--phonemes=latex" => Command::ShowPhonemes(GridStyle::LaTeX),
         "--spelling" => Command::ShowSpelling(GridStyle::Pipes),
         "--spelling=latex" => Command::ShowSpelling(GridStyle::LaTeX),
+        "--lexicon" => {
+          if let Some(arg) = args.get(2) {
+            Command::ProcessLexicon(arg.to_owned())
+          } else {
+            panic!("Please specify a filename")
+          }
+        },
         "--help" => Command::ShowUsage,
         _ => panic!("Unknown command {}",args[1])
     }
@@ -1534,7 +1587,23 @@ pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<
                   std::process::exit(1)
                 }
               }
-            }
+            },
+            Command::ProcessLexicon(path) => {
+              match language.process_lexicon(path) {
+                Ok(entries) => {
+                  for entry in entries {
+                    println!("\\subparagraph{{{}}} (\\ipaq{{{}}}) {}",entry.spelling[0],entry.word,entry.definition);
+// \subparagraph{sope} (\ipaq{sˠo̞pˠe̞}) shame
+                    
+                  }
+    
+                },
+                Err(err) => {
+                  eprintln!("!!! Couldn't process lexicon: {}",err);
+                  std::process::exit(1)
+                }
+              }
+            },
             Command::ShowUsage => {
               println!("usage: {} [command]",language.name);
               println!("default command: --generate 1");
@@ -1551,6 +1620,8 @@ pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<
               println!("      prints out the phonemes of the language.");
               println!("   --spelling");
               println!("      prints out the orthographies of the language.");
+              println!("   --lexicon <path>");
+              println!("      validates lexicon and outputs into a LaTeX file.");
               println!("   --help");
               println!("      display this information.");
             }

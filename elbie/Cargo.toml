@@ -7,4 +7,5 @@ edition = "2021"
 
 [dependencies]
 rand = "0.8.4"
+csv = "1.2.2"
 term_grid = { git = "https://github.com/nms-scribe/rust-term-grid.git" }
