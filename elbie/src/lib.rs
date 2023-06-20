@@ -1600,7 +1600,7 @@ pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<
                     line.push_str(&format!("\\subparagraph{{{}}} (",entry.spelling[ortho_index]));
                     for i in 0..entry.spelling.len() {
                       if i != ortho_index {
-                        line.push_str(&format!("\\textsc{{{}}}: {}; ",language.orthographies[i],entry.spelling[i]));
+                        line.push_str(&format!("\\textit{{{}}}: {}; ",language.orthographies[i],entry.spelling[i]));
                       }
                     }
                     line.push_str(&format!("\\ipa{{{}}}) {}",entry.word,entry.definition));
