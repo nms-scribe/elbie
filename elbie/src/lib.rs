@@ -588,7 +588,6 @@ pub type ValidationTraceCallback = dyn Fn(usize, ValidationTraceMessage);
 pub struct LexiconEntry<const ORTHOGRAPHIES: usize> {
   word: Word,
   spelling: [String; ORTHOGRAPHIES],
-  category: String,
   definition: String
 }
 
@@ -1381,25 +1380,23 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     pub fn process_lexicon(&self, path: String) -> Result<Vec<LexiconEntry<ORTHOGRAPHIES>>,Box<dyn Error>> {
 
-      const WORD_FIELD: usize = 0;
-      const CATEGORY_FIELD: usize = 1;
-      const DEFINITION_FIELD: usize = 2;
 
-
-      let reader = Reader::from_path(path)?;
+      let mut reader = Reader::from_path(path)?;
+      let headers = reader.headers()?;
+      let word_field = headers.iter().position(|a| a.to_lowercase() == "word").ok_or_else(|| format!("No 'word' field found."))?;
+      let definition_field = headers.iter().position(|a| a.to_lowercase() == "definition").ok_or_else(|| format!("No 'definition' field found."))?;
 
       let mut result: Vec<LexiconEntry<ORTHOGRAPHIES>> = Vec::new();
 
       for (row,record) in reader.into_records().enumerate() {
         let record = record.map_err(|e| format!("Error reading record {}: {}",row,e))?;
-        let word = record.get(WORD_FIELD).ok_or_else(|| format!("No word found at entry {}",row))?;
+        let word = record.get(word_field).ok_or_else(|| format!("No word found at entry {}",row))?;
         let word = self.read_word(word).map_err(|e| format!("Error parsing word {}: {}",row,e))?;
         let spelling = std::array::from_fn(|i| self.spell_word(&word, i));
         let entry: LexiconEntry<ORTHOGRAPHIES> = LexiconEntry {
           word,
           spelling,
-          category: record.get(CATEGORY_FIELD).ok_or_else(|| format!("No category found at row {}",row))?.to_owned(),
-          definition: record.get(DEFINITION_FIELD).ok_or_else(|| format!("No category found at row {}",row))?.to_owned(),
+          definition: record.get(definition_field).ok_or_else(|| format!("No category found at row {}",row))?.to_owned(),
         };
 
         result.push(entry);
@@ -1590,23 +1587,10 @@ pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<
             },
             Command::ProcessLexicon(path) => {
               match language.process_lexicon(path) {
-                Ok(mut entries) => {
-                  entries.sort_by(|a,b| {
-                    match a.category.cmp(&b.category) {
-                      std::cmp::Ordering::Equal => a.spelling[0].cmp(&b.spelling[0]),
-                      c => c
-                    }
-                  });
-                  let mut category: Option<String> = None;
+                Ok(entries) => {
+                  // NOTE: I'm *not* sorting the entries before grouping. The user might have some sort of custom sort in the data, however.
                   for entry in entries {
-                    if Some(&entry.category) != category.as_ref() {
-                      println!("\\subsection{{{}}}",entry.category);
-                      println!("");
-                      category = Some(entry.category);
-                    }
                     println!("\\subparagraph{{{}}} (\\ipaq{{{}}}) {}",entry.spelling[0],entry.word,entry.definition);
-// \subparagraph{sope} (\ipaq{sˠo̞pˠe̞}) shame
-                    
                   }
     
                 },
