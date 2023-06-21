@@ -6,14 +6,10 @@ use rand::seq::SliceRandom;
 use rand::prelude::ThreadRng;
 use csv::Reader;
 use std::fmt::Display;
-// NOTE: The term_grid that is used here is a modified variant of the original that
-// 1. allows for multi-line cells
-// 2. removes the ending linefeed.
-// TODO: If this project ever gets published, put in pull requests for the changes to the original github project, or provide a fork.
-// TODO: Better yet, I'd like to come up with one that works better than this. Something more akin to the structure of an HTML table.
-use term_grid::Grid;
-use term_grid::GridOptions;
-use term_grid::Cell;
+
+mod grid;
+use grid::Grid;
+use grid::GridStyle;
 
 /*
 Elbie = LB, Language Builder, and is a bunch of tools for building a constructed language.
@@ -436,13 +432,6 @@ impl Display for Word {
 
 }
 
-impl std::convert::From<&Word> for Cell {
-
-  fn from(word: &Word) -> Self {
-    Cell::from(format!("{}",word))
-  }
-}
-
 // TODO: Is there some way I can do the environments and sets as types? Maybe phonemes, sets and environments are traits instead that you implement in structs. 
 // I could use macros to make those implementations easier to code. Phonemes should really be enumerations. This would require the language to be generic
 // and base itself off of phonemes. --- I think the hardest part is implementing a set that describes which phonemes can be chosen, and then to choose such a 
@@ -483,69 +472,6 @@ impl Table {
       axisses
     }
   }
-}
-
-pub enum GridStyle {
-  Plain, // uses spaces to delimit grids
-  Pipes, // uses '|' to delimit cells, no other styling
-  LaTeX, // custom for my own use
-}
-
-impl GridStyle {
-
-  fn show_headers(&self) -> bool {
-    match self {
-      Self::Plain => false,
-      Self::Pipes |
-      Self::LaTeX => true
-    }
-  }
-
-  fn ellide_empty_rows(&self) -> bool {
-    match self {
-      Self::Plain => true,
-      Self::Pipes |
-      Self::LaTeX => false
-    }
-
-  }
-
-  fn get_filling(&self) -> term_grid::Filling {
-    match self {
-      GridStyle::Plain => term_grid::Filling::Spaces(1),
-      GridStyle::Pipes => term_grid::Filling::Text(" │ ".to_string()),
-      GridStyle::LaTeX => term_grid::Filling::Text(" & ".to_string()),
-    }    
-  }
-
-// TODO: If true, then we need to add a dummy "empty" column before the table
-  fn start_with_filling(&self) -> bool {
-    match self {
-      Self::Plain => false,
-      Self::Pipes => true,
-      Self::LaTeX => false
-    }
-  }
-
-// TODO: If true, then we need to add a dummy "empty" column after the table
-  fn end_with_filling(&self) -> bool {
-    match self {
-      Self::Plain => false,
-      Self::Pipes => true,
-      Self::LaTeX => false
-    }
-  }
-
-// TODO: If set, then we need to append this to the last column
-  fn end_delimiter(&self) -> Option<String> {
-    match self {
-      Self::Plain => None,
-      Self::Pipes => None,
-      Self::LaTeX => Some("\\\\".to_string()),
-    }
-
-  }
-
 }
 
 #[derive(Clone)]
@@ -598,6 +524,8 @@ pub struct Language<const ORTHOGRAPHIES: usize> {
   initial_environment: &'static str,
   initial_phoneme_set: &'static str,
   phonemes: HashMap<&'static str,Rc<Phoneme>>,
+  // These are kept separate from the phoneme structure to reduce some type dependencies.
+  // For example, if this were part of the Phoneme structure, the ORTHOGRAPHIES parameter would be required on almost everything.
   phoneme_behavior: HashMap<Rc<Phoneme>,PhonemeBehavior<ORTHOGRAPHIES>>,
   orthographies: [&'static str; ORTHOGRAPHIES],
   environments: HashMap<&'static str,Vec<EnvironmentBranch>>,
@@ -1103,14 +1031,14 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
     }
 
 
-    fn build_grid(&self, master_set: &Bag<Rc<Phoneme>>, axisses: &Vec<Vec<(&'static str,&'static str)>>, style: &GridStyle, unprinted_phonemes: &mut Bag<Rc<Phoneme>>) -> Result<(Grid,usize),LanguageError> {
+    fn build_grid(&self, master_set: &Bag<Rc<Phoneme>>, axisses: &Vec<Vec<(&'static str,&'static str)>>, style: GridStyle, show_headers: bool, unprinted_phonemes: &mut Bag<Rc<Phoneme>>) -> Result<Grid,LanguageError> {
       // if we have two axises, then the first is the vertical and the second is horizontal.
       // if we have one axis, then it is horizontal.
       // if there are more axes, they create "sub-tables" inside the cell.
 
-      let mut grid = Vec::new();
+      let mut grid = Grid::new(style);
 
-      let column_count = if axisses.len() > 0 {
+      if axisses.len() > 0 {
           let first_axis = &axisses[0];
           let second_axis = &axisses.get(1); // we might not have a second axis.
           let remaining_axisses = if axisses.len() > 2 {
@@ -1120,71 +1048,44 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
             vec![]
           };
 
-          let column_count = if style.start_with_filling() {
-            grid.push(Cell::from(""));
-            1
-          } else { 
-            0 
-          } + if let Some(second_axis) = second_axis {
-            if style.show_headers() {
+          if let Some(second_axis) = second_axis {
+            if show_headers {
               // add column headers including an extra one for the row header column
-              grid.push(Cell::from(String::new()));
+              grid.add_header("");
               for column in second_axis.iter() {
-                grid.push(Cell::from(column.0.to_owned()))
+                grid.add_header(column.0)
               }
 
-              second_axis.len() + 1
-            } else {
-
-              second_axis.len()
-            }
+            } 
           } else {
-            if style.show_headers() {
+            if show_headers {
               // add column headers including an extra one for the row header column
               for column in first_axis.iter() {
-                grid.push(Cell::from(column.0.to_owned()))
+                grid.add_header(column.0)
               }
             }
-            first_axis.len()
 
-          } + if style.end_with_filling() {
-            grid.push(Cell::from(""));
-            1
-          } else { 
-            0 
           };
 
-          if let Some(filling) = style.end_delimiter() {
-            if let Some(cell) = grid.last_mut() {
-              if let Some(text) = cell.contents.last_mut() {
-                text.push_str(&filling)
-              } else {
-                cell.contents.push(filling)
-              }
-            } else {
-              grid.push(Cell::from(filling))
-            }
-          }
-
           for row_def in first_axis.iter() {
+
+            grid.add_row();
+
             // get the set of phonemes in the row
             let row = self.get_set(row_def.1)?;
             // get the intersection of this and the master set.
             let row = master_set.intersection(row);
 
             // empty rows get ellided if the table is not fancy...
-            if style.ellide_empty_rows() && row.is_empty() {
-              continue;
-            }
-
-            if style.start_with_filling() {
-              grid.push(Cell::from(""))
-            }
+            // TODO: An old version needed to do this, but I think the new stuff will automatically ellide if there are no headers.
+            // if style.ellide_empty_rows() && row.is_empty() {
+            //   continue;
+            // }
 
             if let Some(second_axis) = second_axis {
-              if style.show_headers() {
+              if show_headers {
                 // add a row header
-                grid.push(Cell::from(row_def.0.to_owned()));
+                grid.add_cell(row_def.0);
               }
 
               for col_def in second_axis.iter() {
@@ -1196,18 +1097,18 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
   
                 let cell_str = if remaining_axisses.len() > 0 {
                   // build a tiny grid in the cell and print it to text.
-                  let (cell_grid,columns) = self.build_grid(&column, &remaining_axisses, &GridStyle::Plain, unprinted_phonemes)?;
+                  let cell_grid = self.build_grid(&column, &remaining_axisses, GridStyle::Plain, false, unprinted_phonemes)?;
                   // TODO: There are still some problems, for example, /m/ isn't pulling to the right. I wonder if I have to fit into width 
                   // instead of columns? However, I can't do that until the whole thing is printed. Another alternative is to align right,
                   // but that won't work for ones that only have voiceless.
                   // TODO: I think the only real alternative is to have "sub-grids", but that makes the grid way more complicated.
 
-                  format!("{}",cell_grid.fit_into_columns(columns))
+                  format!("{}",cell_grid)
                 } else {
                   Self::print_phonemes_once(&column,unprinted_phonemes)
                 };
   
-                grid.push(Cell::from(cell_str))
+                grid.add_cell(&cell_str)
               }
   
             } else {
@@ -1215,57 +1116,24 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
               let column = row;
 
               let cell_str = Self::print_phonemes_once(&column,unprinted_phonemes);
-              grid.push(Cell::from(cell_str))
+              grid.add_cell(&cell_str)
             }
-
-            if style.end_with_filling() {
-              grid.push(Cell::from(""))
-            }
-
-            if let Some(filling) = style.end_delimiter() {
-              if let Some(cell) = grid.last_mut() {
-                if let Some(text) = cell.contents.last_mut() {
-                  text.push_str(&filling)
-                } else {
-                  cell.contents.push(filling)
-                }
-              } else {
-                grid.push(Cell::from(filling))
-              }
-            }
-  
-  
 
 
           }
 
-          column_count
-        
       } else {
         let cell_str = Self::print_phonemes_once(&master_set, unprinted_phonemes);
-        if style.start_with_filling() {
-          grid.push(Cell::from(""))
-        }
 
-        grid.push(Cell::from(cell_str));
+        grid.add_cell(&cell_str);
 
-        if style.end_with_filling() {
-          grid.push(Cell::from(""))
-        }
-
-        grid.len()
       };
 
-      let grid = Grid::new_with_cells(GridOptions {
-        direction: term_grid::Direction::LeftToRight,
-        filling: style.get_filling()
-      },grid);
-
-      Ok((grid,column_count))
+      Ok(grid)
 
     }
 
-    pub fn display_phonemes(&self, style: &GridStyle) -> Result<Vec<(String,Grid,usize)>,LanguageError> {
+    pub fn display_phonemes(&self, style: GridStyle) -> Result<Vec<(String,Grid)>,LanguageError> {
 
       let mut result = vec![];
 
@@ -1273,108 +1141,50 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
       for (name,set,table) in &self.tables {
 
-        let (grid,column_count) = self.build_grid(self.get_set(set)?, &table.axisses, style, &mut unprinted_phonemes)?;
+        let grid = self.build_grid(self.get_set(set)?, &table.axisses, style.clone(), true, &mut unprinted_phonemes)?;
 
-        result.push((name.to_owned().to_string(),grid,column_count));
+        result.push((name.to_owned().to_string(),grid));
 
 
       } 
 
       if !unprinted_phonemes.is_empty() {
-        let (grid, column_count) = self.build_grid(&unprinted_phonemes.clone(), &vec![], &GridStyle::Plain, &mut unprinted_phonemes)?;
-        result.push(("uncategorized phonemes".to_owned(),grid,column_count));
+        let grid = self.build_grid(&unprinted_phonemes.clone(), &vec![], GridStyle::Plain, false, &mut unprinted_phonemes)?;
+        result.push(("uncategorized phonemes".to_owned(),grid));
       }
 
       Ok(result)
 
     }
 
-    pub fn display_spelling(&self, style: GridStyle) -> Result<(String,Grid,usize),LanguageError> {
+    pub fn display_spelling(&self, style: GridStyle) -> Result<(String,Grid),LanguageError> {
 
       let phonemes: Bag<Rc<Phoneme>> = self.get_set(PHONEME)?.clone();
 
-      let mut grid = Vec::new();
+      let mut grid = Grid::new(style);
 
-      let column_count = 1 + self.orthographies.len() + if style.start_with_filling() {
-        1
-      } else { 
-        0 
-      } + if style.end_with_filling() {
-        1
-      } else { 
-        0 
-      };
-
-      if style.show_headers() {
-
-        if style.start_with_filling() {
-          grid.push(Cell::from(""));
-        }
-
-        grid.push(Cell::from("Phoneme"));
-        for orthography in self.orthographies {
-          grid.push(Cell::from(orthography))
-        }
-  
-        if style.end_with_filling() {
-          grid.push(Cell::from(""));
-        }
-
-        if let Some(filling) = style.end_delimiter() {
-          if let Some(cell) = grid.last_mut() {
-            if let Some(text) = cell.contents.last_mut() {
-              text.push_str(&filling)
-            } else {
-              cell.contents.push(filling)
-            }
-          } else {
-            grid.push(Cell::from(filling))
-          }
-        }
-
-
-
+      grid.add_header("Phoneme");
+      for orthography in self.orthographies {
+        grid.add_header(orthography)
       }
+  
 
       
       for phoneme in phonemes.list() {
-        if style.start_with_filling() {
-          grid.push(Cell::from(""));
-        }
 
-        grid.push(Cell::from(format!("{}",phoneme)));
+        grid.add_row();
+
+        grid.add_cell(&format!("{}",phoneme));
         for i in 0..ORTHOGRAPHIES {
           let mut cell = String::new();
           self.spell_phoneme(&phoneme, i, &mut cell, &mut [].iter().peekable());
-          grid.push(Cell::from(cell));
+          grid.add_cell(&cell);
         }
-
-        if style.end_with_filling() {
-          grid.push(Cell::from(""));
-        }
-
-        if let Some(filling) = style.end_delimiter() {
-          if let Some(cell) = grid.last_mut() {
-            if let Some(text) = cell.contents.last_mut() {
-              text.push_str(&filling)
-            } else {
-              cell.contents.push(filling)
-            }
-          } else {
-            grid.push(Cell::from(filling))
-          }
-        }
-
 
 
       }
 
-      let grid = Grid::new_with_cells(GridOptions {
-        direction: term_grid::Direction::LeftToRight,
-        filling: style.get_filling()
-      },grid);
-
-      Ok(("Orthography".to_owned(),grid,column_count))
+      Ok(("Orthography".to_owned(),grid))
 
     }
 
@@ -1462,10 +1272,10 @@ pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<
               panic!("No words to validate.")
           }
         },
-        "--phonemes" => Command::ShowPhonemes(GridStyle::Pipes),
-        "--phonemes=latex" => Command::ShowPhonemes(GridStyle::LaTeX),
-        "--spelling" => Command::ShowSpelling(GridStyle::Pipes),
-        "--spelling=latex" => Command::ShowSpelling(GridStyle::LaTeX),
+        "--phonemes" => Command::ShowPhonemes(GridStyle::Terminal),
+        // TODO: "--phonemes=latex" => Command::ShowPhonemes(GridStyle::LaTeX),
+        "--spelling" => Command::ShowSpelling(GridStyle::Terminal),
+        // TODO: "--spelling=latex" => Command::ShowSpelling(GridStyle::LaTeX),
         "--lexicon" => {
           if let (Some(path),Some(spelling_index)) = (args.get(2),args.get(3)) {
             Command::ProcessLexicon(path.to_owned(),spelling_index.parse().expect("orthography index must be a number"))
@@ -1485,18 +1295,15 @@ pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<
     
         match command {
             Command::GenerateWords(count) => {
-              let mut grid = Grid::new(GridOptions {
-                direction: term_grid::Direction::LeftToRight,
-                filling: term_grid::Filling::Spaces(1)
-              });
+              let mut grid = Grid::new(GridStyle::Plain);
 
               for _ in 0..count {
                     match language.make_word() {
                       Ok(word) => {
                         for orthography in 0..language.orthographies.len() {
-                          grid.add(Cell::from(language.spell_word(&word,orthography)));
+                          grid.add_cell(&language.spell_word(&word,orthography));
                         }
-                        grid.add(Cell::from(&word));
+                        grid.add_cell(&format!("{}",word));
                         // the following is a sanity check. It might catch some logic errors, but really it's just GIGO.
                         if let Err(err) = language.check_word(&word,&|_,_| { /* eat message, no need to report */}) {
                           println!("-- !!!! invalid word: {}",err);
@@ -1509,7 +1316,7 @@ pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<
                       }
                     }
                 }
-                println!("{}",grid.fit_into_columns(2));
+                print!("{}",grid);
           
             },
             Command::ValidateWords(words,option) => {
@@ -1558,12 +1365,11 @@ pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<
                 }
             }
             Command::ShowPhonemes(style) => {
-              match language.display_phonemes(&style) {
+              match language.display_phonemes(style) {
                 Ok(grids) => {
                   for grid in grids {
                     println!("{}:",grid.0);
-                    println!("{}",grid.1.fit_into_columns(grid.2));
-                    println!();
+                    println!("{}",grid.1);
                   }
                 },
                 Err(err) => {
@@ -1576,8 +1382,7 @@ pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<
               match language.display_spelling(style) {
                 Ok(grid) => {
                   println!("{}:",grid.0);
-                  println!("{}",grid.1.fit_into_columns(grid.2));
-                  println!();
+                  println!("{}",grid.1);
                 },
                 Err(err) => {
                   eprintln!("!!! Couldn't display spelling: {}",err);

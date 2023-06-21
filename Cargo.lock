@@ -34,8 +34,9 @@ name = "elbie"
 version = "0.1.0"
 dependencies = [
  "csv",
+ "pad",
  "rand",
- "term_grid",
+ "unicode-width",
 ]
 
 [[package]]
@@ -73,6 +74,15 @@ name = "memchr"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
+
+[[package]]
+name = "pad"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2ad9b889f1b12e0b9ee24db044b5129150d5eada288edc800f789928dc8c0e3"
+dependencies = [
+ "unicode-width",
+]
 
 [[package]]
 name = "ppv-lite86"
@@ -121,14 +131,6 @@ name = "serde"
 version = "1.0.164"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e8c8cf938e98f769bc164923b06dce91cea1751522f46f8466461af04c9027d"
-
-[[package]]
-name = "term_grid"
-version = "0.2.0"
-source = "git+https://github.com/nms-scribe/rust-term-grid.git#8332008873bb99cac6b6ef492587748edd158ce6"
-dependencies = [
- "unicode-width",
-]
 
 [[package]]
 name = "unicode-width"
