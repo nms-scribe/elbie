@@ -365,7 +365,7 @@ fn create_goblin_language() -> Result<Language<1>,LanguageError> {
     ])
   ])?;
 
-  language.add_table("CONSONANTS (unvoiced ~ voiced / unaspirated ~ aspirated)", CONSONANT, 
+  language.add_table("Consonants (unvoiced ~ voiced / unaspirated ~ aspirated)", CONSONANT, 
     &[
       &[
         ("Nasal",NASAL),("Plosive",PLOSIVE),("Fricative",FRICATIVE),("Reversed Affricate",REV_AFFRICATE),
@@ -375,17 +375,17 @@ fn create_goblin_language() -> Result<Language<1>,LanguageError> {
       &[("",UNASPIRATED),("",ASPIRATED)],
       &[("",UNVOICED),("",VOICED)]])?;
 
-  language.add_table("VOWELS",VOWEL, &[&[("Close",CLOSE),("Near-close",NEARCLOSE),("Close-mid",EMPTY),
+  language.add_table("Vowels",VOWEL, &[&[("Close",CLOSE),("Near-close",NEARCLOSE),("Close-mid",EMPTY),
                                           ("Mid",EMPTY),("Open-mid",OPENMID),("Near-open",EMPTY),("Open",OPEN)],
                               &[("Front",FRONT),("Central",EMPTY),("Back",BACK)]])?;
 
-  language.add_table("DIPHTHONGS",DIPHTHONG, &[])?;
+  language.add_table("Diphthongs",DIPHTHONG, &[])?;
 
   Ok(language)
 
 }
 
 fn main() {
-  run_main(std::env::args().collect(),create_goblin_language());
+  run_main(&mut std::env::args(),create_goblin_language());
 }
 

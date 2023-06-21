@@ -16,6 +16,14 @@ Elbie = LB, Language Builder, and is a bunch of tools for building a constructed
 */
 
 /*
+TODO: Test the current changes with Old Elven.
+TODO: If those work, then start "embedding" actual tables in cells. Then I can figure out a number of actual columns for a column, 
+and rows for row instead of using line breaks, and possibly get colspan and rowspan to work, (is there some way I can do that in LaTeX? 
+  I might be able to do it, and then adjust the borders manually, that only messes up if we change the tables themselves)
+-- At that point the 'plain' table style stays, but we get Embedded versions of the other styles instead.
+*/
+
+/*
 FUTURE: Implementing syllable breaks, stress, etc: (relatively simple)
 - replace phoneme sequences with WordElement enum, where phoneme is only one element.
 - Append new items to branch choices which allow adding these indicators to the word
@@ -1004,7 +1012,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
         Ok(Word::new(&word))
     }
 
-    fn print_phonemes_once(bag: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Bag<Rc<Phoneme>>) -> String {
+    fn print_phonemes_once(bag: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Bag<Rc<Phoneme>>, grid_style: &GridStyle) -> String {
       let mut result = String::new();
       if !bag.is_empty() {
         let mut phonemes: Vec<Rc<Phoneme>> = bag.list();
@@ -1014,9 +1022,9 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
             result.push_str(" ")
           } 
           if unprinted_phonemes.contains(&value) {
-            result.push_str(&format!("{}",value));
+            result.push_str(&grid_style.get_phoneme_text(format!("{}",value)));
           } else {
-            result.push_str(&format!("⚠{}",value)); // FUTURE: Should I report an error?
+            result.push_str(&grid_style.get_phoneme_text(format!("⚠{}",value))); // FUTURE: Should I report an error?
           }
           unprinted_phonemes.remove(&value);
         };
@@ -1024,7 +1032,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
       // TODO: This is a hack, until I can figure out how to align the sub-grids in the grid thing.
       // This really only works if the user is putting out one phoneme per cell.
       if result.is_empty() {
-        result.push_str("   ");
+        result.push_str(&grid_style.get_empty_cell());
       }
       result
 
@@ -1036,7 +1044,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
       // if we have one axis, then it is horizontal.
       // if there are more axes, they create "sub-tables" inside the cell.
 
-      let mut grid = Grid::new(style);
+      let mut grid = Grid::new(style.clone());
 
       if axisses.len() > 0 {
           let first_axis = &axisses[0];
@@ -1085,7 +1093,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
             if let Some(second_axis) = second_axis {
               if show_headers {
                 // add a row header
-                grid.add_cell(row_def.0);
+                grid.add_row_header(row_def.0);
               }
 
               for col_def in second_axis.iter() {
@@ -1097,7 +1105,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
   
                 let cell_str = if remaining_axisses.len() > 0 {
                   // build a tiny grid in the cell and print it to text.
-                  let cell_grid = self.build_grid(&column, &remaining_axisses, GridStyle::Plain, false, unprinted_phonemes)?;
+                  let cell_grid = self.build_grid(&column, &remaining_axisses, style.get_plain(), false, unprinted_phonemes)?;
                   // TODO: There are still some problems, for example, /m/ isn't pulling to the right. I wonder if I have to fit into width 
                   // instead of columns? However, I can't do that until the whole thing is printed. Another alternative is to align right,
                   // but that won't work for ones that only have voiceless.
@@ -1105,7 +1113,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
                   format!("{}",cell_grid)
                 } else {
-                  Self::print_phonemes_once(&column,unprinted_phonemes)
+                  Self::print_phonemes_once(&column,unprinted_phonemes, &style.get_plain())
                 };
   
                 grid.add_cell(&cell_str)
@@ -1115,7 +1123,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
               // the rows are actually columns
               let column = row;
 
-              let cell_str = Self::print_phonemes_once(&column,unprinted_phonemes);
+              let cell_str = Self::print_phonemes_once(&column,unprinted_phonemes, &style.get_plain());
               grid.add_cell(&cell_str)
             }
 
@@ -1123,7 +1131,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
           }
 
       } else {
-        let cell_str = Self::print_phonemes_once(&master_set, unprinted_phonemes);
+        let cell_str = Self::print_phonemes_once(&master_set, unprinted_phonemes, &style.get_plain());
 
         grid.add_cell(&cell_str);
 
@@ -1133,7 +1141,9 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
-    pub fn display_phonemes(&self, style: GridStyle) -> Result<Vec<(String,Grid)>,LanguageError> {
+    pub fn display_phonemes(&self, preferred_table: &Option<String>, style: GridStyle) -> Result<Vec<(String,Grid)>,LanguageError> {
+
+      let preferred_table = preferred_table.as_ref().map(|a| a.to_lowercase());
 
       let mut result = vec![];
 
@@ -1143,14 +1153,32 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
         let grid = self.build_grid(self.get_set(set)?, &table.axisses, style.clone(), true, &mut unprinted_phonemes)?;
 
+        // we have to 'continue' here, as otherwise the "uncategorized phonemes" will show all of the other phonemes.
+        if let Some(preferred_table) = &preferred_table {
+          if (&name.to_lowercase() != preferred_table) && (&set.to_lowercase() != preferred_table) {
+            continue;
+          }
+        }
+
         result.push((name.to_owned().to_string(),grid));
 
 
       } 
 
-      if !unprinted_phonemes.is_empty() {
-        let grid = self.build_grid(&unprinted_phonemes.clone(), &vec![], GridStyle::Plain, false, &mut unprinted_phonemes)?;
+      if !unprinted_phonemes.is_empty() && (if let Some(preferred_table) = &preferred_table {
+          if ("uncategorized" != preferred_table) && ("uncategorized phonemes" != preferred_table) {
+            true
+          } else {
+            false
+          }
+        } else {
+          true
+        }) {
+
+        let grid = self.build_grid(&unprinted_phonemes.clone(), &vec![], style.get_plain(), false, &mut unprinted_phonemes)?;
         result.push(("uncategorized phonemes".to_owned(),grid));
+  
+
       }
 
       Ok(result)
@@ -1241,63 +1269,88 @@ enum ValidateOption {
 enum Command {
     GenerateWords(usize),
     ValidateWords(Vec<String>,ValidateOption), // words to validate, whether to trace
-    ShowPhonemes(GridStyle),
-    ShowSpelling(GridStyle),
+    ShowPhonemes(Option<String>),
+    ShowSpelling,
     ShowUsage,
     ProcessLexicon(String,usize)
 }
 
-pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<Language<ORTHOGRAPHIES>,LanguageError>) {
-  let command = if args.len() > 1 {
-    match args[1].as_str() {
-        "--generate" => Command::GenerateWords(args.get(2).expect("Generate count required").parse().expect("Argument should be a number")),
-        "--validate" => {
-            if args.len() > 2 {
-                Command::ValidateWords(args.iter().skip(2).map(|x| x.to_string()).collect(),ValidateOption::Simple)
-            } else {
-                panic!("No words to validate.")
-            }
-        },
-        "--validate=explain" => {
-          if args.len() > 2 {
-              Command::ValidateWords(args.iter().skip(2).map(|x| x.to_string()).collect(),ValidateOption::Explain)
-          } else {
-              panic!("No words to validate.")
-          }
-        },
-        "--validate=trace" => {
-          if args.len() > 2 {
-              Command::ValidateWords(args.iter().skip(2).map(|x| x.to_string()).collect(),ValidateOption::Trace)
-          } else {
-              panic!("No words to validate.")
-          }
-        },
-        "--phonemes" => Command::ShowPhonemes(GridStyle::Terminal),
-        // TODO: "--phonemes=latex" => Command::ShowPhonemes(GridStyle::LaTeX),
-        "--spelling" => Command::ShowSpelling(GridStyle::Terminal),
-        // TODO: "--spelling=latex" => Command::ShowSpelling(GridStyle::LaTeX),
-        "--lexicon" => {
-          if let (Some(path),Some(spelling_index)) = (args.get(2),args.get(3)) {
-            Command::ProcessLexicon(path.to_owned(),spelling_index.parse().expect("orthography index must be a number"))
-          } else {
-            panic!("Please specify a filename and an orthography index")
-          }
-        },
-        "--help" => Command::ShowUsage,
-        _ => panic!("Unknown command {}",args[1])
+fn parse_args<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Args) -> (Option<GridStyle>,Command) {
+  let mut command = None;
+  let mut grid_style = None;
+
+  macro_rules! set_grid_style {
+      ($style: expr) => {
+        if grid_style.is_some() {
+          panic!("Too many grid styles");
+        } else {
+          grid_style = Some($style);
+        }          
+      };
+  }
+
+  macro_rules! set_command {
+      ($command: expr) => {
+        if command.is_some() {
+          panic!("Too many commands");
+        } else {
+          command = Some($command);
+        }          
+      };
+  }
+
+  while let Some(arg) = args.next() {
+    match arg.as_ref() {
+      "--grid=plain" => set_grid_style!(GridStyle::Plain),
+      "--grid=terminal" => set_grid_style!(GridStyle::Terminal),
+      "--grid=markdown" => set_grid_style!(GridStyle::Markdown),
+      "--grid=latex" => set_grid_style!(GridStyle::LaTeX),
+      "--generate" => set_command!(Command::GenerateWords(args.next().expect("Generate count required").as_ref().parse().expect("Argument should be a number"))),
+      "--validate" => {
+        let mut words = vec![args.next().expect("No words to validate").as_ref().to_owned()];
+        words.extend(args.map(|x| x.as_ref().to_owned()));
+        set_command!(Command::ValidateWords(words,ValidateOption::Simple));
+      },
+      "--validate=explain" => {
+        let mut words = vec![args.next().expect("No words to validate").as_ref().to_owned()];
+        words.extend(args.map(|x| x.as_ref().to_owned()));
+        set_command!(Command::ValidateWords(words,ValidateOption::Explain));
+      },
+      "--validate=trace" => {
+        let mut words = vec![args.next().expect("No words to validate").as_ref().to_owned()];
+        words.extend(args.map(|x| x.as_ref().to_owned()));
+        set_command!(Command::ValidateWords(words,ValidateOption::Trace));
+      },
+      "--phonemes" => set_command!(Command::ShowPhonemes(None)),
+      a if a.starts_with("--phonemes=") => set_command!(Command::ShowPhonemes(Some(a.trim_start_matches("--phonemes=").to_owned()))),
+      "--spelling" => set_command!(Command::ShowSpelling),
+      "--lexicon" => {
+        let path = args.next().expect("No lexicon filename given").as_ref().to_owned();
+        let spelling_index = args.next().expect("No orthography index given").as_ref().parse().expect("orthography index must be a number");
+        set_command!(Command::ProcessLexicon(path,spelling_index))
+      },
+      "--help" => set_command!(Command::ShowUsage),
+      _ => panic!("Unknown command {}",arg.as_ref())
+
     }
-  } else {
-    Command::GenerateWords(1)
-  };
+  }
+
+  (grid_style,command.unwrap_or_else(|| Command::GenerateWords(1)))
+
+}
+
+pub fn run_main<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHOGRAPHIES: usize>(args: &mut Args, language: Result<Language<ORTHOGRAPHIES>,LanguageError>) {
+  let (grid_style,command) = parse_args(&mut args.skip(1));
   
   match language {
       Ok(language) => {
     
         match command {
             Command::GenerateWords(count) => {
-              let mut grid = Grid::new(GridStyle::Plain);
+              let mut grid = Grid::new(grid_style.unwrap_or_else(|| GridStyle::Plain));
 
               for _ in 0..count {
+                    grid.add_row();
                     match language.make_word() {
                       Ok(word) => {
                         for orthography in 0..language.orthographies.len() {
@@ -1364,11 +1417,18 @@ pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<
                   std::process::exit(1);
                 }
             }
-            Command::ShowPhonemes(style) => {
-              match language.display_phonemes(style) {
+            Command::ShowPhonemes(table) => {
+              match language.display_phonemes(&table,grid_style.unwrap_or_else(|| GridStyle::Terminal)) {
                 Ok(grids) => {
+                  if let Some(table) = &table { 
+                    if grids.is_empty() {
+                      println!("No phoneme table named {}. Try singular?",table);
+                    }
+                  }
                   for grid in grids {
-                    println!("{}:",grid.0);
+                    if table.is_none() {
+                      println!("{}:",grid.0);
+                    }
                     println!("{}",grid.1);
                   }
                 },
@@ -1378,8 +1438,8 @@ pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<
                 }
               }
             },
-            Command::ShowSpelling(style) => {
-              match language.display_spelling(style) {
+            Command::ShowSpelling => {
+              match language.display_spelling(grid_style.unwrap_or_else(|| GridStyle::Terminal)) {
                 Ok(grid) => {
                   println!("{}:",grid.0);
                   println!("{}",grid.1);
@@ -1420,8 +1480,11 @@ pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<
               }
             },
             Command::ShowUsage => {
-              println!("usage: {} [command]",language.name);
+              println!("usage: {} [options] <command>",language.name);
               println!("default command: --generate 1");
+              println!("options:");
+              println!("   --grid=<plain | terminal | markdown>");
+              println!("      changes the format of grid output. Default is \"plain\" for generate and \"terminal\" for phonemes and spelling.");
               println!("commands:");
               println!("   --generate <integer>");
               println!("      generates the specified number of words.");
@@ -1433,6 +1496,8 @@ pub fn run_main<const ORTHOGRAPHIES: usize>(args: Vec<String>, language: Result<
               println!("      same as --validate, but provides detailed explanation of valid phonemes on success.");
               println!("   --phonemes");
               println!("      prints out the phonemes of the language.");
+              println!("   --phonemes=<table>");
+              println!("      prints out one table of phonemes of the language.");
               println!("   --spelling");
               println!("      prints out the orthographies of the language.");
               println!("   --lexicon <path>");
