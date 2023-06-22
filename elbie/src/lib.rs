@@ -16,13 +16,12 @@ Elbie = LB, Language Builder, and is a bunch of tools for building a constructed
 */
 
 /*
-TODO: I think the easiest way to get the tables to work is to restrict them, as much as I'd love to have more than 4 axisses, I feel like that would be a really tough language (even though it might work in some alien culture). So, change the axises to enums instead of vectors. This allows me to *know* that
-something is going to be colspan or rowspan when outputting the headers.
-TODO: If those work, then start "embedding" actual tables in cells. Then I can figure out a number of actual columns for a column, 
-and rows for row instead of using line breaks, and possibly get colspan and rowspan to work, (is there some way I can do that in LaTeX? 
-  I might be able to do it, and then adjust the borders manually, that only messes up if we change the tables themselves)
--- At that point the 'plain' table style stays, but we get Embedded versions of the other styles instead.
-TODO: I can then include captions for the extra axises in that as well.
+TODO: Okay, test the changes with Old Elven again to make sure they work.
+TODO: Work on the 'get_text' issue, caching the result so we don't calculate it twice.
+TODO: Then, make sure it works correctly with Markdown
+TODO: Then, get the colspan and rowspan stuff to work with the latex mode.
+TODO: Then, test on Old Elven again.
+TODO: Then, finally, work on an HTML version.
 */
 
 /*
@@ -478,11 +477,11 @@ The good news is that this doesn't limit the language if the user wants somethin
 */
 #[derive(Debug)]
 enum Table {
-  ZeroAxes,
-  OneAxis(TableAxis),
-  TwoAxes(TableAxis,TableAxis),
-  ThreeAxes(TableAxis,TableAxis,TableAxis),
-  FourAxes(TableAxis,TableAxis,TableAxis,TableAxis)
+  NotATable,
+  ColumnsOnly(TableAxis),
+  ColumnsAndRows(TableAxis,TableAxis),
+  ColumnsSubcolumnsAndRows(TableAxis,TableAxis,TableAxis),
+  ColumnsSubcolumnsRowsAndSubrows(TableAxis,TableAxis,TableAxis,TableAxis)
 }
 
 impl Table {
@@ -496,47 +495,55 @@ impl Table {
     }
 
     match axisses.len() {
-        0 => Self::ZeroAxes,
-        1 => Self::OneAxis(axis!(0)),
-        2 => Self::TwoAxes(axis!(0),axis!(1)),
-        3 => Self::ThreeAxes(axis!(0),axis!(1),axis!(2)),
-        4 => Self::FourAxes(axis!(0),axis!(1),axis!(2),axis!(3)),
+        0 => Self::NotATable,
+        1 => Self::ColumnsOnly(axis!(0)),
+        2 => Self::ColumnsAndRows(axis!(0),axis!(1)),
+        3 => Self::ColumnsSubcolumnsAndRows(axis!(0),axis!(1),axis!(2)),
+        4 => Self::ColumnsSubcolumnsRowsAndSubrows(axis!(0),axis!(1),axis!(2),axis!(3)),
         _ => panic!("Tables can only have from 1 to 4 axisses.")
     }
   }
 
 
-  fn first(&self) -> Option<&TableAxis> {
+  fn columns(&self) -> Option<&TableAxis> {
     match self {
-      Self::ZeroAxes => None,
-      Self::OneAxis(a) => Some(a),
-      Self::TwoAxes(a, _) => Some(a),
-      Self::ThreeAxes(a, _, _) => Some(a),
-      Self::FourAxes(a, _, _, _) => Some(a),
+      Self::NotATable => None,
+      Self::ColumnsOnly(a) => Some(a),
+      Self::ColumnsAndRows(a, _) => Some(a),
+      Self::ColumnsSubcolumnsAndRows(a, _, _) => Some(a),
+      Self::ColumnsSubcolumnsRowsAndSubrows(a, _, _, _) => Some(a),
     }
   }
 
-  fn second(&self) -> Option<&TableAxis> {
+  fn rows(&self) -> Option<&TableAxis> {
     match self {
-      Self::ZeroAxes => None,
-      Self::OneAxis(_) => None,
-      Self::TwoAxes(_, a) => Some(a),
-      Self::ThreeAxes(_, a, _) => Some(a),
-      Self::FourAxes(_, a, _, _) => Some(a),
+      Self::NotATable => None,
+      Self::ColumnsOnly(_) => None,
+      Self::ColumnsAndRows(_, a) => Some(a),
+      Self::ColumnsSubcolumnsAndRows(_, a, _) => Some(a),
+      Self::ColumnsSubcolumnsRowsAndSubrows(_, a, _, _) => Some(a),
     }
   }
 
-  fn clone_remaining(&self) -> Self {
+  fn subcolumns(&self) -> Option<&TableAxis> {
     match self {
-      Self::ZeroAxes => Self::ZeroAxes,
-      Self::OneAxis(_) => Self::ZeroAxes,
-      Self::TwoAxes(_, _) => Self::ZeroAxes,
-      Self::ThreeAxes(_, _, a) => Self::OneAxis(a.to_vec()),
-      Self::FourAxes(_, _, a, b) => Self::TwoAxes(a.to_vec(), b.to_vec()),
+      Self::NotATable => None,
+      Self::ColumnsOnly(_) => None,
+      Self::ColumnsAndRows(_, _) => None,
+      Self::ColumnsSubcolumnsAndRows(_, _, a) => Some(a),
+      Self::ColumnsSubcolumnsRowsAndSubrows(_, _, a, _) => Some(a),
     }
   }
 
-
+  fn subrows(&self) -> Option<&TableAxis> {
+    match self {
+      Self::NotATable => None,
+      Self::ColumnsOnly(_) => None,
+      Self::ColumnsAndRows(_, _) => None,
+      Self::ColumnsSubcolumnsAndRows(_, _, _) => None,
+      Self::ColumnsSubcolumnsRowsAndSubrows(_, _, _, a) => Some(a),
+    }
+  }
 
 
 }
@@ -1099,52 +1106,33 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
 
     fn build_grid(&self, master_set: &Bag<Rc<Phoneme>>, axisses: &Table, style: GridStyle, show_headers: bool, unprinted_phonemes: &mut Bag<Rc<Phoneme>>) -> Result<Grid,LanguageError> {
-      // if there is one axis, it has to be horizontal, because that's often what the third axis needs to be if there are three.
-      // So therefore, the first axis should be horizontal, and the second vertical.
-      // If there are more than two axisses, they create "sub-tables" inside the cell, in plain text, with the third being first and the fourth being second.
-      // If there are no axes, then the phonemes are just listed horizontally.
-      // If you want to do a vertical table with just one column, you need to set a first axis that contains only one set.
+      // If there are no columns or rows, then the phonemes are just listed horizontally.
+      // If you want to do a vertical table with just one column, you need to set columns that contains only one set.
 
       let mut grid = Grid::new(style.clone());
 
-      if let Some(first_axis) = axisses.first() {
+      if let Some(columns) = axisses.columns() {
 
-        macro_rules! build_row {
-            ($row_set: expr) => {
-              for col_def in first_axis.iter() {
-                // get the set of phonemes in the column
-                let column = self.get_set(col_def.1)?;
-                // find the intersection of this and the row.
-                let column = $row_set.intersection(column);
-  
-                // add all phonemes in that intersection to the cell.
-                // if there are no remaining axes, this will follow the zero axis path and just print them in a row.
-                let cell_grid = self.build_grid(&column, &axisses.clone_remaining(), style.get_plain(), false, unprinted_phonemes)?;
-  
-                let cell_str = format!("{}",cell_grid);
-  
-                grid.add_cell(&cell_str)
-  
-              }
-  
-            };
-        }
+        if let Some(rows) = axisses.rows() {
 
-        if let Some(second_axis) = axisses.second() {
+          // we need to know about the other axises for the headers.
+          // TODO: I think I can just get references to the axes with the new method.
+          let subcolumns = axisses.subcolumns();
+          let subrows = axisses.subrows();
+          let sub_col_count = subcolumns.map(|a| a.len()).unwrap_or_else(|| 1);
+          let sub_row_count = subrows.map(|a| a.len()).unwrap_or_else(|| 1);
 
           if show_headers {
             // add column headers...
             // add an extra one for the row header column
-            grid.add_header("");
-            for column in first_axis.iter() {
-              grid.add_header(column.0)
+            grid.add_col_row_header();
+            for column in columns.iter() {
+              grid.add_col_header_cell(column.0,sub_col_count)
             }
           }
-  
-  
-          for row_def in second_axis.iter() {
+            
+          for row_def in rows.iter() {
 
-            grid.add_row();
 
             // get the set of phonemes in the row
             let row_set = self.get_set(row_def.1)?;
@@ -1152,11 +1140,55 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
             // get the intersection of this and the master set.
             let row_set = master_set.intersection(row_set);
 
-            if show_headers {
-              grid.add_row_header(row_def.0);
+            for sub_row in 0..sub_row_count {
+
+              grid.add_row();
+
+              if (sub_row == 0) && show_headers {
+                grid.add_row_header_cell(row_def.0,sub_row_count);
+              }
+
+              let sub_row_set = if let Some(subrows) = subrows {
+                let sub_row_def = subrows[sub_row];
+                let sub_row_set = self.get_set(sub_row_def.1)?;
+                let sub_row_set = row_set.intersection(sub_row_set);
+                sub_row_set
+              } else {
+                row_set.clone()
+              };
+
+              for col_def in columns.iter() {
+                // get the set of phonemes in the column
+                let col_set = self.get_set(col_def.1)?;
+                // find the intersection of this and the row.
+                let col_set = sub_row_set.intersection(col_set);
+
+                for sub_col in 0..sub_col_count {
+
+                  let sub_col_set = if let Some(subcolumns) = subcolumns {
+                    let sub_col_def = subcolumns[sub_col];
+                    let sub_col_set = self.get_set(sub_col_def.1)?;
+                    let sub_col_set = col_set.intersection(sub_col_set);
+                    sub_col_set
+                  } else {
+                    col_set.clone()
+                  };
+
+                  // add all phonemes in that intersection to the cell.
+                  // if there are no remaining axes, this will follow the zero axis path and just print them in a row.
+                  //let cell_grid = self.build_grid(&sub_col_set, &Table::ZeroAxes, style.get_plain(), false, unprinted_phonemes)?;
+    
+                  let cell_str = Self::print_phonemes_once(&sub_col_set, unprinted_phonemes, &style.get_plain());
+    
+                  grid.add_cell(&cell_str)
+
+                }
+  
+  
+              }
+  
             }
 
-            build_row!(row_set)
 
           }
 
@@ -1165,12 +1197,23 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
           if show_headers {
             // add column headers...
             // NOTE: This is different from the two-axis branch because it doesn't add a dummy column for the row headers.
-            for column in first_axis.iter() {
-              grid.add_header(column.0)
+            for column in columns.iter() {
+              grid.add_col_header_cell(column.0,1)
             }
           }
 
-          build_row!(master_set)
+          for col_def in columns.iter() {
+            // get the set of phonemes in the column
+            let column = self.get_set(col_def.1)?;
+            // find the intersection of this and the row.
+            let column = master_set.intersection(column);
+
+            // add all phonemes in that intersection to the cell.
+            let cell_str = Self::print_phonemes_once(&column, unprinted_phonemes, &style.get_plain());
+
+            grid.add_cell(&cell_str)
+
+          }
 
         }
 
@@ -1220,7 +1263,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
           true
         }) {
 
-        let grid = self.build_grid(&unprinted_phonemes.clone(), &Table::ZeroAxes, style.get_plain(), false, &mut unprinted_phonemes)?;
+        let grid = self.build_grid(&unprinted_phonemes.clone(), &Table::NotATable, style.get_plain(), false, &mut unprinted_phonemes)?;
         result.push(("uncategorized phonemes".to_owned(),grid));
   
 
@@ -1236,9 +1279,9 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
       let mut grid = Grid::new(style);
 
-      grid.add_header("Phoneme");
+      grid.add_col_header_cell("Phoneme",1);
       for orthography in self.orthographies {
-        grid.add_header(orthography)
+        grid.add_col_header_cell(orthography,1)
       }
   
 
