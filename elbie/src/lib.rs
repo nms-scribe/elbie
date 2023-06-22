@@ -477,51 +477,12 @@ NOTE: Four seems like an arbitrary limit. I used to have this all in a vector so
 The good news is that this doesn't limit the language if the user wants something really alien. They can just separate one of the lower axes into separate tables instead, and then they can still use this.
 */
 #[derive(Debug)]
-enum TableAxisses {
-  Zero,
-  One(TableAxis),
-  Two(TableAxis,TableAxis),
-  Three(TableAxis,TableAxis,TableAxis),
-  Four(TableAxis,TableAxis,TableAxis,TableAxis)
-}
-
-impl TableAxisses {
-
-  fn first(&self) -> Option<&TableAxis> {
-    match self {
-        Self::Zero => None,
-        Self::One(a) => Some(a),
-        Self::Two(a, _) => Some(a),
-        Self::Three(a, _, _) => Some(a),
-        Self::Four(a, _, _, _) => Some(a),
-    }
-  }
-
-  fn second(&self) -> Option<&TableAxis> {
-    match self {
-      TableAxisses::Two(_, a) => Some(a),
-      TableAxisses::Three(_, a, _) => Some(a),
-      TableAxisses::Four(_, a, _, _) => Some(a),
-      _ => None
-    }
-  }
-
-  fn clone_last_two(&self) -> Self {
-    match self {
-      Self::Three(_, _, a) => Self::One(a.to_vec()),
-      Self::Four(_, _, a, b) => Self::Two(a.to_vec(), b.to_vec()),
-      _ => Self::Zero
-    }
-  }
-
-
-
-
-}
-
-#[derive(Debug)]
-struct Table {
-  axisses: TableAxisses
+enum Table {
+  ZeroAxes,
+  OneAxis(TableAxis),
+  TwoAxes(TableAxis,TableAxis),
+  ThreeAxes(TableAxis,TableAxis,TableAxis),
+  FourAxes(TableAxis,TableAxis,TableAxis,TableAxis)
 }
 
 impl Table {
@@ -534,17 +495,50 @@ impl Table {
         };
     }
 
-    Table {
-      axisses: match axisses.len() {
-        0 => TableAxisses::Zero,
-        1 => TableAxisses::One(axis!(0)),
-        2 => TableAxisses::Two(axis!(0),axis!(1)),
-        3 => TableAxisses::Three(axis!(0),axis!(1),axis!(2)),
-        4 => TableAxisses::Four(axis!(0),axis!(1),axis!(2),axis!(3)),
+    match axisses.len() {
+        0 => Self::ZeroAxes,
+        1 => Self::OneAxis(axis!(0)),
+        2 => Self::TwoAxes(axis!(0),axis!(1)),
+        3 => Self::ThreeAxes(axis!(0),axis!(1),axis!(2)),
+        4 => Self::FourAxes(axis!(0),axis!(1),axis!(2),axis!(3)),
         _ => panic!("Tables can only have from 1 to 4 axisses.")
-      }
     }
   }
+
+
+  fn first(&self) -> Option<&TableAxis> {
+    match self {
+      Self::ZeroAxes => None,
+      Self::OneAxis(a) => Some(a),
+      Self::TwoAxes(a, _) => Some(a),
+      Self::ThreeAxes(a, _, _) => Some(a),
+      Self::FourAxes(a, _, _, _) => Some(a),
+    }
+  }
+
+  fn second(&self) -> Option<&TableAxis> {
+    match self {
+      Self::ZeroAxes => None,
+      Self::OneAxis(_) => None,
+      Self::TwoAxes(_, a) => Some(a),
+      Self::ThreeAxes(_, a, _) => Some(a),
+      Self::FourAxes(_, a, _, _) => Some(a),
+    }
+  }
+
+  fn clone_remaining(&self) -> Self {
+    match self {
+      Self::ZeroAxes => Self::ZeroAxes,
+      Self::OneAxis(_) => Self::ZeroAxes,
+      Self::TwoAxes(_, _) => Self::ZeroAxes,
+      Self::ThreeAxes(_, _, a) => Self::OneAxis(a.to_vec()),
+      Self::FourAxes(_, _, a, b) => Self::TwoAxes(a.to_vec(), b.to_vec()),
+    }
+  }
+
+
+
+
 }
 
 #[derive(Clone)]
@@ -1104,81 +1098,79 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
     }
 
 
-    fn build_grid(&self, master_set: &Bag<Rc<Phoneme>>, axisses: &TableAxisses, style: GridStyle, show_headers: bool, unprinted_phonemes: &mut Bag<Rc<Phoneme>>) -> Result<Grid,LanguageError> {
-      // first axis is vertical, second is horizontal
-      // if there are more axes, they create "sub-tables" inside the cell.
-      // if there are no axes, then we just list the phonemes along the bottom.
-      // NOTE: Single axis tables have not been tested. 0-axis tables have.
+    fn build_grid(&self, master_set: &Bag<Rc<Phoneme>>, axisses: &Table, style: GridStyle, show_headers: bool, unprinted_phonemes: &mut Bag<Rc<Phoneme>>) -> Result<Grid,LanguageError> {
+      // if there is one axis, it has to be horizontal, because that's often what the third axis needs to be if there are three.
+      // So therefore, the first axis should be horizontal, and the second vertical.
+      // If there are more than two axisses, they create "sub-tables" inside the cell, in plain text, with the third being first and the fourth being second.
+      // If there are no axes, then the phonemes are just listed horizontally.
+      // If you want to do a vertical table with just one column, you need to set a first axis that contains only one set.
 
       let mut grid = Grid::new(style.clone());
 
       if let Some(first_axis) = axisses.first() {
 
+        macro_rules! build_row {
+            ($row_set: expr) => {
+              for col_def in first_axis.iter() {
+                // get the set of phonemes in the column
+                let column = self.get_set(col_def.1)?;
+                // find the intersection of this and the row.
+                let column = $row_set.intersection(column);
+  
+                // add all phonemes in that intersection to the cell.
+                // if there are no remaining axes, this will follow the zero axis path and just print them in a row.
+                let cell_grid = self.build_grid(&column, &axisses.clone_remaining(), style.get_plain(), false, unprinted_phonemes)?;
+  
+                let cell_str = format!("{}",cell_grid);
+  
+                grid.add_cell(&cell_str)
+  
+              }
+  
+            };
+        }
+
         if let Some(second_axis) = axisses.second() {
 
-          // the first axis is along the top, second along the side.
           if show_headers {
             // add column headers...
             // add an extra one for the row header column
             grid.add_header("");
-            for column in second_axis.iter() {
+            for column in first_axis.iter() {
               grid.add_header(column.0)
             }
           }
-
-
-          for row_def in first_axis.iter() {
+  
+  
+          for row_def in second_axis.iter() {
 
             grid.add_row();
 
             // get the set of phonemes in the row
-            let row = self.get_set(row_def.1)?;
+            let row_set = self.get_set(row_def.1)?;
 
             // get the intersection of this and the master set.
-            let row = master_set.intersection(row);
+            let row_set = master_set.intersection(row_set);
 
             if show_headers {
               grid.add_row_header(row_def.0);
             }
 
-            for col_def in second_axis.iter() {
-              // get the set of phonemes in the column
-              let column = self.get_set(col_def.1)?;
-              // find the intersection of this and the row.
-              let column = row.intersection(column);
-
-              // add all phonemes in that intersection to the cell.
-              let cell_grid = self.build_grid(&column, &axisses.clone_last_two(), style.get_plain(), false, unprinted_phonemes)?;
-
-              let cell_str = format!("{}",cell_grid);
-
-              grid.add_cell(&cell_str)
-
-            }
+            build_row!(row_set)
 
           }
+
         } else {
 
-
-          for row_def in first_axis.iter() {
-            grid.add_row();
-
-            // get the set of phonemes in the column
-            let row = self.get_set(row_def.1)?;
-            // find the intersection of this and the row.
-            let row = master_set.intersection(row);
-
-            if show_headers {
-              grid.add_row_header(row_def.0);
+          if show_headers {
+            // add column headers...
+            // NOTE: This is different from the two-axis branch because it doesn't add a dummy column for the row headers.
+            for column in first_axis.iter() {
+              grid.add_header(column.0)
             }
-
-            // We know that there aren't any remaining axisses
-            let cell_str = Self::print_phonemes_once(&row, unprinted_phonemes, &style.get_plain());
-
-            grid.add_cell(&cell_str)
-
           }
 
+          build_row!(master_set)
 
         }
 
@@ -1204,7 +1196,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
       for (name,set,table) in &self.tables {
 
-        let grid = self.build_grid(self.get_set(set)?, &table.axisses, style.clone(), true, &mut unprinted_phonemes)?;
+        let grid = self.build_grid(self.get_set(set)?, &table, style.clone(), true, &mut unprinted_phonemes)?;
 
         // we have to 'continue' here, as otherwise the "uncategorized phonemes" will show all of the other phonemes.
         if let Some(preferred_table) = &preferred_table {
@@ -1228,7 +1220,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
           true
         }) {
 
-        let grid = self.build_grid(&unprinted_phonemes.clone(), &TableAxisses::Zero, style.get_plain(), false, &mut unprinted_phonemes)?;
+        let grid = self.build_grid(&unprinted_phonemes.clone(), &Table::ZeroAxes, style.get_plain(), false, &mut unprinted_phonemes)?;
         result.push(("uncategorized phonemes".to_owned(),grid));
   
 
