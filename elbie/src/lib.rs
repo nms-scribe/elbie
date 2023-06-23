@@ -7,18 +7,15 @@ use rand::prelude::ThreadRng;
 use csv::Reader;
 use std::fmt::Display;
 
-mod grid;
-use grid::Grid;
-use grid::GridStyle;
+mod chart;
+use chart::Chart;
+use chart::ChartStyle;
 
 /*
 Elbie = LB, Language Builder, and is a bunch of tools for building a constructed language.
 */
 
 /*
-TODO: Test the latex with old elven.
-TODO: Do we need the show_header option on building the grid anymore?
-TODO: Separate the Cell enums into separate objects, since they are defined by position, not randomly anymore.
 TODO: Then, test on Old Elven again.
 TODO: Redo the Old Elven so that we have captions for the broad/slender stuff.
 TODO: Then, finally, work on an HTML version.
@@ -441,7 +438,7 @@ impl Display for Word {
 
 }
 
-// TODO: Is there some way I can do the environments and sets as types? Maybe phonemes, sets and environments are traits instead that you implement in structs. 
+// TODO: Is there some way I can do the environments and sets as types? Maybe phonemes, sets and environments are traits instead that you implement in structs. I might be able to use generic constant parameters to help with that.
 // I could use macros to make those implementations easier to code. Phonemes should really be enumerations. This would require the language to be generic
 // and base itself off of phonemes. --- I think the hardest part is implementing a set that describes which phonemes can be chosen, and then to choose such a 
 // type randomly?
@@ -1078,7 +1075,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
         Ok(Word::new(&word))
     }
 
-    fn print_phonemes_once(bag: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Bag<Rc<Phoneme>>, grid_style: &GridStyle) -> String {
+    fn print_phonemes_once(bag: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Bag<Rc<Phoneme>>, grid_style: &ChartStyle) -> String {
       let mut result = String::new();
       if !bag.is_empty() {
         let mut phonemes: Vec<Rc<Phoneme>> = bag.list();
@@ -1101,30 +1098,25 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
     }
 
 
-    fn build_grid(&self, master_set: &Bag<Rc<Phoneme>>, axisses: &Table, style: GridStyle, show_headers: bool, unprinted_phonemes: &mut Bag<Rc<Phoneme>>) -> Result<Grid,LanguageError> {
+    fn build_phoneme_grid(&self, master_set: &Bag<Rc<Phoneme>>, table: &Table, style: ChartStyle, unprinted_phonemes: &mut Bag<Rc<Phoneme>>) -> Result<Chart,LanguageError> {
       // If there are no columns or rows, then the phonemes are just listed horizontally.
       // If you want to do a vertical table with just one column, you need to set columns that contains only one set.
 
-      let mut grid = Grid::new(style.clone());
+      let mut grid = Chart::new(style.clone());
 
-      if let Some(columns) = axisses.columns() {
+      if let Some(columns) = table.columns() {
 
-        if let Some(rows) = axisses.rows() {
+        if let Some(rows) = table.rows() {
 
           // we need to know about the other axises for the headers.
-          // TODO: I think I can just get references to the axes with the new method.
-          let subcolumns = axisses.subcolumns();
-          let subrows = axisses.subrows();
+          let subcolumns = table.subcolumns();
+          let subrows = table.subrows();
           let sub_col_count = subcolumns.map(|a| a.len()).unwrap_or_else(|| 1);
           let sub_row_count = subrows.map(|a| a.len()).unwrap_or_else(|| 1);
 
-          if show_headers {
-            // add column headers...
-            // add an extra one for the row header column
-            grid.add_col_row_header();
-            for column in columns.iter() {
-              grid.add_col_header_cell(column.0,sub_col_count)
-            }
+          // add column headers...
+          for column in columns.iter() {
+            grid.add_col_header_cell(column.0,sub_col_count)
           }
 
           // I need to place the row-headers after, because I don't know if I'm skipping rows until they're processed.
@@ -1158,13 +1150,11 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
               grid.add_row();
 
-              if show_headers {
-                if !row_header_placed {
-                  row_headers.push(Some(row_def.0));
-                  row_header_placed = true;
-                } else {
-                  row_headers.push(None)
-                }
+              if !row_header_placed {
+                row_headers.push(Some(row_def.0));
+                row_header_placed = true;
+              } else {
+                row_headers.push(None)
               }
 
               for col_def in columns.iter() {
@@ -1227,12 +1217,10 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
           
         } else {
 
-          if show_headers {
-            // add column headers...
-            // NOTE: This is different from the two-axis branch because it doesn't add a dummy column for the row headers.
-            for column in columns.iter() {
-              grid.add_col_header_cell(column.0,1)
-            }
+          // add column headers...
+          // NOTE: This is different from the two-axis branch because it doesn't add a dummy column for the row headers.
+          for column in columns.iter() {
+            grid.add_col_header_cell(column.0,1)
           }
 
           for col_def in columns.iter() {
@@ -1262,7 +1250,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
-    pub fn display_phonemes(&self, preferred_table: &Option<String>, style: GridStyle) -> Result<Vec<(String,Grid)>,LanguageError> {
+    pub fn display_phonemes(&self, preferred_table: &Option<String>, style: ChartStyle) -> Result<Vec<(String,Chart)>,LanguageError> {
 
       let preferred_table = preferred_table.as_ref().map(|a| a.to_lowercase());
 
@@ -1272,7 +1260,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
       for (name,set,table) in &self.tables {
 
-        let grid = self.build_grid(self.get_set(set)?, &table, style.clone(), true, &mut unprinted_phonemes)?;
+        let grid = self.build_phoneme_grid(self.get_set(set)?, &table, style.clone(), &mut unprinted_phonemes)?;
 
         // we have to 'continue' here, as otherwise the "uncategorized phonemes" will show all of the other phonemes.
         if let Some(preferred_table) = &preferred_table {
@@ -1296,7 +1284,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
           true
         }) {
 
-        let grid = self.build_grid(&unprinted_phonemes.clone(), &Table::NotATable, style, false, &mut unprinted_phonemes)?;
+        let grid = self.build_phoneme_grid(&unprinted_phonemes.clone(), &Table::NotATable, style, &mut unprinted_phonemes)?;
         result.push(("uncategorized phonemes".to_owned(),grid));
   
 
@@ -1306,11 +1294,11 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
-    pub fn display_spelling(&self, style: GridStyle) -> Result<(String,Grid),LanguageError> {
+    pub fn display_spelling(&self, style: ChartStyle) -> Result<(String,Chart),LanguageError> {
 
       let phonemes: Bag<Rc<Phoneme>> = self.get_set(PHONEME)?.clone();
 
-      let mut grid = Grid::new(style);
+      let mut grid = Chart::new(style.clone());
 
       grid.add_col_header_cell("Phoneme",1);
       for orthography in self.orthographies {
@@ -1323,7 +1311,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
         grid.add_row();
 
-        grid.add_cell(&format!("{}",phoneme));
+        grid.add_cell(&style.get_phoneme_text(format!("{}",phoneme)));
         for i in 0..ORTHOGRAPHIES {
           let mut cell = String::new();
           self.spell_phoneme(&phoneme, i, &mut cell, &mut [].iter().peekable());
@@ -1396,7 +1384,7 @@ enum Command {
     ProcessLexicon(String,usize)
 }
 
-fn parse_args<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Args) -> (Option<GridStyle>,Command) {
+fn parse_args<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Args) -> (Option<ChartStyle>,Command) {
   let mut command = None;
   let mut grid_style = None;
 
@@ -1422,10 +1410,10 @@ fn parse_args<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Ar
 
   while let Some(arg) = args.next() {
     match arg.as_ref() {
-      "--grid=plain" => set_grid_style!(GridStyle::Plain),
-      "--grid=terminal" => set_grid_style!(GridStyle::Terminal),
-      "--grid=markdown" => set_grid_style!(GridStyle::Markdown),
-      "--grid=latex" => set_grid_style!(GridStyle::LaTeX),
+      "--grid=plain" => set_grid_style!(ChartStyle::Plain),
+      "--grid=terminal" => set_grid_style!(ChartStyle::Terminal),
+      "--grid=markdown" => set_grid_style!(ChartStyle::Markdown),
+      "--grid=latex" => set_grid_style!(ChartStyle::LaTeX),
       "--generate" => set_command!(Command::GenerateWords(args.next().expect("Generate count required").as_ref().parse().expect("Argument should be a number"))),
       "--validate" => {
         let mut words = vec![args.next().expect("No words to validate").as_ref().to_owned()];
@@ -1468,7 +1456,7 @@ pub fn run_main<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHO
     
         match command {
             Command::GenerateWords(count) => {
-              let mut grid = Grid::new(grid_style.unwrap_or_else(|| GridStyle::Plain));
+              let mut grid = Chart::new(grid_style.unwrap_or_else(|| ChartStyle::Plain));
 
               for _ in 0..count {
                     grid.add_row();
@@ -1539,7 +1527,7 @@ pub fn run_main<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHO
                 }
             }
             Command::ShowPhonemes(table) => {
-              match language.display_phonemes(&table,grid_style.unwrap_or_else(|| GridStyle::Terminal)) {
+              match language.display_phonemes(&table,grid_style.unwrap_or_else(|| ChartStyle::Terminal)) {
                 Ok(grids) => {
                   if let Some(table) = &table { 
                     if grids.is_empty() {
@@ -1560,7 +1548,7 @@ pub fn run_main<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHO
               }
             },
             Command::ShowSpelling => {
-              match language.display_spelling(grid_style.unwrap_or_else(|| GridStyle::Terminal)) {
+              match language.display_spelling(grid_style.unwrap_or_else(|| ChartStyle::Terminal)) {
                 Ok(grid) => {
                   println!("{}:",grid.0);
                   println!("{}",grid.1);

@@ -3,7 +3,7 @@ use unicode_width::UnicodeWidthStr;
 use pad::PadStr;
 
 #[derive(Clone,Debug)]
-pub enum GridStyle {
+pub enum ChartStyle {
     Plain, // columns separated by spaces
     Terminal, // columns separated by '|'
     Markdown, // columns separated and lines bordered by '|', header separated from rest by '===', header text enclosed in '**..**'
@@ -30,18 +30,49 @@ macro_rules! and_spacer {
     };
 }
 
+macro_rules! latex {
+    (multicolumn) => {
+        "multicolumn"
+    };
+    (multirow) => {
+        "multirow"
+    };
+    (textbf) => {
+        "textbf"
+    };
+    (ipa) => {
+        "ipa"
+    };
+    ($command: ident $( $argument: tt )+) => {
+       concat!("\\",latex!($command),$(latex!($argument)),+) 
+    };
+    ({ $command: ident $( $argument: tt )+ }) => {
+        concat!("{{",latex!($command $( $argument )+ ),"}}")
 
-impl GridStyle {
+    };
+    ({ $text: ident }) => {
+        concat!("{{",stringify!($text),"}}")
+    };
+    ({*}) => {
+        "{{*}}"
+    };
+    ({?}) => {
+        "{{{}}}"
+    };
+    ({}) => {
+        "{{}}"
+    };
+    
+}
 
-    const LATEX_BOLD: &str = "\\textbf";
-    const LATEX_PHONEME: &str = "\\ipa";
+impl ChartStyle {
 
     pub fn get_phoneme_text(&self, phoneme: String) -> String {
         match self {
-            GridStyle::Plain => phoneme,
-            GridStyle::Terminal => phoneme,
-            GridStyle::Markdown => phoneme,
-            GridStyle::LaTeX => GridStyle::LATEX_PHONEME.to_owned() + "{" + &phoneme + "}",
+            ChartStyle::Plain => phoneme,
+            ChartStyle::Terminal => phoneme,
+            ChartStyle::Markdown => phoneme,
+            ChartStyle::LaTeX => format!(latex!(ipa{?}),phoneme),
         }.to_owned()
 
     }
@@ -117,35 +148,29 @@ impl GridStyle {
 
 }
 
-enum GridCell {
-    Text(String),
-    // TODO: Since these are defined by location now, I might get rid of thes.
-    ColumnHeader(String,usize),
-    RowHeader(String,usize)
-}
+trait ChartCell {
 
-impl GridCell {
 
-    fn render_text(text: &str, is_header: bool, style: &GridStyle, col_span: usize, row_span: usize) -> String {
+    fn render_text(text: &str, is_header: bool, style: &ChartStyle, col_span: usize, row_span: usize) -> String {
 
         match style {
-            GridStyle::Plain => text.to_owned(),
-            GridStyle::Terminal => text.to_owned(),
-            GridStyle::Markdown => if is_header && !text.is_empty() {
+            ChartStyle::Plain => text.to_owned(),
+            ChartStyle::Terminal => text.to_owned(),
+            ChartStyle::Markdown => if is_header && !text.is_empty() {
                 "**".to_owned() + text + "**"
             } else {
                 text.to_owned()
             },
-            GridStyle::LaTeX => match (col_span, row_span,text.is_empty(),is_header) {
+            ChartStyle::LaTeX => match (col_span, row_span,text.is_empty(),is_header) {
                 (2.., 2.., _, _) => panic!("Can't have both col_span and row_span greater than 1"),
-                (2.., 0..=1, true, _) => format!("\\multicolumn{{{}}}{{l}}{{}}",col_span),
-                (2.., 0..=1, false, true) => format!("\\multicolumn{{{}}}{{l}}{{\\textbf{{{}}}}}",col_span,text),
-                (2.., 0..=1, false, false) => format!("\\multicolumn{{{}}}{{l}}{{{}}}",col_span,text),
-                (0..=1, 2.., true, _) => format!("\\multirow{{{}}}{{*}}{{}}",row_span),
-                (0..=1, 2.., false, true) => format!("\\multirow{{{}}}{{*}}{{\\textbf{{{}}}}}",row_span,text),
-                (0..=1, 2.., false, false) => format!("\\multirow{{{}}}{{*}}{{{}}}",row_span,text),
+                (2.., 0..=1, true, _) => format!(latex!(multicolumn{?}{l}{textbf{}}),col_span),
+                (2.., 0..=1, false, true) => format!(latex!(multicolumn{?}{l}{textbf{?}}),col_span,text),
+                (2.., 0..=1, false, false) => format!(latex!(multicolumn {?} {l} {?}),col_span,text),
+                (0..=1, 2.., true, _) => format!(latex!(multirow{?}{*}{}),row_span),
+                (0..=1, 2.., false, true) => format!(latex!(multirow{?}{*}{textbf{?}}),row_span,text),
+                (0..=1, 2.., false, false) => format!(latex!(multirow{?}{*}{?}),row_span,text),
                 (_, _, true, _) => format!(""),
-                (_, _, false, true) => format!("\\textbf{{{}}}",text),
+                (_, _, false, true) => format!(latex!(textbf{?}),text),
                 (_, _, false, false) => format!("{}",text),
             }
 
@@ -153,59 +178,14 @@ impl GridCell {
 
     }
 
-    fn new_text(text: &str, style: &GridStyle) -> Self {
-        if text.contains('\n') {
-            panic!("Can't create grid cell with multiple lines.");
-        }
-        Self::Text(Self::render_text(text, false, style, 1, 1))
-    }
-
-    fn new_col_header(text: &str, col_span: usize, style: &GridStyle) -> Self {
-        if text.contains('\n') {
-            panic!("Can't create grid cell with multiple lines.");
-        }
-        Self::ColumnHeader(Self::render_text(text, true, style, col_span, 1), col_span)
-    }
-
-    fn new_row_header(text: &str, row_span: usize, style: &GridStyle) -> Self {
-        if text.contains('\n') {
-            panic!("Can't create grid cell with multiple lines.");
-        }
-        Self::RowHeader(Self::render_text(text, true, style, 1, row_span), row_span)
-    }
-
-    fn get_text(&self) -> &str {
-        match self {
-            GridCell::Text(a) => a,
-            GridCell::ColumnHeader(a, _) => a,
-            GridCell::RowHeader(a, _) => a,
-        }
-
-    }
-
-    fn col_span(&self) -> &usize {
-        match self {
-            GridCell::Text(_) => &1,
-            GridCell::ColumnHeader(_, a) => a,
-            GridCell::RowHeader(_, _) => &1,
-        }        
-    }
-
-    fn row_span(&self) -> &usize {
-        match self {
-            GridCell::Text(_) => &1,
-            GridCell::ColumnHeader(_, _) => &1,
-            GridCell::RowHeader(_, a) => a,
-        }        
-    }
+    fn get_text(&self) -> &str;
 
     fn calculate_width(&self) -> usize {
         UnicodeWidthStr::width(self.get_text())
         
     }
 
-    fn display_text(text: &str, f: &mut fmt::Formatter<'_>, width: &usize) -> fmt::Result {
-
+    fn display_text(text: &str, f: &mut fmt::Formatter<'_>, width: &usize) -> fmt::Result { 
         // NOTE: I can't use the standard padding mechanism with rust formatting because it doesn't account for unicode width.
         // The pad library uses the same unicode_width crate that I'm using.
         let text = text.pad_to_width(*width);
@@ -214,20 +194,95 @@ impl GridCell {
     }
 
     fn display(&self, f: &mut fmt::Formatter<'_>, width: &usize) -> fmt::Result {
+        Self::display_text(self.get_text(),f,width)
 
-        // TODO: I should just move the below stuff into this, and somehow cache it, so that I can calculate the width on the same thing.
-        Self::display_text(self.get_text(), f, width)
     }
 
 
 }
 
-struct GridRow {
-    row_header: Option<GridCell>,
-    cells: Vec<GridCell>
+struct ChartTextCell {
+    text: String
 }
 
-impl GridRow {
+impl ChartTextCell {
+
+    fn new(text: &str, style: &ChartStyle) -> Self {
+        if text.contains('\n') {
+            panic!("Can't create grid cell with multiple lines.");
+        }
+        Self {
+            text: Self::render_text(text, false, style, 1, 1)
+        }
+    }
+
+
+}
+
+impl ChartCell for ChartTextCell {
+
+    fn get_text(&self) -> &str {
+        &self.text
+    }
+}
+
+struct ChartHeaderCell{
+    text: String,
+    span: usize
+}
+
+impl ChartHeaderCell {
+
+    fn new(text: &str, span: usize, style: &ChartStyle) -> Self {
+        if text.contains('\n') {
+            panic!("Can't create grid cell with multiple lines.");
+        }
+        Self {
+            text: Self::render_text(text, true, style, span, 1),
+            span
+        }
+    }
+
+    fn get_span(&self) -> &usize {
+        &self.span
+    }
+
+}
+
+impl ChartCell for ChartHeaderCell {
+
+    fn get_text(&self) -> &str {
+        &self.text
+    }
+}
+
+trait ChartRow {
+
+
+    fn display_inside(&self, f: &mut fmt::Formatter<'_>, style: &ChartStyle, columns: &Vec<usize>, row_span: &mut usize) -> fmt::Result;
+
+
+
+    fn display(&self, f: &mut fmt::Formatter<'_>, style: &ChartStyle, columns: &Vec<usize>, row_span: &mut usize) -> fmt::Result {
+
+        style.display_start_row(f)?;
+
+        self.display_inside(f, style, columns, row_span)?;
+
+        style.display_end_row(f)?;
+        writeln!(f)?;
+
+        Ok(())
+    }
+
+}
+
+struct ChartBodyRow {
+    row_header: Option<ChartHeaderCell>,
+    cells: Vec<ChartTextCell>
+}
+
+impl ChartBodyRow {
 
     fn new() -> Self {
         Self {
@@ -236,15 +291,140 @@ impl GridRow {
         }
     }
 
-    fn add_cell(&mut self, cell: GridCell) {
+    fn add_cell(&mut self, cell: ChartTextCell) {
         self.cells.push(cell)
     }
 
-    fn set_row_header(&mut self, cell: GridCell) {
+    fn set_row_header(&mut self, cell: ChartHeaderCell) {
         self.row_header = Some(cell);
     }
 
-    fn display(&self, f: &mut fmt::Formatter<'_>, style: &GridStyle, columns: &Vec<usize>, row_span: &mut usize) -> fmt::Result {
+}
+
+impl ChartRow for ChartBodyRow {
+
+
+    fn display_inside(&self, f: &mut fmt::Formatter<'_>, style: &ChartStyle, columns: &Vec<usize>, row_span: &mut usize) -> fmt::Result {
+
+        let cells_length = self.cells.len();
+        let mut j = 0;
+        if let Some(cell) = &self.row_header {
+            // row headers can't colspan
+            cell.display(f, &columns[j])?;
+            if cells_length > 0 {
+                style.display_spacer(f)?;
+            }
+            j += 1;
+            *row_span = cell.get_span() - 1;
+
+        } else if *row_span > 0 {
+            // the previous header had a larger row_span, so shift things over.
+            *row_span -= 1;
+            // display blank content here...
+            ChartTextCell::display_text("", f, &columns[j])?;
+            if cells_length > 0 {
+                style.display_row_span_spacer(f)?;
+            }
+            j += 1;
+
+        }
+
+        for (i,cell) in self.cells.iter().enumerate() {
+            let col_width = columns[j];
+            cell.display(f, &col_width)?;
+            if i < (cells_length - 1) {
+                style.display_spacer(f)?;
+            }
+            j += 1;
+
+        }
+
+        Ok(())
+    }
+
+}
+
+struct ChartHeaderRow {
+    row_header: bool,
+    cells: Vec<ChartHeaderCell>
+}
+
+impl ChartHeaderRow {
+
+    fn new() -> Self {
+        Self {
+            row_header: false,
+            cells: Vec::new()
+        }
+    }
+
+    fn add_cell(&mut self, cell: ChartHeaderCell) {
+        self.cells.push(cell)
+    }
+
+    fn include_row_header(&mut self) {
+        self.row_header = true;
+    }
+
+}
+
+impl ChartRow for ChartHeaderRow {
+
+    fn display_inside(&self, f: &mut fmt::Formatter<'_>, style: &ChartStyle, columns: &Vec<usize>, row_span: &mut usize) -> fmt::Result {
+
+
+        let cells_length = self.cells.len();
+
+        let mut j = 0;
+        if self.row_header {
+            // row headers can't colspan
+            ChartHeaderCell::display_text("", f, &columns[j])?;
+            if cells_length > 0 {
+                style.display_spacer(f)?;
+            }
+            j += 1;
+            *row_span = 0;
+
+        }
+
+        for (i,cell) in self.cells.iter().enumerate() {
+            let mut col_width = columns[j];
+            for k in 1..*cell.get_span() {
+                col_width += style.get_spacer_width() + columns[j+k]; // FUTURE: Do I need to check this? What if they put in a colspan that went beyond the table?
+            };
+            cell.display(f, &col_width)?;
+            if i < (cells_length - 1) {
+                style.display_spacer(f)?;
+            }
+            j += cell.get_span();
+
+        }
+
+        Ok(())
+    }
+}
+
+
+
+/* NOTE: This is some old code which I'm keeping around in case I broke something...
+impl ChartRowOld {
+
+    fn new() -> Self {
+        Self {
+            row_header: None,
+            cells: Vec::new()
+        }
+    }
+
+    fn add_cell(&mut self, cell: ChartCellOld) {
+        self.cells.push(cell)
+    }
+
+    fn set_row_header(&mut self, cell: ChartCellOld) {
+        self.row_header = Some(cell);
+    }
+
+    fn display(&self, f: &mut fmt::Formatter<'_>, style: &ChartStyle, columns: &Vec<usize>, row_span: &mut usize) -> fmt::Result {
 
         let cells_length = self.cells.len();
         style.display_start_row(f)?;
@@ -263,7 +443,7 @@ impl GridRow {
             // the previous header had a larger row_span, so shift things over.
             *row_span -= 1;
             // display blank content here...
-            GridCell::display_text("", f, &columns[j])?;
+            ChartCellOld::display_text("", f, &columns[j])?;
             if cells_length > 0 {
                 style.display_row_span_spacer(f)?;
             }
@@ -292,16 +472,17 @@ impl GridRow {
 
 
 }
+*/
 
-pub struct Grid {
-    style: GridStyle,
-    col_headers: Option<GridRow>,
-    children: Vec<GridRow>
+pub struct Chart {
+    style: ChartStyle,
+    col_headers: Option<ChartHeaderRow>,
+    children: Vec<ChartBodyRow>
 }
 
-impl Grid {
+impl Chart {
 
-    pub fn new(style: GridStyle) -> Self {
+    pub fn new(style: ChartStyle) -> Self {
         Self {
             style,
             col_headers: None,
@@ -310,43 +491,39 @@ impl Grid {
     }
 
     pub fn add_col_header_cell(&mut self, text: &str, col_span: usize) {
-        let cell = GridCell::new_col_header(text, col_span, &self.style);
+        let cell = ChartHeaderCell::new(text, col_span, &self.style);
 
-        let row = self.col_headers.get_or_insert_with(|| GridRow::new());
+        let row = self.col_headers.get_or_insert_with(|| ChartHeaderRow::new());
         row.add_cell(cell);
     }
 
-    pub fn add_col_row_header(&mut self) {
-        let cell = GridCell::new_row_header("", 1, &self.style);
-
-        let row = self.col_headers.get_or_insert_with(|| GridRow::new());
-        row.set_row_header(cell);
-    }
-
     pub fn add_cell(&mut self, text: &str) {
-        let cell = GridCell::new_text(text,&self.style);
+        let cell = ChartTextCell::new(text,&self.style);
         if let Some(row) = self.children.last_mut() {
             row.add_cell(cell)
         } else {
-            let mut row = GridRow::new();
+            let mut row = ChartBodyRow::new();
             row.add_cell(cell);
             self.children.push(row)
         }
     }
 
     pub fn add_row_header_cell(&mut self, text: &str, row_span: usize) {
-        let cell = GridCell::new_row_header(text, row_span, &self.style);
+        if let Some(row) = self.col_headers.as_mut() {
+            row.include_row_header()
+        };
+        let cell = ChartHeaderCell::new(text, row_span, &self.style);
         if let Some(row) = self.children.last_mut() {
             row.set_row_header(cell)
         } else {
-            let mut row = GridRow::new();
+            let mut row = ChartBodyRow::new();
             row.set_row_header(cell);
             self.children.push(row)
         }
     }
 
     pub fn add_row_header_cell_at(&mut self, index: usize, text: &str, row_span: usize) {
-        let cell = GridCell::new_row_header(text, row_span, &self.style);
+        let cell = ChartHeaderCell::new(text, row_span, &self.style);
         if let Some(row) = self.children.get_mut(index) {
             row.set_row_header(cell)
         } else {
@@ -355,10 +532,10 @@ impl Grid {
     }
 
     pub fn add_row(&mut self) {
-        self.children.push(GridRow::new())
+        self.children.push(ChartBodyRow::new())
     }
 
-    fn calculate_columns(&self, style: &GridStyle) -> Vec<usize> {
+    fn calculate_columns(&self, style: &ChartStyle) -> Vec<usize> {
 
         let mut columns = Vec::new();
 
@@ -370,7 +547,7 @@ impl Grid {
 
             if let Some(cell) = &row.row_header {
                 let width = cell.calculate_width();
-                row_span = cell.row_span() - 1;
+                row_span = cell.get_span() - 1;
                 while columns.len() <= j {
                     columns.push(0)
                 }
@@ -399,7 +576,7 @@ impl Grid {
         if let Some(row) = &self.col_headers {
             let mut j = 0;
 
-            if let Some(_) = &row.row_header {
+            if row.row_header {
                 // the row header for the column headers should be "blank" and should not have a col_span or row_span.
                 // plus, since the width is probably less than the row columns here, it's not going to change that.
                 j += 1;
@@ -408,7 +585,7 @@ impl Grid {
 
             for cell in &row.cells {
                 let width = cell.calculate_width();
-                let col_span = cell.col_span();
+                let col_span = cell.get_span();
                 if col_span > &1 {
                     let col_group = &mut columns[j..j+col_span];
                     let spacer_width = (col_group.len() - 1) * style.get_spacer_width();
@@ -446,7 +623,7 @@ impl Grid {
 
 }
 
-impl fmt::Display for Grid {
+impl fmt::Display for Chart {
 
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 
