@@ -508,12 +508,18 @@ impl Chart {
         }
     }
 
-    pub fn add_row_header_cell(&mut self, text: &str, row_span: usize) {
+    fn add_row_header_cell_at_maybe(&mut self, index: Option<usize>, text: &str, row_span: usize) {
         if let Some(row) = self.col_headers.as_mut() {
             row.include_row_header()
         };
         let cell = ChartHeaderCell::new(text, row_span, &self.style);
-        if let Some(row) = self.children.last_mut() {
+        if let Some(index) = index {
+            if let Some(row) = self.children.get_mut(index) {
+                row.set_row_header(cell)
+            } else {
+                panic!("Can't set a row header at index {}",index);
+            }
+        } else if let Some(row) = self.children.last_mut() {
             row.set_row_header(cell)
         } else {
             let mut row = ChartBodyRow::new();
@@ -522,13 +528,14 @@ impl Chart {
         }
     }
 
+
+
+    pub fn add_row_header_cell(&mut self, text: &str, row_span: usize) {
+        self.add_row_header_cell_at_maybe(None, text, row_span)
+    }
+
     pub fn add_row_header_cell_at(&mut self, index: usize, text: &str, row_span: usize) {
-        let cell = ChartHeaderCell::new(text, row_span, &self.style);
-        if let Some(row) = self.children.get_mut(index) {
-            row.set_row_header(cell)
-        } else {
-            panic!("Can't set a row header at index {}",index);
-        }
+        self.add_row_header_cell_at_maybe(Some(index), text, row_span)
     }
 
     pub fn add_row(&mut self) {
