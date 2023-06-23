@@ -163,44 +163,17 @@ enum GridCell {
 
 impl GridCell {
 
-    fn new_text(text: &str) -> Self {
-        if text.contains('\n') {
-            panic!("Can't create grid cell with multiple lines.");
-        }
-        Self::Text(text.to_owned())
-    }
-
-    fn new_col_header(text: &str, col_span: usize) -> Self {
-        if text.contains('\n') {
-            panic!("Can't create grid cell with multiple lines.");
-        }
-        Self::ColumnHeader(text.to_owned(), col_span)
-    }
-
-    fn new_row_header(text: &str, row_span: usize) -> Self {
-        if text.contains('\n') {
-            panic!("Can't create grid cell with multiple lines.");
-        }
-        Self::RowHeader(text.to_owned(), row_span)
-    }
-
-    fn get_text(&self, style: &GridStyle) -> String {
-        let text = match self {
-            GridCell::Text(a) => a,
-            GridCell::ColumnHeader(a, _) => a,
-            GridCell::RowHeader(a, _) => a,
-        };
-
+    fn render_text(text: &str, is_header: bool, style: &GridStyle) -> String {
         // TODO: Any way to "cache" the result, so we don't have to do this stuff twice, once for calculation, the second for other stuff?
         match style {
             GridStyle::Plain => text.to_owned(),
             GridStyle::Terminal => text.to_owned(),
-            GridStyle::Markdown => if self.is_header() && !text.is_empty() {
+            GridStyle::Markdown => if is_header && !text.is_empty() {
                 "**".to_owned() + text + "**"
             } else {
                 text.to_owned()
             },
-            GridStyle::LaTeX => if self.is_header() && !text.is_empty() {
+            GridStyle::LaTeX => if is_header && !text.is_empty() {
                 GridStyle::LATEX_BOLD.to_owned() + "{" + text + "}"
             } else if text.is_empty() {
                 GridStyle::LATEX_EMPTY.to_owned()
@@ -216,12 +189,34 @@ impl GridCell {
 
     }
 
-    fn is_header(&self) -> bool {
+    fn new_text(text: &str, style: &GridStyle) -> Self {
+        if text.contains('\n') {
+            panic!("Can't create grid cell with multiple lines.");
+        }
+        Self::Text(Self::render_text(text, false, style))
+    }
+
+    fn new_col_header(text: &str, col_span: usize, style: &GridStyle) -> Self {
+        if text.contains('\n') {
+            panic!("Can't create grid cell with multiple lines.");
+        }
+        Self::ColumnHeader(Self::render_text(text, true, style), col_span)
+    }
+
+    fn new_row_header(text: &str, row_span: usize, style: &GridStyle) -> Self {
+        if text.contains('\n') {
+            panic!("Can't create grid cell with multiple lines.");
+        }
+        Self::RowHeader(Self::render_text(text, true, style), row_span)
+    }
+
+    fn get_text(&self) -> &str {
         match self {
-            GridCell::Text(_) => false,
-            GridCell::ColumnHeader(_, _) => true,
-            GridCell::RowHeader(_, _) => true,
-        }        
+            GridCell::Text(a) => a,
+            GridCell::ColumnHeader(a, _) => a,
+            GridCell::RowHeader(a, _) => a,
+        }
+
     }
 
     fn col_span(&self) -> &usize {
@@ -240,10 +235,8 @@ impl GridCell {
         }        
     }
 
-    fn calculate_width(&self, style: &GridStyle) -> usize {
-        let text = self.get_text(style);
-        
-        UnicodeWidthStr::width(text.as_str())
+    fn calculate_width(&self) -> usize {
+        UnicodeWidthStr::width(self.get_text())
         
     }
 
@@ -256,12 +249,10 @@ impl GridCell {
         write!(f,"{}",text)
     }
 
-    fn display(&self, f: &mut fmt::Formatter<'_>, style: &GridStyle, width: &usize) -> fmt::Result {
+    fn display(&self, f: &mut fmt::Formatter<'_>, width: &usize) -> fmt::Result {
 
         // TODO: I should just move the below stuff into this, and somehow cache it, so that I can calculate the width on the same thing.
-        let text = self.get_text(style);
-
-        Self::display_text(&text, f, width)
+        Self::display_text(self.get_text(), f, width)
     }
 
 
@@ -297,7 +288,7 @@ impl GridRow {
         let mut j = 0;
         if let Some(cell) = &self.row_header {
             // row headers can't colspan
-            cell.display(f, style, &columns[j])?;
+            cell.display(f, &columns[j])?;
             if cells_length > 0 {
                 style.display_spacer(f)?;
             }
@@ -321,7 +312,7 @@ impl GridRow {
             for k in 1..*cell.col_span() {
                 col_width += style.get_spacer_width() + columns[j+k]; // FUTURE: Do I need to check this? What if they put in a colspan that went beyond the table?
             };
-            cell.display(f, style, &col_width)?;
+            cell.display(f, &col_width)?;
             if i < (cells_length - 1) {
                 style.display_spacer(f)?;
             }
@@ -355,21 +346,21 @@ impl Grid {
     }
 
     pub fn add_col_header_cell(&mut self, text: &str, col_span: usize) {
-        let cell = GridCell::new_col_header(text, col_span);
+        let cell = GridCell::new_col_header(text, col_span, &self.style);
 
         let row = self.col_headers.get_or_insert_with(|| GridRow::new());
         row.add_cell(cell);
     }
 
     pub fn add_col_row_header(&mut self) {
-        let cell = GridCell::new_row_header("", 1);
+        let cell = GridCell::new_row_header("", 1, &self.style);
 
         let row = self.col_headers.get_or_insert_with(|| GridRow::new());
         row.set_row_header(cell);
     }
 
     pub fn add_cell(&mut self, text: &str) {
-        let cell = GridCell::new_text(text);
+        let cell = GridCell::new_text(text,&self.style);
         if let Some(row) = self.children.last_mut() {
             row.add_cell(cell)
         } else {
@@ -380,7 +371,7 @@ impl Grid {
     }
 
     pub fn add_row_header_cell(&mut self, text: &str, row_span: usize) {
-        let cell = GridCell::new_row_header(text, row_span);
+        let cell = GridCell::new_row_header(text, row_span, &self.style);
         if let Some(row) = self.children.last_mut() {
             row.set_row_header(cell)
         } else {
@@ -405,7 +396,7 @@ impl Grid {
             let mut j = 0;
 
             if let Some(cell) = &row.row_header {
-                let width = cell.calculate_width(style);
+                let width = cell.calculate_width();
                 row_span = cell.row_span() - 1;
                 while columns.len() <= j {
                     columns.push(0)
@@ -420,7 +411,7 @@ impl Grid {
             }
 
             for cell in &row.cells {
-                let width = cell.calculate_width(style);
+                let width = cell.calculate_width();
                 while columns.len() <= j {
                     columns.push(0)
                 }
@@ -443,7 +434,7 @@ impl Grid {
             }
 
             for cell in &row.cells {
-                let width = cell.calculate_width(style);
+                let width = cell.calculate_width();
                 let col_span = cell.col_span();
                 if col_span > &1 {
                     let col_group = &mut columns[j..j+col_span];

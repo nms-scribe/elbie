@@ -16,8 +16,6 @@ Elbie = LB, Language Builder, and is a bunch of tools for building a constructed
 */
 
 /*
-TODO: If there are no phonemes in a row, then skip it.
-TODO: Work on the 'get_text' issue, caching the result so we don't calculate it twice.
 TODO: Then, make sure it works correctly with Markdown
 TODO: Then, get the colspan and rowspan stuff to work with the latex mode.
 TODO: Do we need the show_header option on building the grid anymore?
@@ -1156,7 +1154,6 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
               };
 
               if sub_row_set.is_empty() {
-                // TODO: The problem is, if it's the first of the subrows, then the row header is not placed.
                 continue;
               }
 
