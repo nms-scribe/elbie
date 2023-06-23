@@ -16,10 +16,12 @@ Elbie = LB, Language Builder, and is a bunch of tools for building a constructed
 */
 
 /*
-TODO: Okay, test the changes with Old Elven again to make sure they work.
+TODO: If there are no phonemes in a row, then skip it.
 TODO: Work on the 'get_text' issue, caching the result so we don't calculate it twice.
 TODO: Then, make sure it works correctly with Markdown
 TODO: Then, get the colspan and rowspan stuff to work with the latex mode.
+TODO: Do we need the show_header option on building the grid anymore?
+TODO: Separate the Cell enums into separate objects, since they are defined by position, not randomly anymore.
 TODO: Then, test on Old Elven again.
 TODO: Then, finally, work on an HTML version.
 */
@@ -1142,12 +1144,6 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
             for sub_row in 0..sub_row_count {
 
-              grid.add_row();
-
-              if (sub_row == 0) && show_headers {
-                grid.add_row_header_cell(row_def.0,sub_row_count);
-              }
-
               let sub_row_set = if let Some(subrows) = subrows {
                 let sub_row_def = subrows[sub_row];
                 let sub_row_set = self.get_set(sub_row_def.1)?;
@@ -1156,6 +1152,16 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
               } else {
                 row_set.clone()
               };
+
+              if sub_row_set.is_empty() {
+                continue;
+              }
+
+              grid.add_row();
+
+              if (sub_row == 0) && show_headers {
+                grid.add_row_header_cell(row_def.0,sub_row_count);
+              }
 
               for col_def in columns.iter() {
                 // get the set of phonemes in the column
