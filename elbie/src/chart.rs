@@ -1,6 +1,7 @@
 use std::fmt;
 use unicode_width::UnicodeWidthStr;
 use pad::PadStr;
+use crate::VecHelper;
 
 #[derive(Clone,Debug)]
 pub enum ChartStyle {
@@ -474,6 +475,7 @@ impl ChartRowOld {
 }
 */
 
+
 pub struct Chart {
     style: ChartStyle,
     col_headers: Option<ChartHeaderRow>,
@@ -555,9 +557,7 @@ impl Chart {
             if let Some(cell) = &row.row_header {
                 let width = cell.calculate_width();
                 row_span = cell.get_span() - 1;
-                while columns.len() <= j {
-                    columns.push(0)
-                }
+                columns.expand_to(j+1, || 0);
                 columns[j] = columns[j].max(width);
                 j += 1;
             } else if row_span > 0 {
@@ -569,9 +569,7 @@ impl Chart {
 
             for cell in &row.cells {
                 let width = cell.calculate_width();
-                while columns.len() <= j {
-                    columns.push(0)
-                }
+                columns.expand_to(j+1, || 0);
                 columns[j] = columns[j].max(width);
 
                 j += 1;
@@ -594,6 +592,8 @@ impl Chart {
                 let width = cell.calculate_width();
                 let col_span = cell.get_span();
                 if col_span > &1 {
+                    columns.expand_to(j+col_span+1, || 0);
+                        
                     let col_group = &mut columns[j..j+col_span];
                     let spacer_width = (col_group.len() - 1) * style.get_spacer_width();
                     let col_group_width = col_group.iter().sum::<usize>() + spacer_width; 
@@ -614,6 +614,9 @@ impl Chart {
                     } // else the header will be expanded correctly, I think.
                     
                 } else {
+                    columns.expand_to(j+1, || 0);
+                        
+
                     columns[j] = columns[j].max(width);
                 }
 

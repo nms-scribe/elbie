@@ -16,7 +16,6 @@ Elbie = LB, Language Builder, and is a bunch of tools for building a constructed
 */
 
 /*
-TODO: Need an option to "split" the spelling table into multiple columns.
 TODO: Then, test on Old Elven again.
 TODO: Redo the Old Elven tables so that we have captions for the broad/slender rows, and possibly so 'h' shows up as a broad fricative.
 TODO: Once that's done, I think I can shift to using the output from elbie in the latex document for old elven.
@@ -34,6 +33,48 @@ FUTURE: Implementing syllable breaks, stress, etc: (relatively simple)
 
 pub const PHONEME: &'static str = "phoneme";
 pub const EMPTY: &'static str = "empty";
+
+trait UsizeHelper {
+
+  fn div_ceil(&self, rhs: Self) -> Self;
+  
+
+}
+
+impl UsizeHelper for usize {
+
+  fn div_ceil(&self, rhs: Self) -> Self {
+    let d = self / rhs;
+    let r = self % rhs;
+    if r > 0 && rhs > 0 {
+        d + 1
+    } else {
+        d
+    }
+  }
+  
+}
+
+trait VecHelper<T> {
+
+  fn expand_to<F>(&mut self, new_len: usize, f: F)
+  where
+      F: FnMut() -> T;
+  
+
+}
+
+impl<T> VecHelper<T> for Vec<T> {
+  
+    fn expand_to<F>(&mut self, new_len: usize, f: F)
+      where
+          F: FnMut() -> T {
+      if self.len() < new_len {
+          self.resize_with(new_len,f)
+      }
+    }
+}
+
 
 #[derive(Debug,Clone)]
 pub enum LanguageError {
@@ -1297,28 +1338,45 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
-    pub fn display_spelling(&self, style: ChartStyle) -> Result<(String,Chart),LanguageError> {
+    pub fn display_spelling(&self, style: ChartStyle, columns: usize) -> Result<(String,Chart),LanguageError> {
 
       let phonemes: Bag<Rc<Phoneme>> = self.get_set(PHONEME)?.clone();
+      let phonemes = phonemes.list();
 
       let mut grid = Chart::new(style.clone());
 
-      grid.add_col_header_cell("Phoneme",1);
-      for orthography in self.orthographies {
-        grid.add_col_header_cell(orthography,1)
+      for _ in 0..columns {
+        grid.add_col_header_cell("Phoneme",1);
+        for orthography in self.orthographies {
+          grid.add_col_header_cell(orthography,1)
+        }
       }
+
+
+      // once div_ceil is stable in the library, the existence of this will cause an error.
+      // But, we can get rid of our shim, then.
+      #[allow(unstable_name_collisions)] let length = phonemes.len().div_ceil(columns);
+      let mut chunks: Vec<std::slice::Iter<Rc<Phoneme>>> = phonemes.chunks(length).map(|a| a.iter()).collect();
   
-
-      
-      for phoneme in phonemes.list() {
-
+      for _ in 0..length {
         grid.add_row();
 
-        grid.add_cell(&style.get_phoneme_text(format!("{}",phoneme)));
-        for i in 0..ORTHOGRAPHIES {
-          let mut cell = String::new();
-          self.spell_phoneme(&phoneme, i, &mut cell, &mut [].iter().peekable());
-          grid.add_cell(&cell);
+        for chunk in &mut chunks {
+          if let Some(phoneme) = chunk.next() {
+            grid.add_cell(&style.get_phoneme_text(format!("{}",phoneme)));
+            for i in 0..ORTHOGRAPHIES {
+              let mut cell = String::new();
+              self.spell_phoneme(&phoneme, i, &mut cell, &mut [].iter().peekable());
+              grid.add_cell(&cell);
+            }
+  
+          } else {
+            // add blank cells to make the table rectangular.
+            grid.add_cell("");
+            for _ in 0..ORTHOGRAPHIES {
+              grid.add_cell("");
+            }
+          }
         }
 
 
@@ -1379,10 +1437,10 @@ enum ValidateOption {
 }
 
 enum Command {
-    GenerateWords(usize),
+    GenerateWords(usize), // number of words to generate
     ValidateWords(Vec<String>,ValidateOption), // words to validate, whether to trace
-    ShowPhonemes(Option<String>),
-    ShowSpelling,
+    ShowPhonemes(Option<String>), // specifies the table to show
+    ShowSpelling(usize), // specifies number of columns
     ShowUsage,
     ProcessLexicon(String,usize)
 }
@@ -1435,7 +1493,8 @@ fn parse_args<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Ar
       },
       "--phonemes" => set_command!(Command::ShowPhonemes(None)),
       a if a.starts_with("--phonemes=") => set_command!(Command::ShowPhonemes(Some(a.trim_start_matches("--phonemes=").to_owned()))),
-      "--spelling" => set_command!(Command::ShowSpelling),
+      "--spelling" => set_command!(Command::ShowSpelling(1)),
+      a if a.starts_with("--spelling=") => set_command!(Command::ShowSpelling(a.trim_start_matches("--spelling=").parse::<usize>().expect("Parameter should be a number").clamp(1,usize::MAX))),
       "--lexicon" => {
         let path = args.next().expect("No lexicon filename given").as_ref().to_owned();
         let spelling_index = args.next().expect("No orthography index given").as_ref().parse().expect("orthography index must be a number");
@@ -1550,8 +1609,8 @@ pub fn run_main<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHO
                 }
               }
             },
-            Command::ShowSpelling => {
-              match language.display_spelling(grid_style.unwrap_or_else(|| ChartStyle::Terminal)) {
+            Command::ShowSpelling(columns) => {
+              match language.display_spelling(grid_style.unwrap_or_else(|| ChartStyle::Terminal),columns) {
                 Ok(grid) => {
                   println!("{}:",grid.0);
                   println!("{}",grid.1);
@@ -1612,6 +1671,8 @@ pub fn run_main<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHO
               println!("      prints out one table of phonemes of the language.");
               println!("   --spelling");
               println!("      prints out the orthographies of the language.");
+              println!("   --spelling=<2..>");
+              println!("      prints spelling table in multiple columns.");
               println!("   --lexicon <path>");
               println!("      validates lexicon and outputs into a LaTeX file.");
               println!("   --help");
