@@ -1142,6 +1142,8 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
             // get the intersection of this and the master set.
             let row_set = master_set.intersection(row_set);
 
+            let mut row_header_placed = false;
+
             for sub_row in 0..sub_row_count {
 
               let sub_row_set = if let Some(subrows) = subrows {
@@ -1154,13 +1156,15 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
               };
 
               if sub_row_set.is_empty() {
+                // TODO: The problem is, if it's the first of the subrows, then the row header is not placed.
                 continue;
               }
 
               grid.add_row();
 
-              if (sub_row == 0) && show_headers {
-                grid.add_row_header_cell(row_def.0,sub_row_count);
+              if !row_header_placed && show_headers {
+                grid.add_row_header_cell(row_def.0,sub_row_count-sub_row);
+                row_header_placed = true;
               }
 
               for col_def in columns.iter() {
