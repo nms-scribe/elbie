@@ -16,11 +16,11 @@ Elbie = LB, Language Builder, and is a bunch of tools for building a constructed
 */
 
 /*
-TODO: Then, make sure it works correctly with Markdown
-TODO: Then, get the colspan and rowspan stuff to work with the latex mode.
+TODO: Test the latex with old elven.
 TODO: Do we need the show_header option on building the grid anymore?
 TODO: Separate the Cell enums into separate objects, since they are defined by position, not randomly anymore.
 TODO: Then, test on Old Elven again.
+TODO: Redo the Old Elven so that we have captions for the broad/slender stuff.
 TODO: Then, finally, work on an HTML version.
 */
 
@@ -1095,11 +1095,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
           unprinted_phonemes.remove(&value);
         };
       }
-      // TODO: This is a hack, until I can figure out how to align the sub-grids in the grid thing.
-      // This really only works if the user is putting out one phoneme per cell.
-      if result.is_empty() {
-        result.push_str(&grid_style.get_empty_cell());
-      }
+
       result
 
     }
@@ -1130,6 +1126,9 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
               grid.add_col_header_cell(column.0,sub_col_count)
             }
           }
+
+          // I need to place the row-headers after, because I don't know if I'm skipping rows until they're processed.
+          let mut row_headers = Vec::new();
             
           for row_def in rows.iter() {
 
@@ -1159,9 +1158,13 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
               grid.add_row();
 
-              if !row_header_placed && show_headers {
-                grid.add_row_header_cell(row_def.0,sub_row_count-sub_row);
-                row_header_placed = true;
+              if show_headers {
+                if !row_header_placed {
+                  row_headers.push(Some(row_def.0));
+                  row_header_placed = true;
+                } else {
+                  row_headers.push(None)
+                }
               }
 
               for col_def in columns.iter() {
@@ -1183,9 +1186,8 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
                   // add all phonemes in that intersection to the cell.
                   // if there are no remaining axes, this will follow the zero axis path and just print them in a row.
-                  //let cell_grid = self.build_grid(&sub_col_set, &Table::ZeroAxes, style.get_plain(), false, unprinted_phonemes)?;
-    
-                  let cell_str = Self::print_phonemes_once(&sub_col_set, unprinted_phonemes, &style.get_plain());
+                  
+                  let cell_str = Self::print_phonemes_once(&sub_col_set, unprinted_phonemes, &style);
     
                   grid.add_cell(&cell_str)
 
@@ -1199,6 +1201,30 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
           }
 
+          // now, figure out row_headers. Right now, I've got a vector of "Some caption" and "None" which is supposed to match
+          // up with the rows. I need to 1) figure out the correct row spans, and 2) place them on the grid.
+          let mut row_header_spans = Vec::new();
+
+          // scan the row headers
+          for (i,text) in row_headers.iter().enumerate() {
+            if let Some(text) = text {
+              // if there is a row header,
+              // - mark the index it's in, the name, and a row_span of 1.
+              row_header_spans.push((i,text,1))
+            } else {
+              // if there isn't a header,
+              // - increment the last row_span of the row header.
+              if let Some(last) = row_header_spans.last_mut() {
+                last.2 += 1
+              }
+            }
+          }
+
+          for (index,text,row_span) in row_header_spans {
+            grid.add_row_header_cell_at(index, text, row_span)
+          }
+          
+          
         } else {
 
           if show_headers {
@@ -1216,7 +1242,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
             let column = master_set.intersection(column);
 
             // add all phonemes in that intersection to the cell.
-            let cell_str = Self::print_phonemes_once(&column, unprinted_phonemes, &style.get_plain());
+            let cell_str = Self::print_phonemes_once(&column, unprinted_phonemes, &style);
 
             grid.add_cell(&cell_str)
 
@@ -1226,7 +1252,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
 
       } else {
-        let cell_str = Self::print_phonemes_once(&master_set, unprinted_phonemes, &style.get_plain());
+        let cell_str = Self::print_phonemes_once(&master_set, unprinted_phonemes, &style);
 
         grid.add_cell(&cell_str);
 
@@ -1270,7 +1296,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
           true
         }) {
 
-        let grid = self.build_grid(&unprinted_phonemes.clone(), &Table::NotATable, style.get_plain(), false, &mut unprinted_phonemes)?;
+        let grid = self.build_grid(&unprinted_phonemes.clone(), &Table::NotATable, style, false, &mut unprinted_phonemes)?;
         result.push(("uncategorized phonemes".to_owned(),grid));
   
 

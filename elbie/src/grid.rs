@@ -7,9 +7,7 @@ pub enum GridStyle {
     Plain, // columns separated by spaces
     Terminal, // columns separated by '|'
     Markdown, // columns separated and lines bordered by '|', header separated from rest by '===', header text enclosed in '**..**'
-    LaTeX, // columns separated by '&', lines end with '\\', header text enclosed in '\textbf{..}', fills in blank spaces with 2em
-    PlainLaTeX, // columns separated by spaces, fills in blank spaces with 2em, for embedding table inside latex cell.
-    // TODO: Latex, 
+    LaTeX, // columns separated by '&', lines end with '\\', header text enclosed in '\textbf{..}'
     // TODO: HTML, // written out as html markup.
 }
 
@@ -32,39 +30,11 @@ macro_rules! and_spacer {
     };
 }
 
-macro_rules! blank_and_spacer {
-    () => {
-        // NOTE: Must match length of and_spacer
-        "   "
-    };
-}
-
 
 impl GridStyle {
 
     const LATEX_BOLD: &str = "\\textbf";
     const LATEX_PHONEME: &str = "\\ipa";
-    const LATEX_EMPTY: &str = "\\hspace{2em}";
-
-    pub fn get_plain(&self) -> Self {
-        match self {
-            Self::Plain => Self::Plain,
-            Self::Terminal => Self::Plain,
-            Self::Markdown => Self::Plain,
-            Self::LaTeX => Self::PlainLaTeX,
-            Self::PlainLaTeX => Self::PlainLaTeX,
-        }
-    }
-
-    pub fn get_empty_cell(&self) -> String {
-        match self {
-            GridStyle::Plain => "",
-            GridStyle::Terminal => "",
-            GridStyle::Markdown => "",
-            GridStyle::LaTeX => GridStyle::LATEX_EMPTY,
-            GridStyle::PlainLaTeX => GridStyle::LATEX_EMPTY,
-        }.to_owned()
-    }
 
     pub fn get_phoneme_text(&self, phoneme: String) -> String {
         match self {
@@ -72,7 +42,6 @@ impl GridStyle {
             GridStyle::Terminal => phoneme,
             GridStyle::Markdown => phoneme,
             GridStyle::LaTeX => GridStyle::LATEX_PHONEME.to_owned() + "{" + &phoneme + "}",
-            GridStyle::PlainLaTeX => GridStyle::LATEX_PHONEME.to_owned() + "{" + &phoneme + "}" ,
         }.to_owned()
 
     }
@@ -83,7 +52,6 @@ impl GridStyle {
             Self::Terminal => write!(f,pipe_spacer!()),
             Self::Markdown => write!(f,pipe_spacer!()),
             Self::LaTeX => write!(f,and_spacer!()),
-            Self::PlainLaTeX => write!(f,plain_spacer!()),
         }
     }
 
@@ -92,8 +60,7 @@ impl GridStyle {
             Self::Plain => write!(f,plain_spacer!()),
             Self::Terminal => write!(f,pipe_spacer!()),
             Self::Markdown => write!(f,pipe_spacer!()),
-            Self::LaTeX => write!(f,blank_and_spacer!()),
-            Self::PlainLaTeX => write!(f,plain_spacer!()),
+            Self::LaTeX => write!(f,and_spacer!()),
         }
     }
 
@@ -103,7 +70,6 @@ impl GridStyle {
             Self::Terminal => pipe_spacer!().len(),
             Self::Markdown => pipe_spacer!().len(),
             Self::LaTeX => and_spacer!().len(),
-            Self::PlainLaTeX => plain_spacer!().len(),
         }
     }
 
@@ -112,8 +78,7 @@ impl GridStyle {
             Self::Plain => Ok(()),
             Self::Terminal => write!(f,"| "),
             Self::Markdown => write!(f,"| "),
-            Self::LaTeX => Ok(()),
-            Self::PlainLaTeX => Ok(())
+            Self::LaTeX => Ok(())
         }
     }
 
@@ -122,8 +87,7 @@ impl GridStyle {
             Self::Plain => Ok(()),
             Self::Terminal => write!(f," |"),
             Self::Markdown => write!(f," |"),
-            Self::LaTeX => write!(f,"\\\\"),
-            Self::PlainLaTeX => Ok(())
+            Self::LaTeX => write!(f,"\\\\")
         }
     }
 
@@ -146,8 +110,7 @@ impl GridStyle {
                 write!(f,"=|")?;
                 writeln!(f)
             },
-            Self::LaTeX => Ok(()),
-            Self::PlainLaTeX => Ok(())
+            Self::LaTeX => Ok(())
         }
     }
 
@@ -163,8 +126,8 @@ enum GridCell {
 
 impl GridCell {
 
-    fn render_text(text: &str, is_header: bool, style: &GridStyle) -> String {
-        // TODO: Any way to "cache" the result, so we don't have to do this stuff twice, once for calculation, the second for other stuff?
+    fn render_text(text: &str, is_header: bool, style: &GridStyle, col_span: usize, row_span: usize) -> String {
+
         match style {
             GridStyle::Plain => text.to_owned(),
             GridStyle::Terminal => text.to_owned(),
@@ -173,18 +136,19 @@ impl GridCell {
             } else {
                 text.to_owned()
             },
-            GridStyle::LaTeX => if is_header && !text.is_empty() {
-                GridStyle::LATEX_BOLD.to_owned() + "{" + text + "}"
-            } else if text.is_empty() {
-                GridStyle::LATEX_EMPTY.to_owned()
-            } else {
-                text.to_owned()
+            GridStyle::LaTeX => match (col_span, row_span,text.is_empty(),is_header) {
+                (2.., 2.., _, _) => panic!("Can't have both col_span and row_span greater than 1"),
+                (2.., 0..=1, true, _) => format!("\\multicolumn{{{}}}{{l}}{{}}",col_span),
+                (2.., 0..=1, false, true) => format!("\\multicolumn{{{}}}{{l}}{{\\textbf{{{}}}}}",col_span,text),
+                (2.., 0..=1, false, false) => format!("\\multicolumn{{{}}}{{l}}{{{}}}",col_span,text),
+                (0..=1, 2.., true, _) => format!("\\multirow{{{}}}{{*}}{{}}",row_span),
+                (0..=1, 2.., false, true) => format!("\\multirow{{{}}}{{*}}{{\\textbf{{{}}}}}",row_span,text),
+                (0..=1, 2.., false, false) => format!("\\multirow{{{}}}{{*}}{{{}}}",row_span,text),
+                (_, _, true, _) => format!(""),
+                (_, _, false, true) => format!("\\textbf{{{}}}",text),
+                (_, _, false, false) => format!("{}",text),
             }
-            GridStyle::PlainLaTeX => if text.is_empty() {
-                GridStyle::LATEX_EMPTY.to_owned()
-            } else {
-                text.to_owned()
-            }
+
         }
 
     }
@@ -193,21 +157,21 @@ impl GridCell {
         if text.contains('\n') {
             panic!("Can't create grid cell with multiple lines.");
         }
-        Self::Text(Self::render_text(text, false, style))
+        Self::Text(Self::render_text(text, false, style, 1, 1))
     }
 
     fn new_col_header(text: &str, col_span: usize, style: &GridStyle) -> Self {
         if text.contains('\n') {
             panic!("Can't create grid cell with multiple lines.");
         }
-        Self::ColumnHeader(Self::render_text(text, true, style), col_span)
+        Self::ColumnHeader(Self::render_text(text, true, style, col_span, 1), col_span)
     }
 
     fn new_row_header(text: &str, row_span: usize, style: &GridStyle) -> Self {
         if text.contains('\n') {
             panic!("Can't create grid cell with multiple lines.");
         }
-        Self::RowHeader(Self::render_text(text, true, style), row_span)
+        Self::RowHeader(Self::render_text(text, true, style, 1, row_span), row_span)
     }
 
     fn get_text(&self) -> &str {
@@ -378,6 +342,15 @@ impl Grid {
             let mut row = GridRow::new();
             row.set_row_header(cell);
             self.children.push(row)
+        }
+    }
+
+    pub fn add_row_header_cell_at(&mut self, index: usize, text: &str, row_span: usize) {
+        let cell = GridCell::new_row_header(text, row_span, &self.style);
+        if let Some(row) = self.children.get_mut(index) {
+            row.set_row_header(cell)
+        } else {
+            panic!("Can't set a row header at index {}",index);
         }
     }
 
