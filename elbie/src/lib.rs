@@ -1336,7 +1336,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
-    pub fn display_spelling(&self, style: ChartStyle, columns: usize) -> Result<(String,Chart),LanguageError> {
+    pub fn display_spelling(&self, style: ChartStyle, columns: usize) -> Result<Chart,LanguageError> {
 
       let phonemes: Bag<Rc<Phoneme>> = self.get_set(PHONEME)?.clone();
       let phonemes = phonemes.list();
@@ -1380,7 +1380,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
       }
 
-      Ok(("Orthography".to_owned(),grid))
+      Ok(grid)
 
     }
 
@@ -1610,8 +1610,7 @@ pub fn run_main<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHO
             Command::ShowSpelling(columns) => {
               match language.display_spelling(grid_style.unwrap_or_else(|| ChartStyle::Terminal),columns) {
                 Ok(grid) => {
-                  println!("{}:",grid.0);
-                  println!("{}",grid.1);
+                  println!("{}",grid);
                 },
                 Err(err) => {
                   eprintln!("!!! Couldn't display spelling: {}",err);
