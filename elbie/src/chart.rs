@@ -234,12 +234,17 @@ struct ChartHeaderCell{
 
 impl ChartHeaderCell {
 
-    fn new(text: &str, span: usize, style: &ChartStyle) -> Self {
+    fn new(text: &str, span: usize, style: &ChartStyle, is_row_header: bool) -> Self {
         if text.contains('\n') {
             panic!("Can't create grid cell with multiple lines.");
         }
+        let (col_span, row_span) = if is_row_header {
+            (1, span)
+        } else {
+            (span, 1)
+        };
         Self {
-            text: Self::render_text(text, true, style, span, 1),
+            text: Self::render_text(text, true, style, col_span, row_span),
             span
         }
     }
@@ -493,7 +498,7 @@ impl Chart {
     }
 
     pub fn add_col_header_cell(&mut self, text: &str, col_span: usize) {
-        let cell = ChartHeaderCell::new(text, col_span, &self.style);
+        let cell = ChartHeaderCell::new(text, col_span, &self.style,false);
 
         let row = self.col_headers.get_or_insert_with(|| ChartHeaderRow::new());
         row.add_cell(cell);
@@ -514,7 +519,7 @@ impl Chart {
         if let Some(row) = self.col_headers.as_mut() {
             row.include_row_header()
         };
-        let cell = ChartHeaderCell::new(text, row_span, &self.style);
+        let cell = ChartHeaderCell::new(text, row_span, &self.style,true);
         if let Some(index) = index {
             if let Some(row) = self.children.get_mut(index) {
                 row.set_row_header(cell)

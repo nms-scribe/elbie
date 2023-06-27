@@ -16,11 +16,9 @@ Elbie = LB, Language Builder, and is a bunch of tools for building a constructed
 */
 
 /*
-TODO: Then, test on Old Elven again.
 TODO: Redo the Old Elven tables so that we have captions for the broad/slender rows, and possibly so 'h' shows up as a broad fricative.
 TODO: Once that's done, I think I can shift to using the output from elbie in the latex document for old elven.
-TODO: Note that I need to add the multirow package to get it to work.
-TODO: Then, finally, work on an HTML version.
+  -- Note that I need to add the multirow package to get it to work.
 */
 
 /*
