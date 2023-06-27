@@ -54,6 +54,9 @@ macro_rules! latex {
     ({ $text: ident }) => {
         concat!("{{",stringify!($text),"}}")
     };
+    ([ $text: ident ]) => {
+        concat!("[",stringify!($text),"]")
+    };
     ({*}) => {
         "{{*}}"
     };
@@ -167,9 +170,9 @@ trait ChartCell {
                 (2.., 0..=1, true, _) => format!(latex!(multicolumn{?}{l}{textbf{}}),col_span),
                 (2.., 0..=1, false, true) => format!(latex!(multicolumn{?}{l}{textbf{?}}),col_span,text),
                 (2.., 0..=1, false, false) => format!(latex!(multicolumn {?} {l} {?}),col_span,text),
-                (0..=1, 2.., true, _) => format!(latex!(multirow{?}{*}{}),row_span),
-                (0..=1, 2.., false, true) => format!(latex!(multirow{?}{*}{textbf{?}}),row_span,text),
-                (0..=1, 2.., false, false) => format!(latex!(multirow{?}{*}{?}),row_span,text),
+                (0..=1, 2.., true, _) => format!(latex!(multirow[t]{?}{*}{}),row_span),
+                (0..=1, 2.., false, true) => format!(latex!(multirow[t]{?}{*}{textbf{?}}),row_span,text),
+                (0..=1, 2.., false, false) => format!(latex!(multirow[t]{?}{*}{?}),row_span,text),
                 (_, _, true, _) => format!(""),
                 (_, _, false, true) => format!(latex!(textbf{?}),text),
                 (_, _, false, false) => format!("{}",text),
