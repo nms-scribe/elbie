@@ -167,9 +167,9 @@ trait ChartCell {
             },
             ChartStyle::LaTeX => match (col_span, row_span,text.is_empty(),is_header) {
                 (2.., 2.., _, _) => panic!("Can't have both col_span and row_span greater than 1"),
-                (2.., 0..=1, true, _) => format!(latex!(multicolumn{?}{l}{textbf{}}),col_span),
-                (2.., 0..=1, false, true) => format!(latex!(multicolumn{?}{l}{textbf{?}}),col_span,text),
-                (2.., 0..=1, false, false) => format!(latex!(multicolumn {?} {l} {?}),col_span,text),
+                (2.., 0..=1, true, _) => format!(latex!(multicolumn{?}{c}{textbf{}}),col_span),
+                (2.., 0..=1, false, true) => format!(latex!(multicolumn{?}{c}{textbf{?}}),col_span,text),
+                (2.., 0..=1, false, false) => format!(latex!(multicolumn{?}{c}{?}),col_span,text),
                 (0..=1, 2.., true, _) => format!(latex!(multirow[t]{?}{*}{}),row_span),
                 (0..=1, 2.., false, true) => format!(latex!(multirow[t]{?}{*}{textbf{?}}),row_span,text),
                 (0..=1, 2.., false, false) => format!(latex!(multirow[t]{?}{*}{?}),row_span,text),
