@@ -748,7 +748,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
     }
 
     // will eventually be used over add_difference
-    pub fn _build_difference(&mut self, name: &'static str, base_set: &'static str, exclude_sets: &[&'static str]) -> Result<(),LanguageError> {
+    pub fn build_difference(&mut self, name: &'static str, base_set: &'static str, exclude_sets: &[&'static str]) -> Result<(),LanguageError> {
       if let Some(_) = self.sets.get(name) {
         Err(LanguageError::SetAlreadyExists(name))
       } else {
