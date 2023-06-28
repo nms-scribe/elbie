@@ -16,17 +16,31 @@ Elbie = LB, Language Builder, and is a bunch of tools for building a constructed
 */
 
 /*
-TODO: Redo the Old Elven tables so that we have captions for the broad/slender rows, and possibly so 'h' shows up as a broad fricative.
-TODO: Once that's done, I think I can shift to using the output from elbie in the latex document for old elven.
-  -- Note that I need to add the multirow package to get it to work.
-*/
+FUTURE: Implementing syllable breaks, stress, etc, Simple Solution:
+- a "word" is sequence of syllables, not phonemes. A syllable is a sequence of phonemes. I don't think we need to support onset/rhyme structure, since that could be analyzed differently.
+- A syllable can also have stress, tone, etc.
+- spelling callbacks are the hardest part to deal with, but I'm not sure these are great anyway. Spelling might be a type of transformation.
+- Another difficulty is "converting" old words, which won't have the syllable breaks and stress indicators. The best thing I can think of is to have the validators guess when a syllable break is missing, and warn about modifiers missing without stopping the process.
 
-/*
-FUTURE: Implementing syllable breaks, stress, etc: (relatively simple)
-- replace phoneme sequences with WordElement enum, where phoneme is only one element.
-- Append new items to branch choices which allow adding these indicators to the word
-- Figure out how to represent these indicators in the word for writing and reading them phonetically
-- spelling is a bit more difficult, but there're lots of things about spelling that are difficult to implement right now.
+There have been arguments against syllables being a real thing, but I feel like their usage in analysis is big enough that I can still use them.
+https://web.archive.org/web/20150923211920/http://www.cunyphonologyforum.net/syllable.php
+https://web.archive.org/web/20150918220252/http://cunyphonologyforum.wikifoundry.com/page/Paraphonological+Phenomena
+
+FUTURE: Implement transformations:
+* regular sound change for building lexicons of daughter languages
+* regular sound changes for loan words from other languages (I don't expect this to be common)
+* orthography -- the same pattern matching of sound change could potentially be used to create more realistic orthography
+- This is mostly something very similar to regular expressions, searching for patterns in a word, possibly capturing some patterns, and replacing them with other patterns. The final test, however, would require validation to a new language, or something like that.
+
+FUTURE: Is there some way to use types to make languages easier to create? 
+- One issue is the use of string constants to identify environments, sets, phonemes, etc. Some of these would be better implemented as enums, but then we get into some extensive generics. 
+
+// TODO: Is there some way I can do the environments and sets as types? Maybe phonemes, sets and environments are traits instead that you implement in structs. I might be able to use generic constant parameters to help with that.
+// I could use macros to make those implementations easier to code. Phonemes should really be enumerations. This would require the language to be generic
+// and base itself off of phonemes. --- I think the hardest part is implementing a set that describes which phonemes can be chosen, and then to choose such a 
+// type randomly?
+
+
 */
 
 pub const PHONEME: &'static str = "phoneme";
@@ -202,7 +216,7 @@ impl<ItemType: Clone + Ord> Bag<ItemType> {
   }
 
   // returns a new bag containing objects in self, but not in other.
-  fn _difference(&self, other: &Bag<ItemType>) -> Self {
+  fn difference(&self, other: &Bag<ItemType>) -> Self {
     let mut self_iter = self.0.iter();
     let mut other_iter = other.0.iter();
     let mut result: Self = Bag::new();
@@ -480,10 +494,6 @@ impl Display for Word {
 
 }
 
-// TODO: Is there some way I can do the environments and sets as types? Maybe phonemes, sets and environments are traits instead that you implement in structs. I might be able to use generic constant parameters to help with that.
-// I could use macros to make those implementations easier to code. Phonemes should really be enumerations. This would require the language to be generic
-// and base itself off of phonemes. --- I think the hardest part is implementing a set that describes which phonemes can be chosen, and then to choose such a 
-// type randomly?
 
 #[derive(Debug,Clone)]
 pub enum EnvironmentChoice {
@@ -732,14 +742,14 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
       result
     }
 
-    fn _add_difference(&mut self, name: &'static str, source_a: &'static str, source_b: &'static str) -> Result<(),LanguageError> {
+    pub fn add_difference(&mut self, name: &'static str, source_a: &'static str, source_b: &'static str) -> Result<(),LanguageError> {
       
       if let Some(_) = self.sets.get(name) {
         Err(LanguageError::SetAlreadyExists(name))
       } else {
         let subset_a = self.get_set(source_a)?;
         let subset_b = self.get_set(source_b)?;
-        let set = subset_a._difference(subset_b);
+        let set = subset_a.difference(subset_b);
         self.sets.insert(name,set);
         Ok(())
 
@@ -755,7 +765,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
         let mut set = self.get_set(base_set)?.clone();
         for subset in exclude_sets {
           let subset = self.get_set(subset)?;
-          set = set._difference(subset);
+          set = set.difference(subset);
         }
         self.sets.insert(name, set);
         Ok(())

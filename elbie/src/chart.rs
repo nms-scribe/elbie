@@ -9,7 +9,7 @@ pub enum ChartStyle {
     Terminal, // columns separated by '|'
     Markdown, // columns separated and lines bordered by '|', header separated from rest by '===', header text enclosed in '**..**'
     LaTeX, // columns separated by '&', lines end with '\\', header text enclosed in '\textbf{..}'
-    // TODO: HTML, // written out as html markup.
+    // TODO: HTML, // written out as html markup. This would require the spacer to know if it's a th or td.
 }
 
 

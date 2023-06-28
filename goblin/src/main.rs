@@ -276,8 +276,8 @@ fn create_goblin_language() -> Result<Language<1>,LanguageError> {
   language.add_phoneme(Z,&[CONSONANT,CORONAL,ALVEOLAR,FRICATIVE,UNASPIRATED,VOICED,SIBILANT,OBSTRUENT])?;
   language.add_phoneme_with_spelling(ESH,["sh"],&[CONSONANT,CORONAL,POSTALVEOLAR,FRICATIVE,UNVOICED,UNASPIRATED,SIBILANT,OBSTRUENT])?;
   language.add_phoneme_with_spelling(X,["ch"],&[CONSONANT,DORSAL,VELAR,FRICATIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
-  language.add_phoneme_with_spelling(AGH, ["gh"], &[CONSONANT,DORSAL,VELAR,FRICATIVE,VOICED,UNASPIRATED,OBSTRUENT])?; // TODO:
-  language.add_phoneme_with_spelling(GHHEE, ["ghh"], &[CONSONANT,DORSAL,VELAR,FRICATIVE,VOICED,ASPIRATED,OBSTRUENT])?; // TODO:
+  language.add_phoneme_with_spelling(AGH, ["gh"], &[CONSONANT,DORSAL,VELAR,FRICATIVE,VOICED,UNASPIRATED,OBSTRUENT])?; // 
+  language.add_phoneme_with_spelling(GHHEE, ["ghh"], &[CONSONANT,DORSAL,VELAR,FRICATIVE,VOICED,ASPIRATED,OBSTRUENT])?; // 
   language.add_phoneme(H,&[CONSONANT,LARYNGEAL,GLOTTAL,FRICATIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
   language.add_phoneme_with_spelling(ESHT,["sht"],&[CONSONANT,CORONAL,POSTALVEOLAR,REV_AFFRICATE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
   language.add_phoneme_with_spelling(EHK,["hk"],&[CONSONANT,DORSAL,VELAR,REV_AFFRICATE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
@@ -317,8 +317,6 @@ fn create_goblin_language() -> Result<Language<1>,LanguageError> {
   language.add_union(NASAL_OR_OBSTRUENT, NASAL, OBSTRUENT)?;
   language.add_exclusion(CODA_AFTER_APPROXIMANT, NASAL_OR_OBSTRUENT, &[NYE, VHEE, ZHEE, H])?;
   language.add_union(TAP_OR_GLOTTAL, TAP, GLOTTAL)?;
-
-  // TODO: How can I say no 'h' in onset after x, th, sh, 
 
   language.add_environment(ONSET, &[
     EnvironmentBranch::new(VOWEL, &[
