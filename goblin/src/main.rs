@@ -305,18 +305,18 @@ fn create_goblin_language() -> Result<Language<1>,LanguageError> {
   language.add_exclusion(ONSET_CONSONANT, CONSONANT, &[ENG, EHK, EHG, ESHT, X, AGGA, H])?; 
   language.add_exclusion(CODA_CONSONANT, CONSONANT, &[NYE, VHEE, ZHEE, GHHEE, J])?; // Note that Tap-G and 'H' are allowed here, but would require the word to continue with another nucleus
   language.add_exclusion(OBSTRUENT_EXCEPT_GLOTTAL, OBSTRUENT, &[H])?;
-  language.add_intersection(LABIAL_NASAL, LABIAL, NASAL)?;
-  language.add_intersection(CORONAL_NASAL, CORONAL, NASAL)?;
-  language.add_intersection(DORSAL_NASAL, DORSAL, NASAL)?;
-  language.add_intersection(LABIAL_OBSTRUENT, LABIAL, OBSTRUENT)?;
+  language.build_intersection(LABIAL_NASAL, &[LABIAL, NASAL])?;
+  language.build_intersection(CORONAL_NASAL, &[CORONAL, NASAL])?;
+  language.build_intersection(DORSAL_NASAL, &[DORSAL, NASAL])?;
+  language.build_intersection(LABIAL_OBSTRUENT, &[LABIAL, OBSTRUENT])?;
   language.add_exclusion(CODA_LABIAL_OBSTRUENT, LABIAL_OBSTRUENT, &[VHEE])?;
-  language.add_intersection(CORONAL_OBSTRUENT, CORONAL, OBSTRUENT)?;
+  language.build_intersection(CORONAL_OBSTRUENT, &[CORONAL, OBSTRUENT])?;
   language.add_exclusion(CODA_CORONAL_OBSTRUENT, CORONAL_OBSTRUENT, &[ZHEE])?;
-  language.add_intersection(DORSAL_OBSTRUENT, DORSAL, OBSTRUENT)?;
+  language.build_intersection(DORSAL_OBSTRUENT, &[DORSAL, OBSTRUENT])?;
   language.add_exclusion(CODA_DORSAL_OBSTRUENT, DORSAL_OBSTRUENT, &[H])?;
-  language.add_union(NASAL_OR_OBSTRUENT, NASAL, OBSTRUENT)?;
+  language.build_union(NASAL_OR_OBSTRUENT, &[NASAL, OBSTRUENT])?;
   language.add_exclusion(CODA_AFTER_APPROXIMANT, NASAL_OR_OBSTRUENT, &[NYE, VHEE, ZHEE, H])?;
-  language.add_union(TAP_OR_GLOTTAL, TAP, GLOTTAL)?;
+  language.build_union(TAP_OR_GLOTTAL, &[TAP, GLOTTAL])?;
 
   language.add_environment(ONSET, &[
     EnvironmentBranch::new(VOWEL, &[

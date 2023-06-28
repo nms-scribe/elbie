@@ -742,21 +742,6 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
       result
     }
 
-    pub fn add_difference(&mut self, name: &'static str, source_a: &'static str, source_b: &'static str) -> Result<(),LanguageError> {
-      
-      if let Some(_) = self.sets.get(name) {
-        Err(LanguageError::SetAlreadyExists(name))
-      } else {
-        let subset_a = self.get_set(source_a)?;
-        let subset_b = self.get_set(source_b)?;
-        let set = subset_a.difference(subset_b);
-        self.sets.insert(name,set);
-        Ok(())
-
-      }
-
-    }
-
     // will eventually be used over add_difference
     pub fn build_difference(&mut self, name: &'static str, base_set: &'static str, exclude_sets: &[&'static str]) -> Result<(),LanguageError> {
       if let Some(_) = self.sets.get(name) {
@@ -770,21 +755,6 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
         self.sets.insert(name, set);
         Ok(())
       }
-    }
-
-    pub fn add_intersection(&mut self, name: &'static str, source_a: &'static str, source_b: &'static str) -> Result<(),LanguageError> {
-      
-      if let Some(_) = self.sets.get(name) {
-        Err(LanguageError::SetAlreadyExists(name))
-      } else {
-        let subset_a = self.get_set(source_a)?;
-        let subset_b = self.get_set(source_b)?;
-        let set = subset_a.intersection(subset_b);
-        self.sets.insert(name,set);
-        Ok(())
-
-      }
-
     }
 
     pub fn build_intersection(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),LanguageError> {
@@ -807,21 +777,6 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
           self.sets.insert(name, set);
           Ok(())
         }
-      }
-
-    }
-
-    pub fn add_union(&mut self, name: &'static str, source_a: &'static str, source_b: &'static str) -> Result<(),LanguageError> {
-      
-      if let Some(_) = self.sets.get(name) {
-        Err(LanguageError::SetAlreadyExists(name))
-      } else {
-        let subset_a = self.get_set(source_a)?;
-        let subset_b = self.get_set(source_b)?;
-        let set = subset_a.union(subset_b);
-        self.sets.insert(name,set);
-        Ok(())
-
       }
 
     }
