@@ -8,6 +8,8 @@ use csv::Reader;
 use std::fmt::Display;
 
 mod chart;
+#[cfg(test)] mod test;
+
 use chart::Chart;
 use chart::ChartStyle;
 
@@ -32,10 +34,14 @@ FUTURE: Implement transformations:
 * orthography -- the same pattern matching of sound change could potentially be used to create more realistic orthography
 - This is mostly something very similar to regular expressions, searching for patterns in a word, possibly capturing some patterns, and replacing them with other patterns. The final test, however, would require validation to a new language, or something like that.
 
-FUTURE: Is there some way to use types to make languages easier to create? 
-- One issue is the use of string constants to identify environments, sets, phonemes, etc. Some of these would be better implemented as enums, but then we get into some extensive generics. 
+FUTURE: Is there some way to use types or something else to make languages easier to create? 
+- One issue is the use of string constants to identify environments, sets, phonemes, etc. 
+  - There is a small possibility that I could repeat the string name under two different constant names, which could cause some hard to debug issues.
+  - The use of a string constant removes some useful type-checking: if I specify an environment name instead of a set name, I don't know until run-time.
+  - It would be nice if I could just have "phoneme" and "phoneme_set" objects and the like that can be reference by variable, and have internal access to the language they are associated with. (For example, "fricative.intersect_with(glottal)" should work without having to retrieve things off of the language, or even without having a string name)
+- Constant type parameters are now possible in rust, there might be something I could use out of that.
 
-// TODO: Is there some way I can do the environments and sets as types? Maybe phonemes, sets and environments are traits instead that you implement in structs. I might be able to use generic constant parameters to help with that.
+// FUTURE: Is there some way I can do the environments and sets as types? Maybe phonemes, sets and environments are traits instead that you implement in structs. I might be able to use generic constant parameters to help with that.
 // I could use macros to make those implementations easier to code. Phonemes should really be enumerations. This would require the language to be generic
 // and base itself off of phonemes. --- I think the hardest part is implementing a set that describes which phonemes can be chosen, and then to choose such a 
 // type randomly?
@@ -156,160 +162,87 @@ impl<ItemType: Clone + Ord> Bag<ItemType> {
     self.0.len() == 0
   }
 
-  // returns a new bag containing objects in either self or other
-  fn union(&self, other: &Bag<ItemType>) -> Self {
+
+  fn set_operation(&self, other: &Bag<ItemType>, insert_if_in_self: bool, insert_if_in_other: bool, insert_if_in_both: bool) -> Self {
     let mut self_iter = self.0.iter();
     let mut other_iter = other.0.iter();
     let mut result: Self = Bag::new();
 
-    // TODO: Is there some simpler way we can do this with iterators?
-
-    // This algorithm should be more efficient because we're depending on both vectors being sorted, rather than doing the 'contains'
+    // This algorithm should be more efficient because I know both vectors are sorted, rather than doing the 'contains'
     // and a binary_search for every check. There could still be some improvements.
-
+  
     let mut self_next = self_iter.next();
     let mut other_next = other_iter.next();
 
+    // NOTE: To be very clear, this is not a iter.zip. We're only iterating items conditionally.
     loop {
-      if let Some(self_some) = self_next {
-        if let Some(other_some) = other_next {
-          if self_some < other_some {
-            // self is less, so add that and continue iterating self
-            result.insert(self_some.clone()); // TODO: If I was certain that this algorithm works, then I should be able to just push
-            self_next = self_iter.next();
-            continue;
-          } else if self_some > other_some {
-            // other is less, so add that and continue iterating other
-            result.insert(other_some.clone()); // TODO: If I was certain that this algorithm works, then I should be able to just push
-            other_next = other_iter.next();
-            continue;
-          } else {
-            // both are equal, so add self and continue iterating both
-            result.insert(self_some.clone()); // TODO: If I was certain that this algorithm works, then I should be able to just push
-            self_next = self_iter.next();
-            other_next = other_iter.next();
-            continue;
+      match (self_next,other_next) {
+        (Some(self_some), Some(other_some)) => {
+          match self_some.cmp(other_some) {
+            std::cmp::Ordering::Less => {
+              // self is less, so it is in self but not other. (if it had been in other, we would have seen it by now)
+              if insert_if_in_self {
+                result.insert(self_some.clone()); 
+              }
+              // iterate self, but not other. 
+              self_next = self_iter.next();
+            },
+            std::cmp::Ordering::Greater => {
+              // other is less, so it is in other, but not self (if it had been in self, we would have seen it by now)
+              if insert_if_in_other {
+                result.insert(other_some.clone()); 
+              }
+              other_next = other_iter.next();
+            },
+            std::cmp::Ordering::Equal => {
+              // both are equal, so it is in both
+              if insert_if_in_both {
+                result.insert(self_some.clone()); 
+              }
+              self_next = self_iter.next();
+              other_next = other_iter.next();
+            },
           }
-        } else {
-          // we've eaten through all others...
-          break;
-        }
-      } else {
-        // we've eaten through all of the 
-        break;
+        },
+        (Some(self_some),None) => {
+            if insert_if_in_self {
+              result.insert(self_some.clone());
+            }
+            self_next = self_iter.next();
+        },
+        (None,Some(other_some)) => {
+            if insert_if_in_other {
+              result.insert(other_some.clone());
+            }
+            other_next = other_iter.next();
+
+        },
+        (None, None) => break, // we've exhausted both
       }
-
     }
-
-    // either one of the two or both are empty, so loop through each to fill the rest.
-    while let Some(self_some) = self_next {
-      result.insert(self_some.clone()); // TODO: If I was certain that this algorithm works, then I should be able to just push
-      self_next = self_iter.next();
-    }
-
-    while let Some(other_some) = other_next {
-      result.insert(other_some.clone()); // TODO: If I was certain that this algorithm works, then I should be able to just push
-      other_next = other_iter.next();
-    }
-
+  
     result
+  }
+
+  // returns a new bag containing objects in either self or other
+  fn union(&self, other: &Bag<ItemType>) -> Self {
+    self.set_operation(other, true, true, true)
   }
 
   // returns a new bag containing objects in self, but not in other.
   fn difference(&self, other: &Bag<ItemType>) -> Self {
-    let mut self_iter = self.0.iter();
-    let mut other_iter = other.0.iter();
-    let mut result: Self = Bag::new();
-
-    // Based on union, but we're only adding in stuff that is only contained in self if it isn't in the other.
-
-    let mut self_next = self_iter.next();
-    let mut other_next = other_iter.next();
-
-    loop {
-      if let Some(self_some) = self_next {
-        if let Some(other_some) = other_next {
-          if self_some < other_some {
-            // self is less, so add that and continue iterating self
-            result.insert(self_some.clone()); // TODO: If I was certain that this algorithm works, then I should be able to just push
-            self_next = self_iter.next();
-            continue;
-          } else if self_some > other_some {
-            // other is less, so it doesn't belong, continue iterating it...
-            other_next = other_iter.next();
-            continue;
-          } else {
-            // both are equal, so they con't belong, continue iterating both.
-            self_next = self_iter.next();
-            other_next = other_iter.next();
-            continue;
-          }
-        } else {
-          // we've eaten through all others...
-          break;
-        }
-      } else {
-        // we've eaten through all of the self
-        break;
-      }
-
-    }
-
-    // either one of the two or both are empty, so loop through each to fill the rest.
-    while let Some(self_some) = self_next {
-      result.insert(self_some.clone()); // TODO: If I was certain that this algorithm works, then I should be able to just push
-      self_next = self_iter.next();
-    }
-
-    // anything left in other iterator doesn't belong.
-
-    result
-
+    self.set_operation(other, true, false, false)
   }
 
   // returns a new bag containing objects both in self and other
   fn intersection(&self, other: &Bag<ItemType>) -> Self {
-    let mut self_iter = self.0.iter();
-    let mut other_iter = other.0.iter();
-    let mut result: Self = Bag::new();
+    self.set_operation(other, false, false, true)
 
-    // Algorithm based on union, we just only put stuff in when they are equal.
+  }
 
-    let mut self_next = self_iter.next();
-    let mut other_next = other_iter.next();
-
-    loop {
-      if let Some(self_some) = self_next {
-        if let Some(other_some) = other_next {
-          if self_some < other_some {
-            // self is less, so continue iterating self
-            self_next = self_iter.next();
-            continue;
-          } else if self_some > other_some {
-            // other is less, so continue iterating other
-            other_next = other_iter.next();
-            continue;
-          } else {
-            // both are equal, so add self and continue iterating both
-            result.insert(self_some.clone()); // TODO: If I was certain that this algorithm works, then I should be able to just push
-            self_next = self_iter.next();
-            other_next = other_iter.next();
-            continue;
-          }
-        } else {
-          // we've eaten through all others...
-          break;
-        }
-      } else {
-        // we've eaten through all of the self
-        break;
-      }
-
-    }
-
-    // anything left in the iterators is not in the other, so they don't make it into an intersection.
-
-    result
+  // returns a new bag containing objects in self or other but not both 
+  fn _symmetric_difference(&self, other: &Bag<ItemType>) -> Self {
+    self.set_operation(other, true, true, false)
   }
 
 
