@@ -1391,10 +1391,10 @@ fn parse_args<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Ar
 
   while let Some(arg) = args.next() {
     match arg.as_ref() {
-      "--grid=plain" => set_grid_style!(ChartStyle::Plain),
-      "--grid=terminal" => set_grid_style!(ChartStyle::Terminal),
-      "--grid=markdown" => set_grid_style!(ChartStyle::Markdown),
-      "--grid=latex" => set_grid_style!(ChartStyle::LaTeX),
+      "--format=plain" => set_grid_style!(ChartStyle::Plain),
+      "--format=terminal" => set_grid_style!(ChartStyle::Terminal),
+      "--format=markdown" => set_grid_style!(ChartStyle::Markdown),
+      "--format=latex" => set_grid_style!(ChartStyle::LaTeX),
       "--generate" => set_command!(Command::GenerateWords(args.next().expect("Generate count required").as_ref().parse().expect("Argument should be a number"))),
       "--validate" => {
         let mut words = vec![args.next().expect("No words to validate").as_ref().to_owned()];
