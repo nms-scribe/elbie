@@ -1469,8 +1469,15 @@ fn process_lexicon<const ORTHOGRAPHIES: usize>(grid_style: Option<ChartStyle>, l
 
     match language.process_lexicon(path) {
     Ok(entries) => {
+      let mut after_first = false;
       // NOTE: I'm *not* sorting the entries before grouping. The user might have some sort of custom sort in the data, however.
       for entry in entries {
+
+        if after_first {
+            println!();
+        } else {
+            after_first = true;
+        }
 
         let mut main_spelling = String::new();
         let mut other_spellings = Vec::new();
