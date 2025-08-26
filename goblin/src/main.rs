@@ -1,4 +1,7 @@
+use std::env;
+use core::iter;
 use std::rc::Rc;
+use core::slice::Iter;
 
 use elbie::Language;
 use elbie::Phoneme;
@@ -39,7 +42,7 @@ category-declaration = 'add' identifier '{' phoneme-category-declaration+ '}'
    in the expression are modified later, the result category in this statement will not change.
 
 alias = identifier '=' set-expression ';'
--- an alias defines a 'set' which is based on combinations of other sets and phonemes, or rarely an alias defines an identifier that represents a phoneme (the preferred 
+-- an alias defines a 'set' which is based on combinations of other sets and phonemes, or rarely an alias defines an identifier that represents a phoneme (the preferred
 way of doing that is using the mechanism in phoneme-declaration).
 
 set-expression = term | (set-expression ('+' | '&' | '-' ) term)
@@ -74,7 +77,7 @@ table-identifier-term = identifier | '(' identifier* ')'
 -- basically, you can assign the phonemes to multiple categories at once in the column by grouping them in parantheses.
 
 phonotactics = 'phonotactics' phonotactics-environment* initial-phonotactics phonotactics-environment*
--- in the future I may come up with another mechanism for defining this, that looks more like Linguistic academic standards. This is why 'environment' must be 
+-- in the future I may come up with another mechanism for defining this, that looks more like Linguistic academic standards. This is why 'environment' must be
 specified at each line, so I can change to 'rule' or something like that.
 
 initial-phonotactics = 'initial' 'phonemes' identifier '>' identifier
@@ -84,14 +87,14 @@ initial-phonotactics = 'initial' 'phonemes' identifier '>' identifier
 phonotactics-environment = 'environment' identifier ':' phonotactics-branch (';' phonotactics-branch) '.'
 -- the identifier is the name of the environment being defined
 
-phonotactics-branch = 'on' identifier 'choose' phonotactics-choice (',' phonotactics-choice) 
+phonotactics-branch = 'on' identifier 'choose' phonotactics-choice (',' phonotactics-choice)
 -- identifier is a set of phonemes, if the last generated phoneme is in this set, this branch will be followed.
 
 phonotactics-choice = 'done' | phonotactics-continuing-choice ('(' integer ')')?
 -- done means the word can end here. (I need a way to check for infinite recursion)
 -- integer provides a weight to the choice
 
-phontactics-continuing-choice = 'phonemes' identifier 'nocopy'? '>' identifier 
+phontactics-continuing-choice = 'phonemes' identifier 'nocopy'? '>' identifier
 -- first identifier is the name of a a set of phonemes to generate the next phoneme from.
 -- second identifier is the name of an environment to enter after generating that phoneme.
 -- nocopy means that the previous phoneme can not be duplicated in this choice, even if it's a member of the set.
@@ -104,7 +107,7 @@ orthography-definition = phoneme ':' string ';'
 lexicon = 'lexicon' lexicon-entry
 -- **** if this section is included, all words in the lexicon will be validated against the current language at load time, and an invalid word will cause a syntax error.
 
-lexicon-entry = spelled-word phonetic-word 
+lexicon-entry = spelled-word phonetic-word
 
 spelled-word = .... this is like an identifier except that it's pretty much everything allowed except spaces, and I might even allow that with escapes.
 
@@ -129,180 +132,179 @@ such as phoneme tables, lexicon words, etc.
 */
 
 // language name
-const GOBLIN: &'static str = "goblin";
+const GOBLIN: &str = "goblin";
 
 // consonant categories
-const CONSONANT: &'static str = "consonant";
-const VOWEL: &'static str = "vowel";
-const LABIAL: &'static str = "labial";
-const BILABIAL: &'static str = "bilabial";
-const NASAL: &'static str = "nasal";
-const VOICED: &'static str = "voiced";
-const CORONAL: &'static str = "coronal";
-const ALVEOLAR: &'static str = "alveolar";
-const DORSAL: &'static str = "dorsal";
-const PALATAL: &'static str = "palatal";
-const VELAR: &'static str = "velar";
-const PLOSIVE: &'static str = "plosive";
-const UNVOICED: &'static str = "unvoiced";
-const LABIODENTAL: &'static str = "labiodental";
-const FRICATIVE: &'static str = "fricative";
-const ASPIRATED: &'static str = "aspirated";
-const UNASPIRATED: &'static str = "unaspirated";
-const DENTAL: &'static str = "dental";
-const POSTALVEOLAR: &'static str = "post-alveolar";
-const LARYNGEAL: &'static str = "laryngeal";
-const GLOTTAL: &'static str = "glottal";
-const REV_AFFRICATE: &'static str = "reverse affricate";
-const APPROXIMANT: &'static str = "approximant";
-const UVULAR: &'static str = "uvular";
-const TAP: &'static str = "tap";
-const LATERAL: &'static str = "lateral";
-const SIBILANT: &'static str = "sibilant";
-const OBSTRUENT: &'static str = "obstruent";
+const CONSONANT: &str = "consonant";
+const VOWEL: &str = "vowel";
+const LABIAL: &str = "labial";
+const BILABIAL: &str = "bilabial";
+const NASAL: &str = "nasal";
+const VOICED: &str = "voiced";
+const CORONAL: &str = "coronal";
+const ALVEOLAR: &str = "alveolar";
+const DORSAL: &str = "dorsal";
+const PALATAL: &str = "palatal";
+const VELAR: &str = "velar";
+const PLOSIVE: &str = "plosive";
+const UNVOICED: &str = "unvoiced";
+const LABIODENTAL: &str = "labiodental";
+const FRICATIVE: &str = "fricative";
+const ASPIRATED: &str = "aspirated";
+const UNASPIRATED: &str = "unaspirated";
+const DENTAL: &str = "dental";
+const POSTALVEOLAR: &str = "post-alveolar";
+const LARYNGEAL: &str = "laryngeal";
+const GLOTTAL: &str = "glottal";
+const REV_AFFRICATE: &str = "reverse affricate";
+const APPROXIMANT: &str = "approximant";
+const UVULAR: &str = "uvular";
+const TAP: &str = "tap";
+const LATERAL: &str = "lateral";
+const SIBILANT: &str = "sibilant";
+const OBSTRUENT: &str = "obstruent";
 
 // vowel categories
-const FRONT: &'static str = "front";
-const CLOSE: &'static str = "close";
-const UNROUNDED: &'static str = "unrounded";
-const BACK: &'static str = "back";
-const ROUNDED: &'static str = "rounded";
-const NEARCLOSE: &'static str = "near-close";
-const OPENMID: &'static str = "open-mid";
-const OPEN: &'static str = "open";
-const DIPHTHONG: &'static str = "diphthong";
+const FRONT: &str = "front";
+const CLOSE: &str = "close";
+const UNROUNDED: &str = "unrounded";
+const BACK: &str = "back";
+const ROUNDED: &str = "rounded";
+const NEARCLOSE: &str = "near-close";
+const OPENMID: &str = "open-mid";
+const OPEN: &str = "open";
+const DIPHTHONG: &str = "diphthong";
 
 // complex categories
-const INITIAL_ONSET_PHONEME: &'static str = "any phoneme except unvoiced or nasal velar, reversed affricate, and tap)";
-const ONSET_PHONEME: &'static str = "any phoneme except unvoiced or nasal velar, reversed affricate, tap, and glottal";
-const ONSET_CONSONANT: &'static str = "consonant except unvoiced or nasal velar, reversed affricate, tap, and glottal";
-const CODA_CONSONANT: &'static str = "consonant except palatal and aspirated";
-const LABIAL_NASAL: &'static str = "labial-nasal";
-const CORONAL_NASAL: &'static str = "coronal-nasal";
-const DORSAL_NASAL: &'static str = "dorsal-nasal";
-const LABIAL_OBSTRUENT: &'static str = "labial-obstruent";
-const CODA_LABIAL_OBSTRUENT: &'static str = "labial-obstruent except aspirated";
-const CORONAL_OBSTRUENT: &'static str = "coronal-obstruent";
-const CODA_CORONAL_OBSTRUENT: &'static str = "coronal-obstruent except aspirated";
-const DORSAL_OBSTRUENT: &'static str = "dorsal-obstruent";
-const CODA_DORSAL_OBSTRUENT: &'static str = "dorsal-obstruent except aspirated and glottal";
-const NASAL_OR_OBSTRUENT: &'static str = "nasal or obstruent";
-const CODA_AFTER_APPROXIMANT: &'static str = "nasal or obstruent except palatal, aspirated, and glottal)";
-const TAP_OR_GLOTTAL: &'static str = "tap or glottal";
-const NONLATERALAPPROXIMANT: &'static str = "approximant except lateral";
-const OBSTRUENT_EXCEPT_GLOTTAL: &'static str = "obstruent except glottal";
+const INITIAL_ONSET_PHONEME: &str = "any phoneme except unvoiced or nasal velar, reversed affricate, and tap)";
+const ONSET_PHONEME: &str = "any phoneme except unvoiced or nasal velar, reversed affricate, tap, and glottal";
+const ONSET_CONSONANT: &str = "consonant except unvoiced or nasal velar, reversed affricate, tap, and glottal";
+const CODA_CONSONANT: &str = "consonant except palatal and aspirated";
+const LABIAL_NASAL: &str = "labial-nasal";
+const CORONAL_NASAL: &str = "coronal-nasal";
+const DORSAL_NASAL: &str = "dorsal-nasal";
+const LABIAL_OBSTRUENT: &str = "labial-obstruent";
+const CODA_LABIAL_OBSTRUENT: &str = "labial-obstruent except aspirated";
+const CORONAL_OBSTRUENT: &str = "coronal-obstruent";
+const CODA_CORONAL_OBSTRUENT: &str = "coronal-obstruent except aspirated";
+const DORSAL_OBSTRUENT: &str = "dorsal-obstruent";
+const CODA_DORSAL_OBSTRUENT: &str = "dorsal-obstruent except aspirated and glottal";
+const NASAL_OR_OBSTRUENT: &str = "nasal or obstruent";
+const CODA_AFTER_APPROXIMANT: &str = "nasal or obstruent except palatal, aspirated, and glottal)";
+const TAP_OR_GLOTTAL: &str = "tap or glottal";
+const NONLATERALAPPROXIMANT: &str = "approximant except lateral";
+const OBSTRUENT_EXCEPT_GLOTTAL: &str = "obstruent except glottal";
 
 // environments
-const ONSET: &'static str = "onset";
-const CODA: &'static str = "coda";
+const ONSET: &str = "onset";
+const CODA: &str = "coda";
 
 // phoneme names
-const M: &'static str = "m";
-const N: &'static str = "n";
-const NYE: &'static str = "ɲ";
-const ENG: &'static str = "ŋ";
-const P: &'static str = "p";
-const B: &'static str = "b";
-const T: &'static str = "t";
-const D: &'static str = "d";
-const K: &'static str = "k";
-const G: &'static str = "g";
-const F: &'static str = "f";
-const VHEE: &'static str = "vʰ";
-const V: &'static str = "v";
-const THETA: &'static str = "θ";
-const S: &'static str = "s";
-const ZHEE: &'static str = "zʰ";
-const Z: &'static str = "z";
-const ESH: &'static str = "ʃ";
-const X: &'static str = "x";
-const AGH: &'static str = "ɣ";
-const GHHEE: &'static str = "ɣʰ";
-const H: &'static str = "h";
-const ESHT: &'static str = "ʃ͜t̠";
-const EHK: &'static str = "x͜k";
-const EHG: &'static str = "ɣ͜ɡ"; 
-const AHR: &'static str = "ɹ̥";
-const R: &'static str = "ɹ";
-const J: &'static str = "j";
-const AGGA: &'static str = "ɢ̆";
-const L: &'static str = "l";
-const EE: &'static str = "i";
-const OO: &'static str = "u";
-const I: &'static str = "ɪ";
-const E: &'static str = "ɛ";
-const U: &'static str = "ɔ";
-const A: &'static str = "a";
-const O: &'static str = "ɒ";
-const AEU: &'static str = "ɛu̯";
-const OU: &'static str = "au̯";
-const OI: &'static str = "ɒi̯";
-const UI: &'static str = "ɔi̯";
+const M: &str = "m";
+const N: &str = "n";
+const NYE: &str = "ɲ";
+const ENG: &str = "ŋ";
+const P: &str = "p";
+const B: &str = "b";
+const T: &str = "t";
+const D: &str = "d";
+const K: &str = "k";
+const G: &str = "g";
+const F: &str = "f";
+const VHEE: &str = "vʰ";
+const V: &str = "v";
+const THETA: &str = "θ";
+const S: &str = "s";
+const ZHEE: &str = "zʰ";
+const Z: &str = "z";
+const ESH: &str = "ʃ";
+const X: &str = "x";
+const AGH: &str = "ɣ";
+const GHHEE: &str = "ɣʰ";
+const H: &str = "h";
+const ESHT: &str = "ʃ͜t̠";
+const EHK: &str = "x͜k";
+const EHG: &str = "ɣ͜ɡ";
+const AHR: &str = "ɹ̥";
+const R: &str = "ɹ";
+const J: &str = "j";
+const AGGA: &str = "ɢ̆";
+const L: &str = "l";
+const EE: &str = "i";
+const OO: &str = "u";
+const I: &str = "ɪ";
+const E: &str = "ɛ";
+const U: &str = "ɔ";
+const A: &str = "a";
+const O: &str = "ɒ";
+const AEU: &str = "ɛu̯";
+const OU: &str = "au̯";
+const OI: &str = "ɒi̯";
+const UI: &str = "ɔi̯";
 
-fn spell_eng(_: &Language<1>, _: &Rc<Phoneme>, result: &mut String, next: &mut std::iter::Peekable<std::slice::Iter<Rc<Phoneme>>>) {
-  result.push_str("n");
-  if let Some(phoneme) = next.peek() {
-    let phoneme = phoneme.clone();
+fn spell_eng(_: &Language<1>, _: &Rc<Phoneme>, result: &mut String, next: Option<&mut iter::Peekable<Iter<Rc<Phoneme>>>>) {
+  result.push('n');
+  if let Some(phoneme) = next.and_then(|next| next.peek()) {
     match phoneme.name {
-      K | X | EHK | EHG => { // these sounds automatically indicate /ŋ/, so no special spelling needed. 
+      K | X | EHK | EHG => { // these sounds automatically indicate /ŋ/, so no special spelling needed.
                              // /g/ is not in here as /ŋg/ would otherwise be confused with /ŋ/.
       },
-      _ => result.push_str("g") // all other sounds get a "g" to indicate the change.
+      _ => result.push('g') // all other sounds get a "g" to indicate the change.
     }
   } else {
-    result.push_str("g")
+    result.push('g')
   }
 }
 
 fn create_goblin_language() -> Result<Language<1>,LanguageError> {
   let mut language = Language::new(GOBLIN,INITIAL_ONSET_PHONEME,ONSET,["Transcription"]);
 
-  language.add_phoneme(M,&[CONSONANT,LABIAL,BILABIAL,NASAL,UNASPIRATED,VOICED])?;
-  language.add_phoneme(N,&[CONSONANT,CORONAL,ALVEOLAR,NASAL,UNASPIRATED,VOICED])?;
-  language.add_phoneme_with_spelling(NYE,["ny"],&[CONSONANT,DORSAL,PALATAL,NASAL,UNASPIRATED,VOICED])?;
-  language.add_phoneme_with_spelling_fn(ENG,[spell_eng],&[CONSONANT,DORSAL,VELAR,NASAL,UNASPIRATED,VOICED])?;
-  language.add_phoneme(P,&[CONSONANT,LABIAL,BILABIAL,PLOSIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
-  language.add_phoneme(B,&[CONSONANT,LABIAL,BILABIAL,PLOSIVE,UNASPIRATED,VOICED,OBSTRUENT])?;
-  language.add_phoneme(T,&[CONSONANT,CORONAL,ALVEOLAR,PLOSIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
-  language.add_phoneme(D,&[CONSONANT,CORONAL,ALVEOLAR,PLOSIVE,UNASPIRATED,VOICED,OBSTRUENT])?;
-  language.add_phoneme(K,&[CONSONANT,DORSAL,VELAR,PLOSIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
-  language.add_phoneme(G,&[CONSONANT,DORSAL,VELAR,PLOSIVE,UNASPIRATED,VOICED,OBSTRUENT])?;
-  language.add_phoneme(F,&[CONSONANT,LABIAL,LABIODENTAL,FRICATIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
-  language.add_phoneme_with_spelling(VHEE,["vh"],&[CONSONANT,LABIAL,LABIODENTAL,FRICATIVE,ASPIRATED,VOICED,OBSTRUENT])?;
-  language.add_phoneme(V,&[CONSONANT,LABIAL,LABIODENTAL,FRICATIVE,UNASPIRATED,VOICED,OBSTRUENT])?;
-  language.add_phoneme_with_spelling(THETA,["th"],&[CONSONANT,CORONAL,DENTAL,FRICATIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
-  language.add_phoneme(S,&[CONSONANT,CORONAL,ALVEOLAR,FRICATIVE,UNVOICED,UNASPIRATED,SIBILANT,OBSTRUENT])?;
-  language.add_phoneme_with_spelling(ZHEE,["zh"],&[CONSONANT,CORONAL,ALVEOLAR,FRICATIVE,VOICED,ASPIRATED,SIBILANT,OBSTRUENT])?;
-  language.add_phoneme(Z,&[CONSONANT,CORONAL,ALVEOLAR,FRICATIVE,UNASPIRATED,VOICED,SIBILANT,OBSTRUENT])?;
-  language.add_phoneme_with_spelling(ESH,["sh"],&[CONSONANT,CORONAL,POSTALVEOLAR,FRICATIVE,UNVOICED,UNASPIRATED,SIBILANT,OBSTRUENT])?;
-  language.add_phoneme_with_spelling(X,["ch"],&[CONSONANT,DORSAL,VELAR,FRICATIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
-  language.add_phoneme_with_spelling(AGH, ["gh"], &[CONSONANT,DORSAL,VELAR,FRICATIVE,VOICED,UNASPIRATED,OBSTRUENT])?; // 
-  language.add_phoneme_with_spelling(GHHEE, ["ghh"], &[CONSONANT,DORSAL,VELAR,FRICATIVE,VOICED,ASPIRATED,OBSTRUENT])?; // 
-  language.add_phoneme(H,&[CONSONANT,LARYNGEAL,GLOTTAL,FRICATIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
-  language.add_phoneme_with_spelling(ESHT,["sht"],&[CONSONANT,CORONAL,POSTALVEOLAR,REV_AFFRICATE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
-  language.add_phoneme_with_spelling(EHK,["hk"],&[CONSONANT,DORSAL,VELAR,REV_AFFRICATE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
-  language.add_phoneme_with_spelling(EHG,["hg"],&[CONSONANT,DORSAL,VELAR,REV_AFFRICATE,UNASPIRATED,VOICED,OBSTRUENT])?;
-  language.add_phoneme_with_spelling(AHR,["hr"],&[CONSONANT,CORONAL,ALVEOLAR,APPROXIMANT,NONLATERALAPPROXIMANT,UNASPIRATED,UNVOICED])?;
-  language.add_phoneme_with_spelling(R,["r"],&[CONSONANT,CORONAL,ALVEOLAR,APPROXIMANT,NONLATERALAPPROXIMANT,UNASPIRATED,VOICED])?;
-  language.add_phoneme_with_spelling(J,["y"],&[CONSONANT,DORSAL,PALATAL,APPROXIMANT,NONLATERALAPPROXIMANT,UNASPIRATED,VOICED])?;
-  language.add_phoneme_with_spelling(AGGA,["gg"],&[CONSONANT,DORSAL,UVULAR,TAP,UNASPIRATED,VOICED])?;
-  language.add_phoneme(L,&[CONSONANT,CORONAL,ALVEOLAR,LATERAL,APPROXIMANT,UNASPIRATED,VOICED])?;
-  
-  language.add_phoneme_with_spelling(EE,["ee"],&[VOWEL,FRONT,CLOSE,UNROUNDED])?;
-  language.add_phoneme_with_spelling(OO,["oo"],&[VOWEL,BACK,CLOSE,ROUNDED])?;
-  language.add_phoneme_with_spelling(I,["i"],&[VOWEL,FRONT,NEARCLOSE,UNROUNDED])?;
-  language.add_phoneme_with_spelling(E,["e"],&[VOWEL,FRONT,OPENMID,UNROUNDED])?;
-  language.add_phoneme_with_spelling(U,["u"],&[VOWEL,BACK,OPENMID,ROUNDED])?;
-  language.add_phoneme(A,&[VOWEL,FRONT,OPEN,UNROUNDED])?;
-  language.add_phoneme_with_spelling(O,["o"],&[VOWEL,BACK,OPEN,ROUNDED])?;
-  language.add_phoneme_with_spelling(AEU,["eu"],&[VOWEL,DIPHTHONG])?; 
-  language.add_phoneme_with_spelling(OU,["ou"],&[VOWEL,DIPHTHONG])?;
-  language.add_phoneme_with_spelling(OI,["oi"],&[VOWEL,DIPHTHONG])?; 
-  language.add_phoneme_with_spelling(UI,["ui"],&[VOWEL,DIPHTHONG])?; 
+  _ = language.add_phoneme(M,&[CONSONANT,LABIAL,BILABIAL,NASAL,UNASPIRATED,VOICED])?;
+  _ = language.add_phoneme(N,&[CONSONANT,CORONAL,ALVEOLAR,NASAL,UNASPIRATED,VOICED])?;
+  _ = language.add_phoneme_with_spelling(NYE,["ny"],&[CONSONANT,DORSAL,PALATAL,NASAL,UNASPIRATED,VOICED])?;
+  _ = language.add_phoneme_with_spelling_fn(ENG,[spell_eng],&[CONSONANT,DORSAL,VELAR,NASAL,UNASPIRATED,VOICED])?;
+  _ = language.add_phoneme(P,&[CONSONANT,LABIAL,BILABIAL,PLOSIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
+  _ = language.add_phoneme(B,&[CONSONANT,LABIAL,BILABIAL,PLOSIVE,UNASPIRATED,VOICED,OBSTRUENT])?;
+  _ = language.add_phoneme(T,&[CONSONANT,CORONAL,ALVEOLAR,PLOSIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
+  _ = language.add_phoneme(D,&[CONSONANT,CORONAL,ALVEOLAR,PLOSIVE,UNASPIRATED,VOICED,OBSTRUENT])?;
+  _ = language.add_phoneme(K,&[CONSONANT,DORSAL,VELAR,PLOSIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
+  _ = language.add_phoneme(G,&[CONSONANT,DORSAL,VELAR,PLOSIVE,UNASPIRATED,VOICED,OBSTRUENT])?;
+  _ = language.add_phoneme(F,&[CONSONANT,LABIAL,LABIODENTAL,FRICATIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
+  _ = language.add_phoneme_with_spelling(VHEE,["vh"],&[CONSONANT,LABIAL,LABIODENTAL,FRICATIVE,ASPIRATED,VOICED,OBSTRUENT])?;
+  _ = language.add_phoneme(V,&[CONSONANT,LABIAL,LABIODENTAL,FRICATIVE,UNASPIRATED,VOICED,OBSTRUENT])?;
+  _ = language.add_phoneme_with_spelling(THETA,["th"],&[CONSONANT,CORONAL,DENTAL,FRICATIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
+  _ = language.add_phoneme(S,&[CONSONANT,CORONAL,ALVEOLAR,FRICATIVE,UNVOICED,UNASPIRATED,SIBILANT,OBSTRUENT])?;
+  _ = language.add_phoneme_with_spelling(ZHEE,["zh"],&[CONSONANT,CORONAL,ALVEOLAR,FRICATIVE,VOICED,ASPIRATED,SIBILANT,OBSTRUENT])?;
+  _ = language.add_phoneme(Z,&[CONSONANT,CORONAL,ALVEOLAR,FRICATIVE,UNASPIRATED,VOICED,SIBILANT,OBSTRUENT])?;
+  _ = language.add_phoneme_with_spelling(ESH,["sh"],&[CONSONANT,CORONAL,POSTALVEOLAR,FRICATIVE,UNVOICED,UNASPIRATED,SIBILANT,OBSTRUENT])?;
+  _ = language.add_phoneme_with_spelling(X,["ch"],&[CONSONANT,DORSAL,VELAR,FRICATIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
+  _ = language.add_phoneme_with_spelling(AGH, ["gh"], &[CONSONANT,DORSAL,VELAR,FRICATIVE,VOICED,UNASPIRATED,OBSTRUENT])?; //
+  _ = language.add_phoneme_with_spelling(GHHEE, ["ghh"], &[CONSONANT,DORSAL,VELAR,FRICATIVE,VOICED,ASPIRATED,OBSTRUENT])?; //
+  _ = language.add_phoneme(H,&[CONSONANT,LARYNGEAL,GLOTTAL,FRICATIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
+  _ = language.add_phoneme_with_spelling(ESHT,["sht"],&[CONSONANT,CORONAL,POSTALVEOLAR,REV_AFFRICATE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
+  _ = language.add_phoneme_with_spelling(EHK,["hk"],&[CONSONANT,DORSAL,VELAR,REV_AFFRICATE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
+  _ = language.add_phoneme_with_spelling(EHG,["hg"],&[CONSONANT,DORSAL,VELAR,REV_AFFRICATE,UNASPIRATED,VOICED,OBSTRUENT])?;
+  _ = language.add_phoneme_with_spelling(AHR,["hr"],&[CONSONANT,CORONAL,ALVEOLAR,APPROXIMANT,NONLATERALAPPROXIMANT,UNASPIRATED,UNVOICED])?;
+  _ = language.add_phoneme_with_spelling(R,["r"],&[CONSONANT,CORONAL,ALVEOLAR,APPROXIMANT,NONLATERALAPPROXIMANT,UNASPIRATED,VOICED])?;
+  _ = language.add_phoneme_with_spelling(J,["y"],&[CONSONANT,DORSAL,PALATAL,APPROXIMANT,NONLATERALAPPROXIMANT,UNASPIRATED,VOICED])?;
+  _ = language.add_phoneme_with_spelling(AGGA,["gg"],&[CONSONANT,DORSAL,UVULAR,TAP,UNASPIRATED,VOICED])?;
+  _ = language.add_phoneme(L,&[CONSONANT,CORONAL,ALVEOLAR,LATERAL,APPROXIMANT,UNASPIRATED,VOICED])?;
 
-  language.add_exclusion(INITIAL_ONSET_PHONEME, PHONEME, &[ENG, EHK, EHG, ESHT, X, AGGA])?; 
-  language.add_exclusion(ONSET_PHONEME, PHONEME, &[ENG, EHK, EHG, ESHT, X, AGGA, H])?; 
-  language.add_exclusion(ONSET_CONSONANT, CONSONANT, &[ENG, EHK, EHG, ESHT, X, AGGA, H])?; 
+  _ = language.add_phoneme_with_spelling(EE,["ee"],&[VOWEL,FRONT,CLOSE,UNROUNDED])?;
+  _ = language.add_phoneme_with_spelling(OO,["oo"],&[VOWEL,BACK,CLOSE,ROUNDED])?;
+  _ = language.add_phoneme_with_spelling(I,["i"],&[VOWEL,FRONT,NEARCLOSE,UNROUNDED])?;
+  _ = language.add_phoneme_with_spelling(E,["e"],&[VOWEL,FRONT,OPENMID,UNROUNDED])?;
+  _ = language.add_phoneme_with_spelling(U,["u"],&[VOWEL,BACK,OPENMID,ROUNDED])?;
+  _ = language.add_phoneme(A,&[VOWEL,FRONT,OPEN,UNROUNDED])?;
+  _ = language.add_phoneme_with_spelling(O,["o"],&[VOWEL,BACK,OPEN,ROUNDED])?;
+  _ = language.add_phoneme_with_spelling(AEU,["eu"],&[VOWEL,DIPHTHONG])?;
+  _ = language.add_phoneme_with_spelling(OU,["ou"],&[VOWEL,DIPHTHONG])?;
+  _ = language.add_phoneme_with_spelling(OI,["oi"],&[VOWEL,DIPHTHONG])?;
+  _ = language.add_phoneme_with_spelling(UI,["ui"],&[VOWEL,DIPHTHONG])?;
+
+  language.add_exclusion(INITIAL_ONSET_PHONEME, PHONEME, &[ENG, EHK, EHG, ESHT, X, AGGA])?;
+  language.add_exclusion(ONSET_PHONEME, PHONEME, &[ENG, EHK, EHG, ESHT, X, AGGA, H])?;
+  language.add_exclusion(ONSET_CONSONANT, CONSONANT, &[ENG, EHK, EHG, ESHT, X, AGGA, H])?;
   language.add_exclusion(CODA_CONSONANT, CONSONANT, &[NYE, VHEE, ZHEE, GHHEE, J])?; // Note that Tap-G and 'H' are allowed here, but would require the word to continue with another nucleus
   language.add_exclusion(OBSTRUENT_EXCEPT_GLOTTAL, OBSTRUENT, &[H])?;
   language.build_intersection(LABIAL_NASAL, &[LABIAL, NASAL])?;
@@ -353,7 +355,7 @@ fn create_goblin_language() -> Result<Language<1>,LanguageError> {
      (EnvironmentChoice::Done,80)
     ]),
     EnvironmentBranch::new(APPROXIMANT, &[
-     (EnvironmentChoice::Continuing(CODA_AFTER_APPROXIMANT,CODA,true),10), 
+     (EnvironmentChoice::Continuing(CODA_AFTER_APPROXIMANT,CODA,true),10),
      (EnvironmentChoice::Continuing(ONSET_PHONEME,ONSET,false),10),
      (EnvironmentChoice::Done,80)
     ]),
@@ -363,7 +365,7 @@ fn create_goblin_language() -> Result<Language<1>,LanguageError> {
     ])
   ])?;
 
-  language.add_table("Consonants (unvoiced ~ voiced / unaspirated ~ aspirated)", CONSONANT, 
+  language.add_table("Consonants (unvoiced ~ voiced / unaspirated ~ aspirated)", CONSONANT,
     &[
       &[("Bilabial",BILABIAL),("Labiodental",LABIODENTAL),("Dental",DENTAL),("Alveolar",ALVEOLAR),
         ("Post-alveolar",POSTALVEOLAR),("Palatal",PALATAL),("Velar",VELAR),("Uvular",UVULAR),("Glottal",GLOTTAL)],
@@ -386,6 +388,32 @@ fn create_goblin_language() -> Result<Language<1>,LanguageError> {
 }
 
 fn main() {
-  run_main(&mut std::env::args(),create_goblin_language());
+  run_main(&mut env::args(),create_goblin_language());
 }
 
+
+/*
+TODO: Working output for --phonemes
+
+Consonants (unvoiced ~ voiced / unaspirated ~ aspirated):
+|                    | Bilabial  | Labiodental | Dental | Alveolar   | Post-alveolar | Palatal | Velar       | Uvular | Glottal |
+| Nasal              |     | /m/ |     |       |     |  |     | /n/  |         |     |  | /ɲ/  |      | /ŋ/  |  |     |     |   |
+| Plosive            | /p/ | /b/ |     |       |     |  | /t/ | /d/  |         |     |  |      | /k/  | /g/  |  |     |     |   |
+| Fricative          |     |     | /f/ | /v/   | /θ/ |  | /s/ | /z/  | /ʃ/     |     |  |      | /x/  | /ɣ/  |  |     | /h/ |   |
+|                    |     |     |     | /vʰ/  |     |  |     | /zʰ/ |         |     |  |      |      | /ɣʰ/ |  |     |     |   |
+| Reversed Affricate |     |     |     |       |     |  |     |      | /ʃ͜t̠/    |     |  |      | /x͜k/ | /ɣ͜ɡ/ |  |     |     |   |
+| Approximant        |     |     |     |       |     |  | /ɹ̥/ | /ɹ/  |         |     |  | /j/  |      |      |  |     |     |   |
+| Lateral            |     |     |     |       |     |  |     | /l/  |         |     |  |      |      |      |  |     |     |   |
+| Tap                |     |     |     |       |     |  |     |      |         |     |  |      |      |      |  | /ɢ̆/ |     |   |
+
+Vowels:
+|            | Front | Central | Back |
+| Close      | /i/   |         | /u/  |
+| Near-close | /ɪ/   |         |      |
+| Open-mid   | /ɛ/   |         | /ɔ/  |
+| Open       | /a/   |         | /ɒ/  |
+
+Diphthongs:
+| /au̯/ /ɒi̯/ /ɔi̯/ /ɛu̯/ |
+
+ */
