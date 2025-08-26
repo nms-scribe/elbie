@@ -136,18 +136,18 @@ impl ChartStyle {
             Self::LaTeX |
             Self::Terminal => Ok(()),
             Self::Markdown => {
-                write!(f,"|=")?;
+                write!(f,"|-")?;
 
                 let length = columns.len();
 
                 for (i,column) in columns.iter().enumerate() {
-                    write!(f,"{}","".pad_to_width_with_char(*column,'='))?;
+                    write!(f,"{}","".pad_to_width_with_char(*column,'-'))?;
                     if i < (length - 1) {
-                        write!(f,"=|=")?;
+                        write!(f,"-|-")?;
                     }
                 }
 
-                write!(f,"=|")?;
+                write!(f,"-|")?;
                 writeln!(f)
             }
         }
