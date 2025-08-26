@@ -1430,34 +1430,13 @@ fn parse_args<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Ar
 
 }
 
-pub fn run_main<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHOGRAPHIES: usize>(args: &mut Args, language: Result<Language<ORTHOGRAPHIES>,LanguageError>) {
-  let (grid_style,command) = parse_args(&mut args.skip(1));
-
-  match language {
-      Ok(language) => {
-
-        match command {
-            Command::GenerateWords(count) => generate_words(grid_style, &language, count),
-            Command::ValidateWords(words,option) => validate_words(&language, words, &option),
-            Command::ShowPhonemes(table) => show_phonemes(grid_style, &language, table.as_ref()),
-            Command::ShowSpelling(columns) => show_spelling(grid_style, &language, columns),
-            Command::ProcessLexicon(path,ortho_index) => process_lexicon(&language, path, ortho_index),
-            Command::ShowUsage => show_usage(&language),
-        }
-
-      },
-      Err(err) => eprintln!("!!! Language Incomplete: {err}")
-    }
-
-
-  }
 
 fn show_usage<const ORTHOGRAPHIES: usize>(language: &Language<ORTHOGRAPHIES>) {
     println!("usage: {} [options] <command>",language.name);
     println!("default command: --generate 1");
     println!("options:");
-    println!("   --grid=<plain | terminal | markdown>");
-    println!("      changes the format of grid output. Default is \"plain\" for generate and \"terminal\" for phonemes and spelling.");
+    println!("   --format=<plain | terminal | markdown | latex>");
+    println!("      changes the format of grid output. Default is \"plain\" for generate and lexicon, and \"terminal\" for phonemes and spelling.");
     println!("commands:");
     println!("   --generate <integer>");
     println!("      generates the specified number of words.");
@@ -1481,33 +1460,38 @@ fn show_usage<const ORTHOGRAPHIES: usize>(language: &Language<ORTHOGRAPHIES>) {
     println!("      display this information.");
 }
 
-fn process_lexicon<const ORTHOGRAPHIES: usize>(language: &Language<ORTHOGRAPHIES>, path: String, ortho_index: usize) {
+fn process_lexicon<const ORTHOGRAPHIES: usize>(grid_style: Option<ChartStyle>, language: &Language<ORTHOGRAPHIES>, path: String, ortho_index: usize) {
     if ortho_index >= language.orthographies.len() {
         panic!("Language only has {} orthographies.",language.orthographies.len())
     }
+
+    let grid_style = grid_style.unwrap_or(ChartStyle::Plain);
 
     match language.process_lexicon(path) {
     Ok(entries) => {
       // NOTE: I'm *not* sorting the entries before grouping. The user might have some sort of custom sort in the data, however.
       for entry in entries {
 
-        let mut main_spelling = "";
+        let mut main_spelling = String::new();
         let mut other_spellings = Vec::new();
         for (i,(orthography,spelling)) in entry.spelling.iter().zip(language.orthographies).enumerate() {
           if i == ortho_index {
-            main_spelling = spelling;
+            main_spelling = grid_style.get_subpara_header_string(spelling);
           } else {
-            other_spellings.push((orthography,spelling))
+            let orthography = grid_style.get_italic_string(orthography);
+            other_spellings.push(format!("{orthography}: {spelling}; "))
           }
         }
         assert_ne!(main_spelling.len(),0,"Missing spelling for orthography {ortho_index} in {}",entry.word);
 
-        print!("\\subparagraph{{{main_spelling}}} (");
-        for (orthography,spelling) in other_spellings {
-            print!("\\textit{{{orthography}}}: {spelling}; ")
+
+        print!("{main_spelling} (");
+        for spelling in other_spellings {
+            print!("{spelling}")
         }
 
-        println!("\\ipa{{{}}}) {}",entry.word,entry.definition);
+        let ipa = grid_style.get_phoneme_text(entry.word.to_string());
+        println!("{ipa}) {}",entry.definition);
       }
 
     },
@@ -1532,24 +1516,24 @@ fn show_spelling<const ORTHOGRAPHIES: usize>(grid_style: Option<ChartStyle>, lan
 
 fn show_phonemes<const ORTHOGRAPHIES: usize>(grid_style: Option<ChartStyle>, language: &Language<ORTHOGRAPHIES>, table: Option<&String>) {
     match language.display_phonemes(table,&grid_style.unwrap_or(ChartStyle::Terminal)) {
-    Ok(grids) => {
-      if let Some(table) = &table {
-        if grids.is_empty() {
-          println!("No phoneme table named {table}. Try singular?");
+        Ok(grids) => {
+        if let Some(table) = &table {
+            if grids.is_empty() {
+            println!("No phoneme table named {table}. Try singular?");
+            }
         }
-      }
-      for grid in grids {
-        if table.is_none() {
-          println!("{}:",grid.0);
+        for grid in grids {
+            if table.is_none() {
+            println!("{}:",grid.0);
+            }
+            println!("{}",grid.1);
         }
-        println!("{}",grid.1);
-      }
-    },
-    Err(err) => {
-      eprintln!("!!! Couldn't display phonemes: {err}");
-      process::exit(1)
+        },
+        Err(err) => {
+        eprintln!("!!! Couldn't display phonemes: {err}");
+        process::exit(1)
+        }
     }
-  }
 }
 
 fn validate_words<const ORTHOGRAPHIES: usize>(language: &Language<ORTHOGRAPHIES>, words: Vec<String>, option: &ValidateOption) {
@@ -1623,4 +1607,27 @@ fn generate_words<const ORTHOGRAPHIES: usize>(grid_style: Option<ChartStyle>, la
         }
     }
     print!("{grid}");
+}
+
+
+pub fn run_main<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHOGRAPHIES: usize>(args: &mut Args, language: Result<Language<ORTHOGRAPHIES>,LanguageError>) {
+  let (grid_style,command) = parse_args(&mut args.skip(1));
+
+  match language {
+      Ok(language) => {
+
+        match command {
+            Command::GenerateWords(count) => generate_words(grid_style, &language, count),
+            Command::ValidateWords(words,option) => validate_words(&language, words, &option),
+            Command::ShowPhonemes(table) => show_phonemes(grid_style, &language, table.as_ref()),
+            Command::ShowSpelling(columns) => show_spelling(grid_style, &language, columns),
+            Command::ProcessLexicon(path,ortho_index) => process_lexicon(grid_style, &language, path, ortho_index),
+            Command::ShowUsage => show_usage(&language),
+        }
+
+      },
+      Err(err) => eprintln!("!!! Language Incomplete: {err}")
+    }
+
+
 }

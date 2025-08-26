@@ -1,24 +1,27 @@
 use std::fmt;
+use core::fmt::Display;
 use unicode_width::UnicodeWidthStr;
 use pad::PadStr as _;
 use crate::VecHelper as _;
 
 #[derive(Clone,Debug)]
 pub enum ChartStyle {
-    Plain, // columns separated by spaces
-    Terminal, // columns separated by '|'
-    Markdown, // columns separated and lines bordered by '|', header separated from rest by '===', header text enclosed in '**..**'
-    LaTeX, // columns separated by '&', lines end with '\\', header text enclosed in '\textbf{..}'
+     // columns separated by spaces
+     Plain,
+     // columns separated by '|'
+     Terminal,
+     // columns separated and lines bordered by '|', header separated from rest by '===', header text enclosed in '**..**'
+     Markdown,
+     // columns separated by '&', lines end with '\\', header text enclosed in '\textbf{..}'
+     LaTeX,
     // TODO: HTML, // written out as html markup. This would require the spacer to know if it's a th or td.
 }
 
-/* NMS: Not used
 macro_rules! plain_spacer {
     () => {
         " "
     };
 }
-*/
 
 macro_rules! pipe_spacer {
     () => {
@@ -84,7 +87,7 @@ impl ChartStyle {
 
     fn display_spacer(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Plain |
+            Self::Plain => write!(f,plain_spacer!()),
             Self::Terminal |
             Self::Markdown => write!(f,pipe_spacer!()),
             Self::LaTeX => write!(f,and_spacer!()),
@@ -93,7 +96,7 @@ impl ChartStyle {
 
     fn display_row_span_spacer(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Plain |
+            Self::Plain => write!(f,plain_spacer!()),
             Self::Terminal |
             Self::Markdown => write!(f,pipe_spacer!()),
             Self::LaTeX => write!(f,and_spacer!()),
@@ -102,7 +105,7 @@ impl ChartStyle {
 
     const fn get_spacer_width(&self) -> usize {
         match self {
-            Self::Plain |
+            Self::Plain => plain_spacer!().len(),
             Self::Terminal |
             Self::Markdown => pipe_spacer!().len(),
             Self::LaTeX => and_spacer!().len(),
@@ -147,6 +150,24 @@ impl ChartStyle {
                 write!(f,"=|")?;
                 writeln!(f)
             }
+        }
+    }
+
+    pub(crate) fn get_subpara_header_string<Content: Display>(&self, content: Content) -> String {
+        match self {
+            Self::Plain |
+            Self::Terminal => format!("{content}"),
+            Self::LaTeX => format!("\\subparagraph{{{content}}}"),
+            Self::Markdown => format!("**{content}**.")
+        }
+    }
+
+    pub(crate) fn get_italic_string<Content: Display>(&self, content: &Content) -> String {
+        match self {
+            Self::Plain |
+            Self::Terminal => format!("{content}"),
+            Self::LaTeX => format!("\\textit{{{content}}}"),
+            Self::Markdown => format!("*{content}*")
         }
     }
 
@@ -647,7 +668,7 @@ impl Chart {
 
 }
 
-impl fmt::Display for Chart {
+impl Display for Chart {
 
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 
