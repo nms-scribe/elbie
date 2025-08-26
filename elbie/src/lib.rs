@@ -1474,7 +1474,7 @@ fn process_lexicon<const ORTHOGRAPHIES: usize>(grid_style: Option<ChartStyle>, l
 
         let mut main_spelling = String::new();
         let mut other_spellings = Vec::new();
-        for (i,(orthography,spelling)) in entry.spelling.iter().zip(language.orthographies).enumerate() {
+        for (i,(spelling,orthography)) in entry.spelling.iter().zip(language.orthographies).enumerate() {
           if i == ortho_index {
             main_spelling = grid_style.get_subpara_header_string(spelling);
           } else {

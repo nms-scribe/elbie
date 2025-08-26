@@ -162,7 +162,7 @@ impl ChartStyle {
         }
     }
 
-    pub(crate) fn get_italic_string<Content: Display>(&self, content: &Content) -> String {
+    pub(crate) fn get_italic_string<Content: Display>(&self, content: Content) -> String {
         match self {
             Self::Plain |
             Self::Terminal => format!("{content}"),
