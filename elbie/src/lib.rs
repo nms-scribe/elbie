@@ -16,10 +16,14 @@ use csv::Reader;
 use core::fmt::Display;
 
 mod chart;
+mod table;
 #[cfg(test)] mod test;
 
 pub use chart::Chart;
 pub use chart::ChartStyle;
+
+use crate::table::CellWithSpan;
+use crate::table::CellWithoutSpan;
 
 /*
 Elbie = LB, Language Builder, and is a bunch of tools for building a constructed language.
@@ -293,6 +297,10 @@ impl<ItemType: Clone + Ord> Bag<ItemType> {
     self.0.clone()
   }
 
+  fn iter(&self) -> impl Iterator<Item = &ItemType> {
+      self.0.iter()
+  }
+
 
 }
 
@@ -465,7 +473,7 @@ NOTE: Four seems like an arbitrary limit. I used to have this all in a vector so
 The good news is that this doesn't limit the language if the user wants something really alien. They can just separate one of the lower axes into separate tables instead, and then they can still use this.
 */
 #[derive(Debug)]
-enum Table {
+pub enum TableDef {
   Not,
   ColumnsOnly(TableAxis),
   ColumnsAndRows(TableAxis,TableAxis),
@@ -473,26 +481,52 @@ enum Table {
   ColumnsSubcolumnsRowsAndSubrows(TableAxis,TableAxis,TableAxis,TableAxis)
 }
 
-impl Table {
-
-  fn new(axisses: &[&[(&'static str,&'static str)]]) -> Self {
-
-    macro_rules! axis {
-        ($index: literal) => {
-          axisses.get($index).expect("Invalid axes for table").to_vec()
-        };
+impl From<&[(&'static str,&'static str)]> for TableDef {
+    fn from(value: &[(&'static str,&'static str)]) -> Self {
+        Self::ColumnsOnly(value.to_vec())
     }
+}
 
-    match axisses.len() {
-        0 => Self::Not,
-        1 => Self::ColumnsOnly(axis!(0)),
-        2 => Self::ColumnsAndRows(axis!(0),axis!(1)),
-        3 => Self::ColumnsSubcolumnsAndRows(axis!(0),axis!(1),axis!(2)),
-        4 => Self::ColumnsSubcolumnsRowsAndSubrows(axis!(0),axis!(1),axis!(2),axis!(3)),
-        _ => panic!("Tables can only have from 1 to 4 axisses.")
+impl From<(&[(&'static str,&'static str)],&[(&'static str,&'static str)])> for TableDef {
+    fn from(value: (&[(&'static str,&'static str)],&[(&'static str,&'static str)])) -> Self {
+        Self::ColumnsAndRows(value.0.to_vec(), value.1.to_vec())
     }
+}
+
+impl From<(&[(&'static str,&'static str)],&[(&'static str,&'static str)],&[(&'static str,&'static str)])> for TableDef {
+    fn from(value: (&[(&'static str,&'static str)],&[(&'static str,&'static str)],&[(&'static str,&'static str)])) -> Self {
+        Self::ColumnsSubcolumnsAndRows(value.0.to_vec(), value.1.to_vec(), value.2.to_vec())
+    }
+}
+
+impl From<(&[(&'static str,&'static str)],&[(&'static str,&'static str)],&[(&'static str,&'static str)],&[(&'static str,&'static str)])> for TableDef {
+    fn from(value: (&[(&'static str,&'static str)],&[(&'static str,&'static str)],&[(&'static str,&'static str)],&[(&'static str,&'static str)])) -> Self {
+        Self::ColumnsSubcolumnsRowsAndSubrows(value.0.to_vec(), value.1.to_vec(), value.2.to_vec(), value.3.to_vec())
+    }
+}
+
+impl TableDef {
+
+  pub fn new_4d(axis_1: &[(&'static str,&'static str)], axis_2: &[(&'static str,&'static str)], axis_3: &[(&'static str,&'static str)], axis_4: &[(&'static str,&'static str)]) -> Self {
+      Self::ColumnsSubcolumnsRowsAndSubrows(axis_1.to_vec(), axis_2.to_vec(), axis_3.to_vec(), axis_4.to_vec())
   }
 
+  pub fn new_3d(axis_1: &[(&'static str,&'static str)], axis_2: &[(&'static str,&'static str)], axis_3: &[(&'static str,&'static str)]) -> Self {
+      Self::ColumnsSubcolumnsAndRows(axis_1.to_vec(), axis_2.to_vec(), axis_3.to_vec())
+  }
+
+  pub fn new_2d(axis_1: &[(&'static str,&'static str)], axis_2: &[(&'static str,&'static str)]) -> Self {
+      Self::ColumnsAndRows(axis_1.to_vec(), axis_2.to_vec())
+  }
+
+  pub fn new_1d(axis_1: &[(&'static str,&'static str)]) -> Self {
+      Self::ColumnsOnly(axis_1.to_vec())
+  }
+
+  /// The table is just a column header and a single cell containing all phonemes
+  pub fn new_list() -> Self {
+      Self::Not
+  }
 
   const fn columns(&self) -> Option<&TableAxis> {
     match self {
@@ -527,13 +561,89 @@ impl Table {
   const fn subrows(&self) -> Option<&TableAxis> {
     match self {
       Self::Not |
-      Self::ColumnsOnly(_) |
+      Self::ColumnsOnly(_) | // TODO: Should be RowsOnly
       Self::ColumnsAndRows(_, _) |
       Self::ColumnsSubcolumnsAndRows(_, _, _) => None,
       Self::ColumnsSubcolumnsRowsAndSubrows(_, _, _, a) => Some(a),
     }
   }
 
+  fn test_new_system<const ORTHOGRAPHIES: usize>(&self, set: &'static str, language: &Language<ORTHOGRAPHIES>) {
+      match self {
+        TableDef::Not => (),
+        TableDef::ColumnsOnly(_) => (),
+        TableDef::ColumnsAndRows(_, _) => (),
+        TableDef::ColumnsSubcolumnsAndRows(_, _, _) => (),
+        TableDef::ColumnsSubcolumnsRowsAndSubrows(columns, rows, subcolumns, subrows) => {
+            use crate::table::Table4D;
+
+            let mut table = Table4D::default();
+            // fill rows
+            for column in columns {
+                println!("col: {}",column.1);
+                _ = table.add_column(column.1,column.0);
+            }
+            for subcolumn in subcolumns {
+                println!("subcol: {}",subcolumn.1);
+                _ = table.add_subcolumn(subcolumn.1, subcolumn.0)
+            }
+            for row in rows {
+                println!("row: {}",row.1);
+                _ = table.add_row(row.1, row.0)
+            }
+            for subrow in subrows {
+                println!("subrow: {}",subrow.1);
+                _ = table.add_subrow(subrow.1, subrow.0)
+            }
+
+            let phoneme_set = language.get_set(set).unwrap();
+
+            for column in columns {
+                let column_set = language.get_set(column.1).unwrap();
+                let phoneme_set = phoneme_set.intersection(column_set);
+
+                for subcolumn in subcolumns {
+                    let subcolumn_set = language.get_set(subcolumn.1).unwrap();
+                    let phoneme_set = phoneme_set.intersection(subcolumn_set);
+
+                    for row in rows {
+                        let row_set = language.get_set(row.1).unwrap();
+                        let phoneme_set = phoneme_set.intersection(row_set);
+
+                        for subrow in subrows {
+                            let subrow_set = language.get_set(subrow.1).unwrap();
+                            let phoneme_set = phoneme_set.intersection(subrow_set);
+                            for phoneme in phoneme_set.iter() {
+                                _ = table.add_phoneme(column.1, subcolumn.1, row.1, subrow.1, phoneme).unwrap();
+                            }
+
+                        }
+                    }
+                }
+            }
+
+            let grid = table.build_to_string::<CellWithoutSpan>();
+            println!("{grid}");
+            println!();
+
+            let grid = table.build_to_string::<CellWithSpan>();
+            println!("{grid}");
+            println!();
+
+            let grid = table.build_markdown_no_spans();
+            println!("{grid}");
+            println!();
+
+            let grid = table.build_plain_no_spans();
+            println!("{grid}");
+            println!();
+
+            // TODO: Okay, this seems to be working. Let's get the 0, 1, 2 and 3 dimensional tables working. Can I do that with Table4d, or do I need separate structs?
+            // I could at least possibly do optional on subcolumns and subrows and see what happens. For one-dimensional, I can just have optional columns that still creates at least one column.
+            // For 0-dimensional, it's a single column/single-cell table with a caption that says the name of the set.
+        },
+    }
+  }
 
 }
 
@@ -593,7 +703,7 @@ pub struct Language<const ORTHOGRAPHIES: usize> {
   orthographies: [&'static str; ORTHOGRAPHIES],
   environments: HashMap<&'static str,Vec<EnvironmentBranch>>,
   sets: HashMap<&'static str,Bag<Rc<Phoneme>>>, // It seems like a hashset would be better, but I can't pick randomly from it without converting to vec anyway.
-  tables: Vec<(&'static str,&'static str,Table)> // (caption, set name, table axes)
+  tables: Vec<(&'static str,&'static str,TableDef)> // (caption, set name, table axes)
 }
 
 impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
@@ -787,8 +897,8 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
-    pub fn add_table(&mut self, caption: &'static str, set: &'static str, axisses: &[&[(&'static str,&'static str)]]) -> Result<(),LanguageError> {
-      self.tables.push((caption, set, Table::new(axisses)));
+    pub fn add_table(&mut self, caption: &'static str, set: &'static str, table: TableDef) -> Result<(),LanguageError> {
+      self.tables.push((caption, set, table));
       Ok(())
     }
 
@@ -1047,9 +1157,11 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
     }
 
 
-    fn build_phoneme_grid(&self, master_set: &Bag<Rc<Phoneme>>, table: &Table, style: &ChartStyle, unprinted_phonemes: &mut Bag<Rc<Phoneme>>) -> Result<Chart,LanguageError> {
+    fn build_phoneme_grid(&self, master_set: &Bag<Rc<Phoneme>>, table: &TableDef, style: &ChartStyle, unprinted_phonemes: &mut Bag<Rc<Phoneme>>) -> Result<Chart,LanguageError> {
       // If there are no columns or rows, then the phonemes are just listed horizontally.
       // If you want to do a vertical table with just one column, you need to set columns that contains only one set.
+
+
 
       let mut grid = Chart::new(style.clone());
 
@@ -1228,6 +1340,8 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
       for (name,set,table) in &self.tables {
 
+        table.test_new_system(set,self);
+
         let grid = self.build_phoneme_grid(self.get_set(set)?, table, style, &mut unprinted_phonemes)?;
 
         // we have to 'continue' here, as otherwise the "uncategorized phonemes" will show all of the other phonemes.
@@ -1248,7 +1362,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
           true
         }) {
 
-        let grid = self.build_phoneme_grid(&unprinted_phonemes.clone(), &Table::Not, style, &mut unprinted_phonemes)?;
+        let grid = self.build_phoneme_grid(&unprinted_phonemes.clone(), &TableDef::Not, style, &mut unprinted_phonemes)?;
         result.push(("uncategorized phonemes".to_owned(),grid));
 
 
@@ -1524,21 +1638,21 @@ fn show_spelling<const ORTHOGRAPHIES: usize>(grid_style: Option<ChartStyle>, lan
 fn show_phonemes<const ORTHOGRAPHIES: usize>(grid_style: Option<ChartStyle>, language: &Language<ORTHOGRAPHIES>, table: Option<&String>) {
     match language.display_phonemes(table,&grid_style.unwrap_or(ChartStyle::Terminal)) {
         Ok(grids) => {
-        if let Some(table) = &table {
-            if grids.is_empty() {
-            println!("No phoneme table named {table}. Try singular?");
+            if let Some(table) = &table {
+                if grids.is_empty() {
+                    println!("No phoneme table named {table}. Try singular?");
+                }
             }
-        }
-        for grid in grids {
-            if table.is_none() {
-            println!("{}:",grid.0);
+            for grid in grids {
+                if table.is_none() {
+                    println!("{}:",grid.0);
+                }
+                println!("{}",grid.1);
             }
-            println!("{}",grid.1);
-        }
-        },
-        Err(err) => {
-        eprintln!("!!! Couldn't display phonemes: {err}");
-        process::exit(1)
+            },
+            Err(err) => {
+            eprintln!("!!! Couldn't display phonemes: {err}");
+            process::exit(1)
         }
     }
 }

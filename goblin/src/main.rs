@@ -6,6 +6,7 @@ use core::slice::Iter;
 use elbie::Language;
 use elbie::Phoneme;
 use elbie::LanguageError;
+use elbie::TableDef;
 use elbie::PHONEME;
 use elbie::EMPTY;
 use elbie::EnvironmentBranch;
@@ -365,23 +366,22 @@ fn create_goblin_language() -> Result<Language<1>,LanguageError> {
     ])
   ])?;
 
-  language.add_table("Consonants (unvoiced ~ voiced / unaspirated ~ aspirated)", CONSONANT,
-    &[
-      &[("Bilabial",BILABIAL),("Labiodental",LABIODENTAL),("Dental",DENTAL),("Alveolar",ALVEOLAR),
+  language.add_table("Consonants (Vʹ = unvoiced ~ V = voiced / Aʹ = unaspirated ~ A = aspirated)", CONSONANT, TableDef::new_4d(
+    &[("Bilabial",BILABIAL),("Labiodental",LABIODENTAL),("Dental",DENTAL),("Alveolar",ALVEOLAR),
         ("Post-alveolar",POSTALVEOLAR),("Palatal",PALATAL),("Velar",VELAR),("Uvular",UVULAR),("Glottal",GLOTTAL)],
-      &[
+    &[
         ("Nasal",NASAL),("Plosive",PLOSIVE),("Fricative",FRICATIVE),("Reversed Affricate",REV_AFFRICATE),
         ("Approximant",NONLATERALAPPROXIMANT,),("Lateral",LATERAL),("Tap",TAP)],
-      &[("",UNVOICED),("",VOICED)],
-      &[("",UNASPIRATED),("",ASPIRATED)]
-    ])?;
+    &[("Vʹ",UNVOICED),("V",VOICED)],
+    &[("Aʹ",UNASPIRATED),("A",ASPIRATED)]
+  ))?;
 
-  language.add_table("Vowels",VOWEL, &[
+  language.add_table("Vowels",VOWEL, TableDef::new_2d(
     &[("Front",FRONT),("Central",EMPTY),("Back",BACK)],
     &[("Close",CLOSE),("Near-close",NEARCLOSE),("Close-mid",EMPTY),("Mid",EMPTY),("Open-mid",OPENMID),("Near-open",EMPTY),("Open",OPEN)]
-  ])?;
+  ))?;
 
-  language.add_table("Diphthongs",DIPHTHONG, &[])?;
+  language.add_table("Diphthongs",DIPHTHONG, TableDef::new_list())?;
 
   Ok(language)
 
