@@ -17,14 +17,19 @@ use core::fmt::Display;
 
 mod chart;
 mod phoneme_table;
-mod grid;
+pub mod grid;
+pub mod lexicon;
 #[cfg(test)] mod test;
 
 pub use chart::Chart;
 pub use chart::ChartStyle;
 
-pub use crate::grid::Cell;
-pub use crate::grid::Grid;
+use crate::grid::Cell;
+use crate::grid::ColumnHeader;
+use crate::grid::Grid;
+use crate::grid::GridRow;
+use crate::lexicon::Lexicon;
+use crate::lexicon::LexiconEntry;
 use crate::phoneme_table::Table;
 use crate::phoneme_table::Table0D;
 pub use crate::phoneme_table::Table0DDef;
@@ -294,13 +299,12 @@ impl<ItemType: Clone + Ord> Bag<ItemType> {
 
   }
 
-  fn remove(&mut self, value: &ItemType) -> bool {
+  fn remove(&mut self, value: &ItemType) -> Option<ItemType> {
     match self.0.binary_search(value) {
       Ok(pos) => {
-        _ = self.0.remove(pos);
-        true
+        Some(self.0.remove(pos))
       }
-      Err(_) => false
+      Err(_) => None
     }
   }
 
@@ -678,12 +682,13 @@ impl Display for ValidationTraceMessage<'_> {
 
 pub type ValidationTraceCallback = dyn Fn(usize, ValidationTraceMessage);
 
-pub struct LexiconEntry<const ORTHOGRAPHIES: usize> {
-  word: Word,
-  spelling: [String; ORTHOGRAPHIES],
-  definition: String
+#[derive(Debug)]
+struct TableEntry {
+    id: &'static str,
+    caption: &'static str,
+    set: &'static str,
+    definition: TableDef
 }
-
 
 #[derive(Debug)]
 pub struct Language<const ORTHOGRAPHIES: usize> {
@@ -697,7 +702,7 @@ pub struct Language<const ORTHOGRAPHIES: usize> {
   orthographies: [&'static str; ORTHOGRAPHIES],
   environments: HashMap<&'static str,Vec<EnvironmentBranch>>,
   sets: HashMap<&'static str,Bag<Rc<Phoneme>>>, // It seems like a hashset would be better, but I can't pick randomly from it without converting to vec anyway.
-  tables: Vec<(&'static str,&'static str,TableDef)> // (caption, set name, table axes)
+  tables: Vec<TableEntry>
 }
 
 impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
@@ -891,8 +896,13 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
-    pub fn add_table(&mut self, caption: &'static str, set: &'static str, table: TableDef) -> Result<(),LanguageError> {
-      self.tables.push((caption, set, table));
+    pub fn add_table(&mut self, id: &'static str, caption: &'static str, set: &'static str, def: TableDef) -> Result<(),LanguageError> {
+      self.tables.push(TableEntry {
+        id,
+        caption,
+        set,
+        definition: def
+      });
       Ok(())
     }
 
@@ -1128,7 +1138,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
         Ok(Word::new(&word))
     }
 
-    fn build_phoneme_grid(&self, master_set: &Bag<Rc<Phoneme>>, table: &TableDef, style: &TableStyle, unprinted_phonemes: &mut Bag<Rc<Phoneme>>) -> Result<String,LanguageError> {
+    fn build_phoneme_grid(&self, master_set: &Bag<Rc<Phoneme>>, table: &TableDef, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<Grid,LanguageError> {
 
         match table {
             TableDef::OneCell(definition) => {
@@ -1137,7 +1147,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
                 // TODO: Should be language error
                 table.add_phonemes(self, master_set, unprinted_phonemes).expect("A phoneme was added with an non-existing axis");
 
-                Ok(table.build_grid(style))
+                Ok(table.build_grid())
             },
             TableDef::ListTable(definition) => {
                 let mut table = Table1D::new(definition);
@@ -1145,7 +1155,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
                 // TODO: Should be language error
                 table.add_phonemes(self, master_set, unprinted_phonemes).expect("A phoneme was added with an non-existing axis");
 
-                Ok(table.build_grid(style))
+                Ok(table.build_grid())
             },
             TableDef::SimpleTable(definition) => {
                 let mut table = Table2D::new(definition);
@@ -1153,7 +1163,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
                 // TODO: Should be language error
                 table.add_phonemes(self, master_set, unprinted_phonemes).expect("A phoneme was added with an non-existing axis");
 
-                Ok(table.build_grid(style))
+                Ok(table.build_grid())
             },
             TableDef::TableWithSubcolumns(definition) => {
                 let mut table = Table3D::new(definition);
@@ -1161,7 +1171,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
                 // TODO: Should be language error
                 table.add_phonemes(self, master_set, unprinted_phonemes).expect("A phoneme was added with an non-existing axis");
 
-                Ok(table.build_grid(style))
+                Ok(table.build_grid())
             },
             TableDef::TableWithSubcolumnsAndSubrows(definition) => {
                 let mut table = Table4D::new(definition);
@@ -1169,45 +1179,30 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
                 // TODO: Should be language error
                 table.add_phonemes(self, master_set, unprinted_phonemes).expect("A phoneme was added with an non-existing axis");
 
-                Ok(table.build_grid(style))
+                Ok(table.build_grid())
             },
         }
     }
 
+    pub fn build_all_phoneme_tables(&self) -> Result<Vec<(&'static str,&'static str,Grid)>,LanguageError> {
 
-    pub fn display_phonemes(&self, preferred_table: Option<&String>, style: &TableStyle) -> Result<Vec<(String,String)>,LanguageError> {
-
-      let preferred_table = preferred_table.as_ref().map(|a| a.to_lowercase());
-
-      let mut result = vec![];
+      let mut result = Vec::new();
 
       let mut unprinted_phonemes: Bag<Rc<Phoneme>> = self.get_set(PHONEME)?.clone();
 
-      for (name,set,table) in &self.tables {
+      for entry in &self.tables {
 
-        let grid = self.build_phoneme_grid(self.get_set(set)?, table, style, &mut unprinted_phonemes)?;
+        let grid = self.build_phoneme_grid(self.get_set(entry.set)?, &entry.definition, &mut Some(&mut unprinted_phonemes))?;
 
-        // we have to 'continue' here, as otherwise the "uncategorized phonemes" will show all of the other phonemes.
-        if let Some(preferred_table) = &preferred_table {
-          if (&name.to_lowercase() != preferred_table) && (&set.to_lowercase() != preferred_table) {
-            continue;
-          }
-        }
-
-        result.push((name.to_owned().to_owned(),grid));
+        result.push((entry.id,entry.caption,grid));
 
 
       }
 
-      if !unprinted_phonemes.is_empty() && (if let Some(preferred_table) = &preferred_table {
-          ("uncategorized" != preferred_table) && ("uncategorized phonemes" != preferred_table)
-        } else {
-          true
-        }) {
+      if !unprinted_phonemes.is_empty() {
 
-        let grid = self.build_phoneme_grid(&unprinted_phonemes.clone(), &TableDef::OneCell(Table0DDef::new("Uncategorized Phonemes")), style, &mut unprinted_phonemes)?;
-        result.push(("uncategorized phonemes".to_owned(),grid));
-
+        let grid = self.build_phoneme_grid(&unprinted_phonemes.clone(), &TableDef::OneCell(Table0DDef::new("Uncategorized Phonemes")), &mut Some(&mut unprinted_phonemes))?;
+        result.push(("uncategorized","Uncategorized",grid));
 
       }
 
@@ -1215,19 +1210,50 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
-    pub fn display_spelling(&self, style: &ChartStyle, columns: usize) -> Result<Chart,LanguageError> {
+    pub fn build_phoneme_table(&self, table_name: &String) -> Result<Option<(&'static str,Grid)>,LanguageError> {
+
+        if table_name == "uncategorized" { // FUTURE: Make that a constant
+            // we need to build all of the tables to find the uncategorized phonemes
+            let all_tables = self.build_all_phoneme_tables()?;
+            Ok(all_tables.into_iter().find_map(|(id,caption,grid)| {
+                if id == "uncategorized" {
+                    Some((caption,grid))
+                } else {
+                    None
+                }
+            }))
+
+        } else {
+            let table = self.tables.iter().find(|entry| {
+               entry.id == table_name || entry.caption == table_name
+            });
+
+            if let Some(entry) = table {
+                Ok(Some((entry.caption,self.build_phoneme_grid(self.get_set(entry.set)?, &entry.definition, &mut None)?)))
+
+
+            } else {
+                Ok(None)
+            }
+        }
+
+    }
+
+    pub fn display_spelling(&self, columns: usize) -> Result<Grid,LanguageError> {
 
       let phonemes: Bag<Rc<Phoneme>> = self.get_set(PHONEME)?.clone();
       let phonemes = phonemes.list();
 
-      let mut grid = Chart::new(style.clone());
+      let mut grid = Grid::new();
 
+      let mut header = Vec::new();
       for _ in 0..columns {
-        grid.add_col_header_cell("Phoneme",1);
+        header.push(ColumnHeader::new("Phoneme".to_owned(),1));
         for orthography in self.orthographies {
-          grid.add_col_header_cell(orthography,1)
+          header.push(ColumnHeader::new(orthography.to_owned(),1));
         }
       }
+      grid.push_header_row(header);
 
 
       // once div_ceil is stable in the library, the existence of this will cause an error.
@@ -1236,25 +1262,27 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
       let mut chunks: Vec<Iter<Rc<Phoneme>>> = phonemes.chunks(length).map(|a| a.iter()).collect();
 
       for _ in 0..length {
-        grid.add_row();
+        let mut row = GridRow::new();
 
         for chunk in &mut chunks {
           if let Some(phoneme) = chunk.next() {
-            grid.add_cell(&style.get_phoneme_text(format!("{phoneme}")));
+            row.push_cell(Cell::content(phoneme.to_string()));
             for i in 0..ORTHOGRAPHIES {
               let mut cell = String::new();
               self.spell_phoneme(phoneme, i, &mut cell, None);
-              grid.add_cell(&cell);
+              row.push_cell(Cell::content(cell));
             }
 
           } else {
             // add blank cells to make the table rectangular.
-            grid.add_cell("");
+            row.push_cell(Cell::content(String::new()));
             for _ in 0..ORTHOGRAPHIES {
-              grid.add_cell("");
+                row.push_cell(Cell::content(String::new()));
             }
           }
         }
+
+        grid.push_body_row(row);
 
 
       }
@@ -1263,7 +1291,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
-    pub fn process_lexicon(&self, path: String) -> Result<Vec<LexiconEntry<ORTHOGRAPHIES>>,Box<dyn Error>> {
+    pub fn load_lexicon(&self, path: String, primary_orthography: usize) -> Result<Lexicon<ORTHOGRAPHIES>,Box<dyn Error>> {
 
 
       let mut reader = Reader::from_path(path)?;
@@ -1271,18 +1299,18 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
       let word_field = headers.iter().position(|a| a.to_lowercase() == "word").ok_or_else(|| "No 'word' field found.".to_owned())?;
       let definition_field = headers.iter().position(|a| a.to_lowercase() == "definition").ok_or_else(|| "No 'definition' field found.".to_owned())?;
 
-      let mut result: Vec<LexiconEntry<ORTHOGRAPHIES>> = Vec::new();
+      let mut result = Lexicon::new(self.orthographies, primary_orthography);
 
       for (row,record) in reader.into_records().enumerate() {
         let record = record.map_err(|e| format!("Error reading record {row}: {e}"))?;
         let word = record.get(word_field).ok_or_else(|| format!("No word found at entry {row}"))?;
         let word = self.read_word(word).map_err(|e| format!("Error parsing word {row}: {e}"))?;
         let spelling = array::from_fn(|i| self.spell_word(&word, i));
-        let entry: LexiconEntry<ORTHOGRAPHIES> = LexiconEntry {
-          word,
-          spelling,
-          definition: record.get(definition_field).ok_or_else(|| format!("No category found at row {row}"))?.to_owned(),
-        };
+        let entry: LexiconEntry<ORTHOGRAPHIES> = LexiconEntry::new(
+            word,
+            spelling,
+            record.get(definition_field).ok_or_else(|| format!("No category found at row {row}"))?.to_owned(),
+        );
 
         result.push(entry);
 
@@ -1429,46 +1457,17 @@ fn show_usage<const ORTHOGRAPHIES: usize>(language: &Language<ORTHOGRAPHIES>) {
     println!("      display this information.");
 }
 
-fn process_lexicon<const ORTHOGRAPHIES: usize>(grid_style: Option<ChartStyle>, language: &Language<ORTHOGRAPHIES>, path: String, ortho_index: usize) {
-    if ortho_index >= language.orthographies.len() {
+fn format_lexicon<const ORTHOGRAPHIES: usize>(grid_style: Option<TableStyle>, language: &Language<ORTHOGRAPHIES>, path: String, ortho_index: usize) {
+  if ortho_index >= language.orthographies.len() {
         panic!("Language only has {} orthographies.",language.orthographies.len())
-    }
+  }
 
-    let grid_style = grid_style.unwrap_or(ChartStyle::Plain);
+  let grid_style = grid_style.unwrap_or(TableStyle::Plain);
 
-    match language.process_lexicon(path) {
-    Ok(entries) => {
-      let mut after_first = false;
-      // NOTE: I'm *not* sorting the entries before grouping. The user might have some sort of custom sort in the data, however.
-      for entry in entries {
-
-        if after_first {
-            println!();
-        } else {
-            after_first = true;
-        }
-
-        let mut main_spelling = String::new();
-        let mut other_spellings = Vec::new();
-        for (i,(spelling,orthography)) in entry.spelling.iter().zip(language.orthographies).enumerate() {
-          if i == ortho_index {
-            main_spelling = grid_style.get_subpara_header_string(spelling);
-          } else {
-            let orthography = grid_style.get_italic_string(orthography);
-            other_spellings.push(format!("{orthography}: {spelling}; "))
-          }
-        }
-        assert_ne!(main_spelling.len(),0,"Missing spelling for orthography {ortho_index} in {}",entry.word);
-
-
-        print!("{main_spelling} (");
-        for spelling in other_spellings {
-            print!("{spelling}")
-        }
-
-        let ipa = grid_style.get_phoneme_text(entry.word.to_string());
-        println!("{ipa}) {}",entry.definition);
-      }
+  match language.load_lexicon(path,ortho_index) {
+    Ok(lexicon) => {
+        let result = lexicon.into_string(&grid_style);
+        println!("{result}")
 
     },
     Err(err) => {
@@ -1478,38 +1477,52 @@ fn process_lexicon<const ORTHOGRAPHIES: usize>(grid_style: Option<ChartStyle>, l
   }
 }
 
-fn show_spelling<const ORTHOGRAPHIES: usize>(grid_style: Option<ChartStyle>, language: &Language<ORTHOGRAPHIES>, columns: usize) {
-    match language.display_spelling(&grid_style.unwrap_or(ChartStyle::Terminal),columns) {
-    Ok(grid) => {
-      println!("{grid}");
-    },
-    Err(err) => {
-      eprintln!("!!! Couldn't display spelling: {err}");
-      process::exit(1)
+fn show_spelling<const ORTHOGRAPHIES: usize>(grid_style: Option<TableStyle>, language: &Language<ORTHOGRAPHIES>, columns: usize) {
+    match language.display_spelling(columns) {
+        Ok(grid) => {
+            println!("{}",grid.into_string(&grid_style.unwrap_or(TableStyle::Terminal { spans: false })));
+        },
+        Err(err) => {
+            eprintln!("!!! Couldn't display spelling: {err}");
+            process::exit(1)
+        }
     }
-  }
 }
 
 fn show_phonemes<const ORTHOGRAPHIES: usize>(grid_style: Option<TableStyle>, language: &Language<ORTHOGRAPHIES>, table: Option<&String>) {
-    match language.display_phonemes(table,&grid_style.as_ref().unwrap_or(&TableStyle::Terminal{ spans: true })) {
-        Ok(grids) => {
-            if let Some(table) = &table {
-                if grids.is_empty() {
-                    println!("No phoneme table named {table}. Try singular?");
-                }
-            }
-            for grid in grids {
-                if table.is_none() {
-                    println!("{}:",grid.0);
-                }
-                println!("{}",grid.1);
-                println!();
-            }
+    let style = grid_style.as_ref().unwrap_or(&TableStyle::Terminal{ spans: true });
+    let result = match table {
+        Some(table) => match language.build_phoneme_table(table) {
+            Ok(Some(grid)) => {
+                println!("{}:",grid.0);
+                println!("{}",grid.1.into_string(&style));
+                Ok(())
             },
-            Err(err) => {
-            eprintln!("!!! Couldn't display phonemes: {err}");
-            process::exit(1)
-        }
+            Ok(None) => {
+                println!("No phoneme table named {table}. Try singular?");
+                Ok(())
+            }
+            Err(err) => Err(err),
+        },
+        None => match language.build_all_phoneme_tables() {
+            Ok(grids) => {
+                for grid in grids {
+                    println!("{}:",grid.1);
+                    println!("{}",grid.2.into_string(&style));
+                    println!();
+
+                }
+
+                Ok(())
+            },
+            Err(err) => Err(err),
+        },
+    };
+
+    if let Err(err) = result {
+        eprintln!("!!! Couldn't display phonemes: {err}");
+        process::exit(1)
+
     }
 }
 
@@ -1560,47 +1573,47 @@ fn validate_words<const ORTHOGRAPHIES: usize>(language: &Language<ORTHOGRAPHIES>
     }
 }
 
-fn generate_words<const ORTHOGRAPHIES: usize>(grid_style: Option<ChartStyle>, language: &Language<ORTHOGRAPHIES>, count: usize) {
-    let mut grid = Chart::new(grid_style.unwrap_or(ChartStyle::Plain));
+fn generate_words<const ORTHOGRAPHIES: usize>(grid_style: Option<TableStyle>, language: &Language<ORTHOGRAPHIES>, count: usize) {
+    let mut grid = Grid::new();
+
+    // FUTURE: Should I have a header?
 
     for _ in 0..count {
-        grid.add_row();
+        let mut row = GridRow::new();
+
         match language.make_word() {
             Ok(word) => {
-            for orthography in 0..language.orthographies.len() {
-                grid.add_cell(&language.spell_word(&word,orthography));
-            }
-            grid.add_cell(&format!("{word}"));
-            // the following is a sanity check. It might catch some logic errors, but really it's just GIGO.
-            if let Err(err) = language.check_word(&word,&|_,_| { /* eat message, no need to report */}) {
-                println!("-- !!!! invalid word: {err}");
-                process::exit(1);
-            }
+                for orthography in 0..language.orthographies.len() {
+                    row.push_cell(Cell::content(language.spell_word(&word,orthography)));
+                }
+                row.push_cell(Cell::content(format!("{word}")));
+
+                // the following is a sanity check. It might catch some logic errors, but really it's just GIGO.
+                if let Err(err) = language.check_word(&word,&|_,_| { /* eat message, no need to report */}) {
+                    println!("-- !!!! invalid word: {err}");
+                    process::exit(1);
+                }
             },
             Err(err) => {
-            eprintln!("!!! Couldn't make word: {err}");
-            process::exit(1);
+                eprintln!("!!! Couldn't make word: {err}");
+                process::exit(1);
             }
         }
+
+        grid.push_body_row(row);
     }
-    print!("{grid}");
+    println!("{}",grid.into_string(grid_style.as_ref().unwrap_or(&TableStyle::Plain)));
 }
 
 
 pub fn run_main<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHOGRAPHIES: usize>(args: &mut Args, language: Result<Language<ORTHOGRAPHIES>,LanguageError>) {
-  let (table_style,command) = parse_args(&mut args.skip(1));
+  let (grid_style,command) = parse_args(&mut args.skip(1));
 
-  // TODO: I need to use the same tables for the other thing as well... How can I share code for that?
+  // TODO: For blending the columns, I can just specify a column number and width and combine regular cells, then I don't need the MultiCell.
+  // TODO: something like that also makes it easy to blend rows as well.
   // TODO: I need two more styles: HTML and JSON (which formats everything into a form of json for use in other tools)
-  // TODO: Make sure the library exposes a way to get the phoneme table in 'Cells' so that they can do whatever they want to with it in rust.
-  let grid_style = match &table_style {
-      Some(style) => match style {
-        TableStyle::Plain => Some(ChartStyle::Plain),
-        TableStyle::Terminal { .. } => Some(ChartStyle::Terminal),
-        TableStyle::Markdown { .. } => Some(ChartStyle::Markdown),
-      },
-      None => None,
-  };
+  // TODO: Make sure the library exposes a way to get the phoneme table as a 'Grid' so that they can do whatever they want to with it in rust.
+
 
   match language {
       Ok(language) => {
@@ -1608,9 +1621,9 @@ pub fn run_main<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHO
         match command {
             Command::GenerateWords(count) => generate_words(grid_style, &language, count),
             Command::ValidateWords(words,option) => validate_words(&language, words, &option),
-            Command::ShowPhonemes(table) => show_phonemes(table_style, &language, table.as_ref()),
+            Command::ShowPhonemes(table) => show_phonemes(grid_style, &language, table.as_ref()),
             Command::ShowSpelling(columns) => show_spelling(grid_style, &language, columns),
-            Command::ProcessLexicon(path,ortho_index) => process_lexicon(grid_style, &language, path, ortho_index),
+            Command::ProcessLexicon(path,ortho_index) => format_lexicon(grid_style, &language, path, ortho_index),
             Command::ShowUsage => show_usage(&language),
         }
 

@@ -7,9 +7,9 @@ use std::fmt::Display;
 use std::fmt::Debug;
 use std::rc::Rc;
 
-use crate::grid::Cell;
+use crate::grid::GridRow;
 use crate::grid::Grid;
-use crate::grid::TableStyle;
+use crate::grid::RowHeader;
 use crate::phoneme_table::sealed::InnerTable as _;
 use crate::Bag;
 use crate::Language;
@@ -59,10 +59,12 @@ impl Display for PhonemeDisplay {
 }
 
 mod sealed {
+    use crate::grid::ColumnHeader;
     use crate::phoneme_table::PhonemeDisplay;
     // Basically, I want to keep the functions on InnerTable private, and since trait functions are automatically public, this is the convoluted way I have to do it.
     use crate::phoneme_table::Axis;
     use crate::grid::Cell;
+    use crate::grid::Grid;
     use crate::phoneme_table::HeaderDef;
     use std::collections::HashSet;
 
@@ -74,7 +76,7 @@ mod sealed {
 
         fn phoneme_sets_to_cells_key(&self, sets: &Self::PhonemeSets) -> Result<Self::CellsKey,Axis>;
 
-        fn build_cells(&self) -> Vec<Vec<Cell>>;
+        fn build_cells(&self, grid: &mut Grid);
 
         fn phoneme_set(&mut self, cells_key: Self::CellsKey) -> Result<&mut HashSet<PhonemeDisplay>, Axis>;
 
@@ -86,20 +88,9 @@ mod sealed {
         /// * `col_header_level_count`: The number of column header rows the final table will have, used for creating the blank "corner" square. `0` is treated as `1`
         /// * `row_header_level_count`: The number of row header columns the final table will have, used for creating the blank "corner" square. `0` is valid.
         /// * `colspan_for_each_header`: How manu columns each header will take up, allowing for subheaders. `0` is treated as `1`
-        fn build_header_row(columns: &[&HeaderDef], col_header_level_count: usize, row_header_level_count: usize, colspan_for_each_header: usize) -> Vec<Cell> {
+        fn build_header_row(columns: &[&HeaderDef], colspan_for_each_header: usize) -> Vec<ColumnHeader> {
             // main column headers:
             let mut row = Vec::new();
-            // NOTE: I can foresee some future implementation where there are no row headers, in which case we don't push a corner here.
-            if row_header_level_count > 0 {
-                let rowspan = col_header_level_count.max(1);
-                row.push(Cell::corner(row_header_level_count,rowspan));
-
-                // fill in the remaining...
-                for _ in 1..row_header_level_count {
-                    row.push(Cell::corner_span())
-                }
-
-            }
 
             Self::build_column_headers(columns, colspan_for_each_header, &mut row);
             row
@@ -111,14 +102,9 @@ mod sealed {
         /// * `row_header_count`: The number of row header columns the final table will have, used for creating the blank "corner" square. `0` is valid.
         /// * `repeat_count`: The number of times to repeat the headers. On a single subheader, the subheaders should repeat for each primary header.
         /// * `colspan_for_each_header`: How manu columns each header will take up, allowing for subheaders. `0` is treated as `1`
-        fn build_subheader_row(subcolumns: &Vec<&HeaderDef>, row_header_count: usize, repeat_count: usize, colspan_for_each_header: usize) -> Vec<Cell> {
+        fn build_subheader_row(subcolumns: &Vec<&HeaderDef>, repeat_count: usize, colspan_for_each_header: usize) -> Vec<ColumnHeader> {
             // subcolumn headers
             let mut row = Vec::new();
-
-            for _ in 0..row_header_count {
-                // push to fill in the corner spans
-                row.push(Cell::corner_span())
-            }
 
             for _ in 0..repeat_count.max(1) {
                 Self::build_column_headers(subcolumns, colspan_for_each_header, &mut row);
@@ -130,13 +116,10 @@ mod sealed {
         ///
         /// * `columns`: List of headers to output. It is only a HeaderDef to reduce the need to map the struct. The headers should already be in the expected order.
         /// * `colspan_for_each_header`: How manu columns each header will take up, allowing for subheaders. `0` is treated as `1`
-        fn build_column_headers(columns: &[&HeaderDef], colspan_for_each: usize, row: &mut Vec<Cell>) {
+        fn build_column_headers(columns: &[&HeaderDef], colspan_for_each: usize, row: &mut Vec<ColumnHeader>) {
             let colspan_for_each = colspan_for_each.max(1);
             for column_def in columns {
-                row.push(Cell::column_header(column_def.caption.to_owned(), colspan_for_each));
-                for _ in 1..colspan_for_each {
-                    row.push(Cell::column_header_span())
-                }
+                row.push(ColumnHeader::new(column_def.caption.to_owned(), colspan_for_each));
             }
         }
 
@@ -145,7 +128,7 @@ mod sealed {
         /// * `cells_key`: Specify the key into the cells (see `get_cell`) from which to retrieve phonemes
         /// * `merge_to_right`: If true, then tables which format with borders should hide their right border. (Used with some subcolumn options)
         fn build_cell(&self, cells_key: Self::CellsKey) -> Cell {
-            let phonemes = self.get_phoneme_text(&cells_key).join("");
+            let phonemes = self.get_phoneme_text(&cells_key).join(" ");
             Cell::content(phonemes)
         }
 
@@ -216,17 +199,33 @@ macro_rules! table_add_col_fn {
 
 pub(crate) trait Table: sealed::InnerTable {
 
-    fn add_phoneme(&mut self, sets: &Self::PhonemeSets, phoneme: PhonemeDisplay) -> Result<bool,Axis> {
+    fn add_phoneme(&mut self, sets: &Self::PhonemeSets, phoneme: &Rc<Phoneme>, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<bool, Axis> {
+        let phoneme = if let Some(bag) = unprinted_phonemes {
+            if let Some(phoneme) = bag.remove(&phoneme) {
+                PhonemeDisplay::Normal(phoneme)
+            } else {
+                PhonemeDisplay::Duplicate(phoneme.clone()) // FUTURE: Should I report an error?
+            }
+        } else {
+            PhonemeDisplay::Normal(phoneme.clone())
+        };
+
         let cell_key = self.phoneme_sets_to_cells_key(sets)?;
-        Ok(self.phoneme_set(cell_key)?.insert(phoneme.clone()))
+        Ok(self.phoneme_set(cell_key)?.insert(phoneme))
+
+
 
     }
 
-    fn build_grid(&self, style: &TableStyle) -> String {
 
-        let grid = Grid::new(self.build_cells());
+    fn build_grid(&self) -> Grid {
 
-        grid.into_string(style)
+        let mut grid = Grid::new();
+        self.build_cells(&mut grid);
+
+        grid
+
+
     }
 
 
@@ -306,7 +305,7 @@ impl<'definition> Table4D<'definition> {
 
 impl Table4D<'_> {
 
-    pub(crate) fn add_phonemes<const ORTHOGRAPHIES: usize>(&mut self, language: &Language<ORTHOGRAPHIES>, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Bag<Rc<Phoneme>>) -> Result<(), Axis> {
+    pub(crate) fn add_phonemes<const ORTHOGRAPHIES: usize>(&mut self, language: &Language<ORTHOGRAPHIES>, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<(), Axis> {
         let columns: Vec<_> = self.definition.columns_by_set.keys().cloned().collect();
         let subcolumns: Vec<_> = self.definition.subcolumns_by_set.keys().cloned().collect();
         let rows: Vec<_> = self.definition.rows_by_set.keys().cloned().collect();
@@ -335,12 +334,7 @@ impl Table4D<'_> {
                         };
 
                         for phoneme in phoneme_set.iter() {
-                            if unprinted_phonemes.contains(&phoneme) {
-                                _ = self.add_phoneme(&sets, PhonemeDisplay::Normal(phoneme.clone()))?;
-                            } else {
-                                _ = self.add_phoneme(&sets, PhonemeDisplay::Duplicate(phoneme.clone()))?; // FUTURE: Should I report an error?
-                            }
-                            _ = unprinted_phonemes.remove(&phoneme);
+                            _ = self.add_phoneme(&sets, phoneme, unprinted_phonemes)?;
 
 
                         }
@@ -355,18 +349,18 @@ impl Table4D<'_> {
         Ok(())
     }
 
-    fn build_grid_row(&self, columns: &Vec<&HeaderDef>, subcolumns: &Vec<&HeaderDef>, row_def: &HeaderDef, subrows_count: usize, subrow_def: &HeaderDef) -> Vec<Cell> {
-        let mut row = Vec::new();
+    fn build_grid_row(&self, columns: &Vec<&HeaderDef>, subcolumns: &Vec<&HeaderDef>, row_def: &HeaderDef, subrows_count: usize, subrow_def: &HeaderDef) -> GridRow {
+        let mut row = GridRow::new();
         if subrow_def.order == 0 {
-            row.push(Cell::row_header(row_def.caption.to_owned(), subrows_count));
+            row.push_header(RowHeader::row_header(row_def.caption.to_owned(), subrows_count));
         } else {
             // still adding a span fill even if we aren't showing subrow headers.
-            row.push(Cell::row_header_span());
+            row.push_header(RowHeader::row_header_span());
         };
 
 
         if !self.definition.hide_subrow_captions {
-            row.push(Cell::row_header(subrow_def.caption.to_owned(), 1));
+            row.push_header(RowHeader::row_header(subrow_def.caption.to_owned(), 1));
         }
 
         for column in columns {
@@ -380,13 +374,13 @@ impl Table4D<'_> {
 
             if self.definition.hide_subcolumn_captions && self.definition.blend_subcolumns {
                 let content = self.build_multi_col_cell(&keys.collect::<Vec<_>>());
-                row.push(content);
+                row.push_cell(content);
 
             } else {
                 for key in keys {
 
                     let content = self.build_cell(key);
-                    row.push(content);
+                    row.push_cell(content);
                 };
 
             }
@@ -404,36 +398,22 @@ impl sealed::InnerTable for Table4D<'_> {
 
     type CellsKey = Cells4DKey;
 
-    fn build_cells(&self) -> Vec<Vec<Cell>> {
+    fn build_cells(&self, grid: &mut Grid) {
         let (columns,columns_count) = self.definition.columns_by_set.hashmap_to_captions_len();
         let (subcolumns,subcolumns_count) = self.definition.subcolumns_by_set.hashmap_to_captions_len();
         let rows: Vec<_> = self.definition.rows_by_set.hashmap_to_captions();
         let (subrows,subrows_count) = self.definition.subrows_by_set.hashmap_to_captions_len();
 
-        let mut result = Vec::new();
-
-        let col_header_level_count = if self.definition.hide_subcolumn_captions {
-            1
-        } else {
-            2
-        };
-
-        let row_header_level_count = if self.definition.hide_subrow_captions {
-            1
-        } else {
-            2
-        };
-
-        let colspan_for_each_header = if self.definition.hide_subcolumn_captions && self.definition.blend_subcolumns {
+        let colspan_for_each_header = if self.definition.hide_subcolumn_captions {
             1
         } else {
             subcolumns_count
         };
 
-        result.push(Self::build_header_row(&columns, col_header_level_count, row_header_level_count, colspan_for_each_header));
+        grid.push_header_row(Self::build_header_row(&columns, colspan_for_each_header));
 
         if !self.definition.hide_subcolumn_captions {
-            result.push(Self::build_subheader_row(&subcolumns, row_header_level_count, columns_count, 1));
+            grid.push_header_row(Self::build_subheader_row(&subcolumns, columns_count, 1));
 
         }
 
@@ -442,12 +422,10 @@ impl sealed::InnerTable for Table4D<'_> {
 
             for subrow in &subrows {
                 let row = self.build_grid_row(&columns, &subcolumns, row, subrows_count, subrow);
-                result.push(row)
+                grid.push_body_row(row)
 
             }
         }
-
-        result
 
     }
 
@@ -547,7 +525,7 @@ impl<'definition> Table3D<'definition> {
 
 impl Table3D<'_> {
 
-    pub(crate) fn add_phonemes<const ORTHOGRAPHIES: usize>(&mut self, language: &Language<ORTHOGRAPHIES>, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Bag<Rc<Phoneme>>) -> Result<(), Axis> {
+    pub(crate) fn add_phonemes<const ORTHOGRAPHIES: usize>(&mut self, language: &Language<ORTHOGRAPHIES>, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<(), Axis> {
         let columns: Vec<_> = self.definition.columns_by_set.keys().cloned().collect();
         let subcolumns: Vec<_> = self.definition.subcolumns_by_set.keys().cloned().collect();
         let rows: Vec<_> = self.definition.rows_by_set.keys().cloned().collect();
@@ -571,12 +549,7 @@ impl Table3D<'_> {
                     };
 
                     for phoneme in phoneme_set.iter() {
-                        if unprinted_phonemes.contains(&phoneme) {
-                            _ = self.add_phoneme(&sets, PhonemeDisplay::Normal(phoneme.clone()))?;
-                        } else {
-                            _ = self.add_phoneme(&sets, PhonemeDisplay::Duplicate(phoneme.clone()))?; // FUTURE: Should I report an error?
-                        }
-                        _ = unprinted_phonemes.remove(&phoneme);
+                        _ = self.add_phoneme(&sets, phoneme, unprinted_phonemes)?;
 
 
                     }
@@ -591,9 +564,9 @@ impl Table3D<'_> {
     }
 
 
-    fn build_grid_row(&self, columns: &Vec<&HeaderDef>, subcolumns: &Vec<&HeaderDef>, row_def: &HeaderDef) -> Vec<Cell> {
-        let mut row = Vec::new();
-        row.push(Cell::row_header(row_def.caption.to_owned(), 1));
+    fn build_grid_row(&self, columns: &Vec<&HeaderDef>, subcolumns: &Vec<&HeaderDef>, row_def: &HeaderDef) -> GridRow {
+        let mut row = GridRow::new();
+        row.push_header(RowHeader::row_header(row_def.caption.to_owned(), 1));
 
         for column in columns {
 
@@ -605,14 +578,14 @@ impl Table3D<'_> {
 
             if self.definition.hide_subcolumn_captions && self.definition.blend_subcolumns {
                 let content = self.build_multi_col_cell(&keys.collect::<Vec<_>>());
-                row.push(content);
+                row.push_cell(content);
 
             } else {
                 for key in keys {
 
                     let content = self.build_cell(key);
 
-                    row.push(content);
+                    row.push_cell(content);
                 };
 
             }
@@ -629,36 +602,30 @@ impl sealed::InnerTable for Table3D<'_> {
 
     type CellsKey = Cells3DKey;
 
-    fn build_cells(&self) -> Vec<Vec<Cell>> {
+    fn build_cells(&self, grid: &mut Grid) {
         let (columns,columns_count) = self.definition.columns_by_set.hashmap_to_captions_len();
         let (subcolumns,subcolumns_count) = self.definition.subcolumns_by_set.hashmap_to_captions_len();
         let rows: Vec<_> = self.definition.rows_by_set.hashmap_to_captions();
 
-        let mut result = Vec::new();
-
-        let col_header_level_count = if self.definition.hide_subcolumn_captions {
+        let colspan_for_each_header = if self.definition.hide_subcolumn_captions {
             1
         } else {
-            2
+            subcolumns_count
         };
 
-
-
-        result.push(Self::build_header_row(&columns, col_header_level_count, 1, subcolumns_count));
+        grid.push_header_row(Self::build_header_row(&columns, colspan_for_each_header));
 
         if !self.definition.hide_subcolumn_captions {
-            result.push(Self::build_subheader_row(&subcolumns, 1, columns_count, 1));
+            grid.push_header_row(Self::build_subheader_row(&subcolumns, columns_count, 1));
         }
 
         // rows
         for row in &rows {
 
             let row = self.build_grid_row(&columns, &subcolumns, row);
-            result.push(row)
+            grid.push_body_row(row)
 
         }
-
-        result
 
     }
 
@@ -742,7 +709,7 @@ impl<'definition> Table2D<'definition> {
 impl Table2D<'_> {
 
 
-    pub(crate) fn add_phonemes<const ORTHOGRAPHIES: usize>(&mut self, language: &Language<ORTHOGRAPHIES>, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Bag<Rc<Phoneme>>) -> Result<(), Axis>{
+    pub(crate) fn add_phonemes<const ORTHOGRAPHIES: usize>(&mut self, language: &Language<ORTHOGRAPHIES>, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<(), Axis>{
         let columns: Vec<_> = self.definition.columns_by_set.keys().cloned().collect();
         let rows: Vec<_> = self.definition.rows_by_set.keys().cloned().collect();
         for column in &columns {
@@ -760,12 +727,7 @@ impl Table2D<'_> {
                 };
 
                 for phoneme in phoneme_set.iter() {
-                    if unprinted_phonemes.contains(&phoneme) {
-                        _ = self.add_phoneme(&sets, PhonemeDisplay::Normal(phoneme.clone()))?;
-                    } else {
-                        _ = self.add_phoneme(&sets, PhonemeDisplay::Duplicate(phoneme.clone()))?; // FUTURE: Should I report an error?
-                    }
-                    _ = unprinted_phonemes.remove(&phoneme);
+                    _ = self.add_phoneme(&sets, phoneme, unprinted_phonemes)?;
 
 
                 }
@@ -777,9 +739,9 @@ impl Table2D<'_> {
     }
 
 
-    fn build_grid_row(&self, columns: &Vec<&HeaderDef>, row_def: &HeaderDef) -> Vec<Cell> {
-        let mut row = Vec::new();
-        row.push(Cell::row_header(row_def.caption.to_owned(), 1));
+    fn build_grid_row(&self, columns: &Vec<&HeaderDef>, row_def: &HeaderDef) -> GridRow {
+        let mut row = GridRow::new();
+        row.push_header(RowHeader::row_header(row_def.caption.to_owned(), 1));
 
         for column in columns {
 
@@ -790,7 +752,7 @@ impl Table2D<'_> {
 
             let content = self.build_cell(key);
 
-            row.push(content);
+            row.push_cell(content);
 
         }
         row
@@ -805,23 +767,20 @@ impl sealed::InnerTable for Table2D<'_> {
 
     type CellsKey = Cells2DKey;
 
-    fn build_cells(&self) -> Vec<Vec<Cell>> {
+    fn build_cells(&self, grid: &mut Grid) {
         let columns = self.definition.columns_by_set.hashmap_to_captions();
         let rows: Vec<_> = self.definition.rows_by_set.hashmap_to_captions();
 
-        let mut result = Vec::new();
 
-        result.push(Self::build_header_row(&columns, 1, 1, 1));
+        grid.push_header_row(Self::build_header_row(&columns, 1));
 
         // rows
         for row in &rows {
 
             let row = self.build_grid_row(&columns, row);
-            result.push(row)
+            grid.push_body_row(row)
 
         }
-
-        result
 
     }
 
@@ -898,7 +857,7 @@ impl<'definition> Table1D<'definition> {
 
 impl Table1D<'_> {
 
-    pub(crate) fn add_phonemes<const ORTHOGRAPHIES: usize>(&mut self, language: &Language<ORTHOGRAPHIES>, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Bag<Rc<Phoneme>>) -> Result<(), Axis> {
+    pub(crate) fn add_phonemes<const ORTHOGRAPHIES: usize>(&mut self, language: &Language<ORTHOGRAPHIES>, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<(), Axis> {
         let rows: Vec<_> = self.definition.rows_by_set.keys().cloned().collect();
 
 
@@ -907,12 +866,7 @@ impl Table1D<'_> {
             let phoneme_set = phoneme_set.intersection(row_set);
 
             for phoneme in phoneme_set.iter() {
-                if unprinted_phonemes.contains(&phoneme) {
-                    _ = self.add_phoneme(&row, PhonemeDisplay::Normal(phoneme.clone()))?;
-                } else {
-                    _ = self.add_phoneme(&row, PhonemeDisplay::Duplicate(phoneme.clone()))?; // FUTURE: Should I report an error?
-                }
-                _ = unprinted_phonemes.remove(&phoneme);
+                _ = self.add_phoneme(&row, phoneme, unprinted_phonemes)?;
 
             }
 
@@ -924,15 +878,15 @@ impl Table1D<'_> {
     }
 
 
-    fn build_grid_row(&self, row_def: &HeaderDef) -> Vec<Cell> {
-        let mut row = Vec::new();
-        row.push(Cell::row_header(row_def.caption.to_owned(), 1));
+    fn build_grid_row(&self, row_def: &HeaderDef) -> GridRow {
+        let mut row = GridRow::new();
+        row.push_header(RowHeader::row_header(row_def.caption.to_owned(), 1));
 
         let key = row_def.order;
 
         let content = self.build_cell(key);
 
-        row.push(content);
+        row.push_cell(content);
 
         row
     }
@@ -946,22 +900,20 @@ impl sealed::InnerTable for Table1D<'_> {
 
     type CellsKey = usize;
 
-    fn build_cells(&self) -> Vec<Vec<Cell>> {
+    fn build_cells(&self, grid: &mut Grid) {
         let rows: Vec<_> = self.definition.rows_by_set.hashmap_to_captions();
 
-        let mut result = Vec::new();
 
-        result.push(Self::build_header_row(&[&self.definition.header], 1, 1, 1));
+        grid.push_header_row(Self::build_header_row(&[&self.definition.header], 1));
 
         // rows
         for row in &rows {
 
             let row = self.build_grid_row(row);
-            result.push(row)
+            grid.push_body_row(row)
 
         }
 
-        result
 
     }
 
@@ -1029,16 +981,11 @@ impl<'definition> Table0D<'definition> {
 impl Table0D<'_> {
 
 
-    pub(crate) fn add_phonemes<const ORTHOGRAPHIES: usize>(&mut self, _: &Language<ORTHOGRAPHIES>, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Bag<Rc<Phoneme>>) -> Result<(), Axis> {
+    pub(crate) fn add_phonemes<const ORTHOGRAPHIES: usize>(&mut self, _: &Language<ORTHOGRAPHIES>, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<(), Axis> {
 
 
         for phoneme in phoneme_set.iter() {
-            if unprinted_phonemes.contains(&phoneme) {
-                _ = self.add_phoneme(&(), PhonemeDisplay::Normal(phoneme.clone()))?;
-            } else {
-                _ = self.add_phoneme(&(), PhonemeDisplay::Duplicate(phoneme.clone()))?; // FUTURE: Should I report an error?
-            }
-            _ = unprinted_phonemes.remove(&phoneme);
+            _ = self.add_phoneme(&(), phoneme, unprinted_phonemes)?;
 
 
         }
@@ -1048,14 +995,14 @@ impl Table0D<'_> {
     }
 
 
-    fn build_grid_row(&self) -> Vec<Cell> {
-        let mut row = Vec::new();
+    fn build_grid_row(&self) -> GridRow {
+        let mut row = GridRow::new();
 
         let key = ();
 
         let content = self.build_cell(key);
 
-        row.push(content);
+        row.push_cell(content);
 
         row
     }
@@ -1069,17 +1016,14 @@ impl sealed::InnerTable for Table0D<'_> {
 
     type CellsKey = ();
 
-    fn build_cells(&self) -> Vec<Vec<Cell>> {
+    fn build_cells(&self, grid: &mut Grid) {
 
-        let mut result = Vec::new();
 
-        result.push(Self::build_header_row(&[&self.definition.header], 1, 0, 1));
+        grid.push_header_row(Self::build_header_row(&[&self.definition.header], 1));
 
         let row = self.build_grid_row();
-        result.push(row);
+        grid.push_body_row(row);
 
-
-        result
 
     }
 
