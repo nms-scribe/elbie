@@ -7,8 +7,8 @@ use elbie::Language;
 use elbie::Phoneme;
 use elbie::LanguageError;
 use elbie::TableDef;
+use elbie::TableOption;
 use elbie::PHONEME;
-use elbie::EMPTY;
 use elbie::EnvironmentBranch;
 use elbie::EnvironmentChoice;
 use elbie::run_main;
@@ -366,22 +366,24 @@ fn create_goblin_language() -> Result<Language<1>,LanguageError> {
     ])
   ])?;
 
-  language.add_table("Consonants (Vʹ = unvoiced ~ V = voiced / Aʹ = unaspirated ~ A = aspirated)", CONSONANT, TableDef::new_4d(
+  language.add_table("Consonants (unvoiced ~ voiced / unaspirated ~ aspirated)", CONSONANT, TableDef::new_with_subcolumns_and_subrows(
     &[("Bilabial",BILABIAL),("Labiodental",LABIODENTAL),("Dental",DENTAL),("Alveolar",ALVEOLAR),
         ("Post-alveolar",POSTALVEOLAR),("Palatal",PALATAL),("Velar",VELAR),("Uvular",UVULAR),("Glottal",GLOTTAL)],
     &[
         ("Nasal",NASAL),("Plosive",PLOSIVE),("Fricative",FRICATIVE),("Reversed Affricate",REV_AFFRICATE),
         ("Approximant",NONLATERALAPPROXIMANT,),("Lateral",LATERAL),("Tap",TAP)],
     &[("Vʹ",UNVOICED),("V",VOICED)],
+    // FUTURE: Note that this is only differentiated in fricatives. In a real language table, one should simply make a Fricative and a Fricative Aspirated classes.
+    // But I'm using this to test subrows, in case those are needed.
     &[("Aʹ",UNASPIRATED),("A",ASPIRATED)]
+  ).with(TableOption::BlendSubcolumns)?.with(TableOption::HideSubrowCaptions)?)?;
+
+  language.add_table("Vowels",VOWEL, TableDef::new_simple_table(
+    &[("Front",FRONT),("Back",BACK)],
+    &[("Close",CLOSE),("Near-close",NEARCLOSE),("Open-mid",OPENMID),("Open",OPEN)]
   ))?;
 
-  language.add_table("Vowels",VOWEL, TableDef::new_2d(
-    &[("Front",FRONT),("Central",EMPTY),("Back",BACK)],
-    &[("Close",CLOSE),("Near-close",NEARCLOSE),("Close-mid",EMPTY),("Mid",EMPTY),("Open-mid",OPENMID),("Near-open",EMPTY),("Open",OPEN)]
-  ))?;
-
-  language.add_table("Diphthongs",DIPHTHONG, TableDef::new_list())?;
+  language.add_table("Diphthongs",DIPHTHONG, TableDef::new_single_cell("Diphthongs"))?;
 
   Ok(language)
 
