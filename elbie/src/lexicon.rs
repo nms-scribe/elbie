@@ -1,6 +1,9 @@
 use std::fmt::Write;
 
-use crate::grid::TableStyle;
+
+use html_builder::Html5;
+
+use crate::grid::GridStyle;
 use crate::Word;
 
 
@@ -55,28 +58,41 @@ impl<const ORTHOGRAPHIES: usize> Lexicon<ORTHOGRAPHIES> {
         self.entries.push(entry);
     }
 
-    pub fn format_entry<Output: Write>(style: &TableStyle, main_spelling: &str, other_spellings: Vec<(&str,&str)>, word: Word, definition: &str, output: &mut Output) {
+    pub fn format_entry<Output: Write>(style: &GridStyle, main_spelling: &str, other_spellings: Vec<(&str,&str)>, word: Word, definition: &str, output: &mut Output) {
         match style {
-            TableStyle::Plain |
-            TableStyle::Terminal { .. } => {
+            GridStyle::Plain |
+            GridStyle::Terminal { .. } => {
                 write!(output,"{main_spelling} ({word}").expect("Could not write orthography");
                 for (orthography,spelling) in other_spellings {
                     write!(output,"; {orthography}: {spelling}").expect("Could not write orthography");
                 }
                 write!(output,"): {definition}").expect("Could not write orthography");
             }
-            TableStyle::Markdown { .. } => {
+            GridStyle::Markdown { .. } => {
                 write!(output,"**{main_spelling}**. ({word}").expect("Could not write orthography");
                 for (orthography,spelling) in other_spellings {
                     write!(output,"; {orthography}: *{spelling}*").expect("Could not write orthography");
                 }
                 write!(output,"): {definition}").expect("Could not write orthography");
             },
+            GridStyle::HTML { .. } => {
+                // TODO: Test this make sure it's working
+                let mut buffer = html_builder::Buffer::new();
+                let mut p = buffer.p();
+                write!(p.b(),"{main_spelling}").expect("Could not write to html node");
+                write!(p," ({word}").expect("Could not write to html node");
+                for (orthography,spelling) in other_spellings {
+                    write!(p,"; {orthography}").expect("Could not write to html node");
+                    write!(p.i(),"{spelling}").expect("Could not write to html node");
+                }
+                write!(p,"): {definition}").expect("Could not write to html node");
+                write!(output,"{}",buffer.finish()).expect("Could not write html");
+            }
         }
 
     }
 
-    pub fn into_string(self, style: &TableStyle) -> String {
+    pub fn into_string(self, style: &GridStyle) -> String {
 
         let mut result = String::new();
 

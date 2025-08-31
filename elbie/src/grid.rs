@@ -1,49 +1,74 @@
 use std::collections::HashMap;
 
+use std::fmt::Write as _;
+use html_builder::Html5 as _;
 use tabled::builder::Builder;
 use tabled::settings::themes::BorderCorrection;
 use tabled::settings::Span;
 use tabled::settings::Style;
 
-// TODO: Should be "GridStyle"
-pub enum TableStyle {
+pub enum TextStyle {
     Plain,
-    Terminal{ spans: bool },
-    Markdown{ spans: bool }
+    Terminal,
+    Markdown
 }
 
-impl TableStyle {
+impl TextStyle {
 
     fn column_header(&self, text: &str) -> String {
         match self {
-            TableStyle::Plain |
-            TableStyle::Terminal { .. } => text.to_owned(),
-            TableStyle::Markdown { .. } => format!("**{text}**"),
+            TextStyle::Plain |
+            TextStyle::Terminal { .. } => text.to_owned(),
+            TextStyle::Markdown { .. } => format!("**{text}**"),
         }
     }
 
     fn row_header(&self, text: &str) -> String {
         match self {
-            TableStyle::Plain |
-            TableStyle::Terminal { .. } => text.to_owned(),
-            TableStyle::Markdown { .. } => format!("**{text}**"),
+            TextStyle::Plain |
+            TextStyle::Terminal { .. } => text.to_owned(),
+            TextStyle::Markdown { .. } => format!("**{text}**"),
         }
     }
 
 }
 
+
+pub enum GridStyle {
+    Plain,
+    Terminal{ spans: bool },
+    Markdown{ spans: bool },
+    HTML{ spans: bool },
+}
+
+
+impl GridStyle {
+
+    fn to_text_style(&self) -> TextStyle {
+        match self {
+            GridStyle::Plain => TextStyle::Plain,
+            GridStyle::Terminal { .. } => TextStyle::Terminal,
+            GridStyle::Markdown { .. } => TextStyle::Markdown,
+            // HTML style has it's own ways of specifying this stuff, so it just returns plain.
+            GridStyle::HTML { .. } => TextStyle::Plain,
+        }
+    }
+}
+
 pub struct ColumnHeader {
     text: String,
-    colspan: usize
+    colspan: usize,
+    class: &'static str
 }
 
 
 impl ColumnHeader {
 
-    pub fn new(text: String, colspan: usize) -> Self {
+    pub fn new(text: String, colspan: usize, class: &'static str) -> Self {
         Self {
             text,
-            colspan
+            colspan,
+            class
         }
     }
 
@@ -54,7 +79,8 @@ impl ColumnHeader {
 pub enum RowHeader {
     RowHeader{
         text: String,
-        rowspan: usize
+        rowspan: usize,
+        class: &'static str
     },
     RowHeaderSpan
 }
@@ -62,10 +88,11 @@ pub enum RowHeader {
 impl RowHeader {
 
 
-    pub fn row_header(text: String, rowspan: usize) -> Self {
+    pub fn row_header(text: String, rowspan: usize, class: &'static str) -> Self {
         Self::RowHeader{
             text,
-            rowspan
+            rowspan,
+            class
         }
     }
 
@@ -83,19 +110,31 @@ impl RowHeader {
 
 #[derive(Debug)]
 pub enum Cell {
-    Content(String),
-    MultiColumnCell(Vec<String>),
+    Content{
+        text: String,
+        class: &'static str
+    },
+    MultiColumnCell{
+        cells: Vec<String>,
+        class: &'static str
+    },
 }
 
 impl Cell {
 
 
-    pub fn content(text: String) -> Self {
-        Self::Content(text)
+    pub fn content(text: String, class: &'static str) -> Self {
+        Self::Content{
+            text,
+            class
+        }
     }
 
-    pub fn multi_col_cell(cells: Vec<String>) -> Self {
-        Self::MultiColumnCell(cells)
+    pub fn multi_col_cell(cells: Vec<String>, class: &'static str) -> Self {
+        Self::MultiColumnCell{
+            cells,
+            class
+        }
 
     }
 
@@ -128,14 +167,16 @@ impl GridRow {
 
 
 pub struct Grid {
+    class: &'static str,
     headers: Vec<Vec<ColumnHeader>>,
     body: Vec<GridRow>
 }
 
 impl Grid {
 
-    pub fn new() -> Self {
+    pub fn new(class: &'static str) -> Self {
         Self {
+            class,
             headers: Vec::new(),
             body: Vec::new()
         }
@@ -158,15 +199,15 @@ impl Grid {
         self.body.push(row);
     }
 
-    fn blend_columns(&mut self) {
+    fn blend_columns_to_text(&mut self) {
 
         let mut table_index: HashMap<_, Vec<_>> = HashMap::new();
         // build an index of multi_cell values by column index
         for (row_idx,row) in self.body.iter().enumerate() {
             for (col_idx,cell) in row.cells.iter().enumerate() {
-                if let Cell::MultiColumnCell(vec) = cell {
+                if let Cell::MultiColumnCell{ cells, class} = cell {
 
-                    table_index.entry(col_idx).or_default().push((row_idx,vec.clone()));
+                    table_index.entry(col_idx).or_default().push((row_idx,cells.clone(),class.to_owned()));
 
                 }
             }
@@ -175,24 +216,24 @@ impl Grid {
         for (col_idx,list) in table_index {
             let mut plain_builder = Builder::new();
             let mut rows = Vec::new();
-            for (row_idx,cells) in list {
+            for (row_idx,cells,class) in list {
                 plain_builder.push_record(cells);
-                rows.push(row_idx);
+                rows.push((row_idx,class));
             }
 
             let mut table = plain_builder.build();
             let table = table.with(Style::blank());
             let text = table.to_string();
 
-            for (row_idx,line) in rows.into_iter().zip(text.lines()) {
+            for ((row_idx,class),line) in rows.into_iter().zip(text.lines()) {
                 if let Some(row) = self.body.get_mut(row_idx) {
                     if let Some(cell) = row.cells.get_mut(col_idx) {
-                        * cell = Cell::content(line.to_owned());
+                        * cell = Cell::content(line.to_owned(), class);
                     } else {
-                        println!("couldn't found cell at {row_idx}:{col_idx}")
+                        panic!("While merging columns, couldn't found cell at {row_idx}:{col_idx}")
                     }
                 } else {
-                    println!("couldn't found row {row_idx} for {col_idx}")
+                    panic!("While merging columns, couldn't found row {row_idx} for {col_idx}")
 
                 }
             }
@@ -203,16 +244,11 @@ impl Grid {
 
     }
 
-    pub fn into_string(mut self, style: &TableStyle) -> String {
 
-        self.blend_columns();
+    // NOTE: I don't ordinarily like single-letter type names, but I'm just trying to match the Style
+    pub fn into_tabled<T, B, L, R, H, V, const HSIZE: usize, const VSIZE: usize>(mut self, with_span: bool, text_style: TextStyle, table_style: Style<T, B, L, R, H, V, HSIZE, VSIZE>) -> tabled::Table {
 
-        let with_span = match style {
-            // plain tables spanning won't make any difference.
-            TableStyle::Plain => false,
-            TableStyle::Terminal { spans } |
-            TableStyle::Markdown { spans } => *spans,
-        };
+        self.blend_columns_to_text();
 
         let mut builder = Builder::new();
         let mut row_spans = Vec::new();
@@ -241,10 +277,11 @@ impl Grid {
             for (col_idx,cell) in row.iter().enumerate() {
                 let ColumnHeader {
                     text,
-                    colspan
+                    colspan,
+                    class: _
                 } = cell;
 
-                record.push(style.column_header(text));
+                record.push(text_style.column_header(text));
 
                 if colspan > &1 {
                     let colspan = *colspan;
@@ -263,11 +300,11 @@ impl Grid {
             let mut record = Vec::new();
             for (col_idx,cell) in row.headers.iter().enumerate() {
                 match cell {
-                    RowHeader::RowHeader { text, rowspan } => {
+                    RowHeader::RowHeader { text, rowspan, class: _ } => {
                         if rowspan > &1 {
                             row_spans.push((column_header_offset + row_idx,col_idx,*rowspan))
                         }
-                        record.push(style.row_header(text))
+                        record.push(text_style.row_header(text))
                     },
                     RowHeader::RowHeaderSpan => {
                         // even if I'm going to set them to spanning later, I still need an empty cell for it to span over.
@@ -280,8 +317,8 @@ impl Grid {
 
             for cell in row.cells.iter() {
                 let text = match cell {
-                    Cell::Content(text) => text.to_owned(),
-                    Cell::MultiColumnCell(_) => {
+                    Cell::Content{ text, class: _ } => text.to_owned(),
+                    Cell::MultiColumnCell{..} => {
                         // This should have been processed out by `process_multi_cells` above, so I'm going to ignore this...
                         String::new()
                     }
@@ -307,14 +344,113 @@ impl Grid {
 
 
 
-        let table = match style {
-            TableStyle::Plain => table.with(Style::blank()),
-            TableStyle::Terminal{..} => table.with(Style::modern()),
-            TableStyle::Markdown{..} => table.with(Style::markdown()),
-        };
+
+        _ = table.with(table_style);
+
+        table
+    }
+
+    pub fn into_html(self,with_span: bool) -> String {
+
+        // need to know this for creating "corner" cell in the top-left
+        let row_header_offset = self.body.first().map(|first| {
+            first.headers.len()
+        }).unwrap_or(0);
+        let column_header_offset = self.headers.len();
+
+        let mut buffer = html_builder::Buffer::new();
+        let mut table = buffer.table().attr(&format!("class=\"{}\"",self.class));
+        let mut thead = table.thead();
+        for (i,headers) in self.headers.iter().enumerate() {
+            let mut tr = thead.tr();
+            if with_span {
+                if i == 0 {
+                    let th = tr.th();
+                    let th = if column_header_offset > 1 {
+                        th.attr(&format!("colspan={column_header_offset}"))
+                    } else {
+                        th
+                    };
+                    if row_header_offset > 1 {
+                        _ = th.attr(&format!("rowspan={row_header_offset}"));
+                    }
+
+                }
+                for header in headers {
+                    let th = tr.th().attr(&format!("class=\"{}\"",header.class));
+                    let mut th = if header.colspan > 1 {
+                        th.attr(&format!("colspan={}",header.colspan))
+                    } else {
+                        th
+                    };
+                    write!(th,"{}",header.text).expect("Could not write to html node");
+                }
+            } else {
+                for _ in 0..row_header_offset {
+                    _ = tr.th();
+                }
+                for header in headers {
+                    write!(tr.th().attr(&format!("class=\"{}\"",header.class)),"{}",header.text).expect("Could not write to html node");
+                    for _ in 1..header.colspan {
+                        _ = tr.td();
+                    }
+                }
+            }
+        }
+
+        let mut tbody = table.tbody();
+
+        for row in self.body {
+            let mut tr = tbody.tr();
+            for header in row.headers {
+                match header {
+                    RowHeader::RowHeader { text, rowspan, class } => {
+                        let th = tr.th().attr(&format!("class=\"{class}\""));
+                        let mut th = if with_span && rowspan > 1 {
+                            th.attr(&format!("rowspan={rowspan}"))
+                        } else {
+                            th
+                        };
+                        write!(th,"{text}").expect("Could not write to html node");
+                    },
+                    RowHeader::RowHeaderSpan => {
+                        if !with_span {
+                            // just put an empty row header here.
+                            _ = tr.th();
+                        }
+                    },
+                }
+            }
+
+            for cell in row.cells {
+                match cell {
+                    Cell::Content{ text, class } => {
+                        write!(tr.td().attr(&format!("class=\"{class}\"")),"{text}").expect("Could not write to html node.")
+                    },
+                    Cell::MultiColumnCell{ cells, class} => {
+                        // HTML format should automatically turn off column blending, but just in case:
+                        let text = cells.join(" ");
+                        write!(tr.td().attr(&format!("class=\"{class}\"")),"{text}").expect("Could not write to html node.")
+                    },
+                }
+            }
+
+        }
 
 
-        table.to_string()
+        buffer.finish()
+    }
+
+    pub fn into_string(self, style: &GridStyle) -> String {
+
+        let text_style = style.to_text_style();
+
+        match style {
+            GridStyle::Plain => self.into_tabled(false,text_style,Style::blank()).to_string(),
+            GridStyle::Terminal { spans } => self.into_tabled(*spans,text_style,Style::modern()).to_string(),
+            GridStyle::Markdown { spans } => self.into_tabled(*spans,text_style,Style::markdown()).to_string(),
+            GridStyle::HTML { spans } => self.into_html(*spans).to_string(),
+        }
 
     }
 
