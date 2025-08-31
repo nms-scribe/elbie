@@ -1,20 +1,18 @@
-#![allow(dead_code)]
-
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::fmt::Display;
-use std::fmt::Debug;
-use std::rc::Rc;
-
-use crate::grid::GridRow;
-use crate::grid::Grid;
-use crate::grid::RowHeader;
-use crate::phoneme_table::sealed::InnerTable as _;
 use crate::Bag;
+use crate::ColumnDef;
 use crate::Language;
 use crate::Phoneme;
-use crate::ColumnDef;
+use crate::grid::Grid;
+use crate::grid::GridRow;
+use crate::grid::RowHeader;
+use crate::phoneme_table::sealed::InnerTable as _;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::collections::hash_map::Entry;
+use core::fmt;
+use core::fmt::Debug;
+use core::fmt::Display;
+use std::rc::Rc;
 
 #[derive(Debug,Clone)]
 pub enum Axis {
@@ -33,7 +31,7 @@ pub struct HeaderDef {
 
 impl HeaderDef {
 
-    fn new(caption: &'static str, order: usize) -> Self {
+    const fn new(caption: &'static str, order: usize) -> Self {
         Self {
             caption,
             order
@@ -50,7 +48,7 @@ pub(crate) enum PhonemeDisplay {
 
 impl Display for PhonemeDisplay {
 
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Normal(phoneme) => write!(f,"{phoneme}"),
             Self::Duplicate(phoneme) => write!(f,"⚠{phoneme}"),
@@ -138,9 +136,9 @@ mod sealed {
         }
 
         fn get_phoneme_text(&self, cells_key: &<Self as InnerTable>::CellsKey) -> Vec<String> {
-            match self.get_cell(&cells_key) {
+            match self.get_cell(cells_key) {
                 Some(phonemes) => {
-                    let mut phonemes: Vec<_> = phonemes.iter().map(|p| p.to_string()).collect();
+                    let mut phonemes: Vec<_> = phonemes.iter().map(PhonemeDisplay::to_string).collect();
                     phonemes.sort();
                     phonemes
                 },
@@ -201,7 +199,7 @@ pub(crate) trait Table: sealed::InnerTable {
 
     fn add_phoneme(&mut self, sets: &Self::PhonemeSets, phoneme: &Rc<Phoneme>, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<bool, Axis> {
         let phoneme = if let Some(bag) = unprinted_phonemes {
-            if let Some(phoneme) = bag.remove(&phoneme) {
+            if let Some(phoneme) = bag.remove(phoneme) {
                 PhonemeDisplay::Normal(phoneme)
             } else {
                 PhonemeDisplay::Duplicate(phoneme.clone()) // FUTURE: Should I report an error?
@@ -271,15 +269,15 @@ impl Table4DDef {
     table_add_col_fn!(add_subrow, add_subrows, subrows_by_set);
 
 
-    pub(crate) fn hide_subcolumn_captions(&mut self, value: bool) {
+    pub(crate) const fn hide_subcolumn_captions(&mut self, value: bool) {
         self.hide_subcolumn_captions = value;
     }
 
-    pub(crate) fn blend_subcolumns(&mut self, value: bool) {
+    pub(crate) const fn blend_subcolumns(&mut self, value: bool) {
         self.blend_subcolumns = value;
     }
 
-    pub(crate) fn hide_subrow_captions(&mut self, value: bool) {
+    pub(crate) const fn hide_subrow_captions(&mut self, value: bool) {
         self.hide_subrow_captions = value;
     }
 }
@@ -303,11 +301,11 @@ impl<'definition> Table4D<'definition> {
         Self {
             definition,
             override_: None,
-            cells: Default::default()
+            cells: HashMap::default()
         }
     }
 
-    pub(crate) fn dont_blend_columns(&mut self) {
+    pub(crate) const fn dont_blend_columns(&mut self) {
         if let Some(override_) = &mut self.override_ {
             override_.dont_blend_columns = true
         } else {
@@ -322,10 +320,10 @@ impl<'definition> Table4D<'definition> {
 impl Table4D<'_> {
 
     pub(crate) fn add_phonemes<const ORTHOGRAPHIES: usize>(&mut self, language: &Language<ORTHOGRAPHIES>, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<(), Axis> {
-        let columns: Vec<_> = self.definition.columns_by_set.keys().cloned().collect();
-        let subcolumns: Vec<_> = self.definition.subcolumns_by_set.keys().cloned().collect();
-        let rows: Vec<_> = self.definition.rows_by_set.keys().cloned().collect();
-        let subrows: Vec<_> = self.definition.subrows_by_set.keys().cloned().collect();
+        let columns: Vec<_> = self.definition.columns_by_set.keys().copied().collect();
+        let subcolumns: Vec<_> = self.definition.subcolumns_by_set.keys().copied().collect();
+        let rows: Vec<_> = self.definition.rows_by_set.keys().copied().collect();
+        let subrows: Vec<_> = self.definition.subrows_by_set.keys().copied().collect();
         for column in &columns {
             let column_set = language.get_set(column).unwrap();
             let phoneme_set = phoneme_set.intersection(column_set);
@@ -365,7 +363,7 @@ impl Table4D<'_> {
         Ok(())
     }
 
-    fn blend_subcolumns(&self) -> bool {
+    const fn blend_subcolumns(&self) -> bool {
         if let Some(override_) = &self.override_ {
             !override_.dont_blend_columns
         } else {
@@ -378,15 +376,15 @@ impl Table4D<'_> {
     fn build_grid_row(&self, columns: &Vec<&HeaderDef>, subcolumns: &Vec<&HeaderDef>, row_def: &HeaderDef, subrows_count: usize, subrow_def: &HeaderDef) -> GridRow {
         let mut row = GridRow::new();
         if subrow_def.order == 0 {
-            row.push_header(RowHeader::row_header(row_def.caption.to_owned(), subrows_count,"elbie-phonemes-row-header"));
+            row.push_header(RowHeader::new(row_def.caption.to_owned(), subrows_count,"elbie-phonemes-row-header"));
         } else {
             // still adding a span fill even if we aren't showing subrow headers.
             row.push_header(RowHeader::row_header_span());
-        };
+        }
 
 
         if !self.definition.hide_subrow_captions {
-            row.push_header(RowHeader::row_header(subrow_def.caption.to_owned(), 1, "elbie-phonemes-subrow-header"));
+            row.push_header(RowHeader::new(subrow_def.caption.to_owned(), 1, "elbie-phonemes-subrow-header"));
         }
 
         for column in columns {
@@ -470,8 +468,8 @@ impl sealed::InnerTable for Table4D<'_> {
 
     }
 
-    fn phoneme_set(&mut self, cell_key: Self::CellsKey) -> Result<&mut HashSet<PhonemeDisplay>, Axis> {
-        match self.cells.entry(cell_key) {
+    fn phoneme_set(&mut self, cells_key: Self::CellsKey) -> Result<&mut HashSet<PhonemeDisplay>, Axis> {
+        match self.cells.entry(cells_key) {
             Entry::Occupied(entry) => {
                 Ok(entry.into_mut())
             },
@@ -483,8 +481,8 @@ impl sealed::InnerTable for Table4D<'_> {
     }
 
 
-    fn get_cell(&self, cell_key: &Cells4DKey) -> Option<&HashSet<PhonemeDisplay>> {
-        self.cells.get(cell_key)
+    fn get_cell(&self, cells_key: &Cells4DKey) -> Option<&HashSet<PhonemeDisplay>> {
+        self.cells.get(cells_key)
     }
 
 }
@@ -519,11 +517,11 @@ impl Table3DDef {
     table_add_col_fn!(add_subcolumn, add_subcolumns, subcolumns_by_set);
 
 
-    pub(crate) fn hide_subcolumn_captions(&mut self, value: bool) {
+    pub(crate) const fn hide_subcolumn_captions(&mut self, value: bool) {
         self.hide_subcolumn_captions = value;
     }
 
-    pub(crate) fn blend_subcolumns(&mut self, value: bool) {
+    pub(crate) const fn blend_subcolumns(&mut self, value: bool) {
         self.blend_subcolumns = value;
     }
 
@@ -545,11 +543,11 @@ impl<'definition> Table3D<'definition> {
         Self {
             definition,
             override_: None,
-            cells: Default::default()
+            cells: HashMap::default()
         }
     }
 
-    pub(crate) fn dont_blend_columns(&mut self) {
+    pub(crate) const fn dont_blend_columns(&mut self) {
         if let Some(override_) = &mut self.override_ {
             override_.dont_blend_columns = true
         } else {
@@ -565,9 +563,9 @@ impl<'definition> Table3D<'definition> {
 impl Table3D<'_> {
 
     pub(crate) fn add_phonemes<const ORTHOGRAPHIES: usize>(&mut self, language: &Language<ORTHOGRAPHIES>, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<(), Axis> {
-        let columns: Vec<_> = self.definition.columns_by_set.keys().cloned().collect();
-        let subcolumns: Vec<_> = self.definition.subcolumns_by_set.keys().cloned().collect();
-        let rows: Vec<_> = self.definition.rows_by_set.keys().cloned().collect();
+        let columns: Vec<_> = self.definition.columns_by_set.keys().copied().collect();
+        let subcolumns: Vec<_> = self.definition.subcolumns_by_set.keys().copied().collect();
+        let rows: Vec<_> = self.definition.rows_by_set.keys().copied().collect();
         for column in &columns {
             let column_set = language.get_set(column).unwrap();
             let phoneme_set = phoneme_set.intersection(column_set);
@@ -602,7 +600,7 @@ impl Table3D<'_> {
         Ok(())
     }
 
-    fn blend_subcolumns(&self) -> bool {
+    const fn blend_subcolumns(&self) -> bool {
         if let Some(override_) = &self.override_ {
             !override_.dont_blend_columns
         } else {
@@ -613,7 +611,7 @@ impl Table3D<'_> {
 
     fn build_grid_row(&self, columns: &Vec<&HeaderDef>, subcolumns: &Vec<&HeaderDef>, row_def: &HeaderDef) -> GridRow {
         let mut row = GridRow::new();
-        row.push_header(RowHeader::row_header(row_def.caption.to_owned(), 1, "elbie-phonemes-row-header"));
+        row.push_header(RowHeader::new(row_def.caption.to_owned(), 1, "elbie-phonemes-row-header"));
 
         for column in columns {
 
@@ -688,8 +686,8 @@ impl sealed::InnerTable for Table3D<'_> {
         })
 
     }
-    fn phoneme_set(&mut self, cell_key: Self::CellsKey) -> Result<&mut HashSet<PhonemeDisplay>, Axis> {
-        match self.cells.entry(cell_key) {
+    fn phoneme_set(&mut self, cells_key: Self::CellsKey) -> Result<&mut HashSet<PhonemeDisplay>, Axis> {
+        match self.cells.entry(cells_key) {
             Entry::Occupied(entry) => {
                 Ok(entry.into_mut())
             },
@@ -702,8 +700,8 @@ impl sealed::InnerTable for Table3D<'_> {
 
 
 
-    fn get_cell(&self, cell_key: &Cells3DKey) -> Option<&HashSet<PhonemeDisplay>> {
-        self.cells.get(cell_key)
+    fn get_cell(&self, cells_key: &Cells3DKey) -> Option<&HashSet<PhonemeDisplay>> {
+        self.cells.get(cells_key)
     }
 
 }
@@ -747,7 +745,7 @@ impl<'definition> Table2D<'definition> {
     pub(crate) fn new(definition: &'definition Table2DDef) -> Self {
         Self {
             definition,
-            cells: Default::default()
+            cells: HashMap::default()
         }
     }
 
@@ -757,8 +755,8 @@ impl Table2D<'_> {
 
 
     pub(crate) fn add_phonemes<const ORTHOGRAPHIES: usize>(&mut self, language: &Language<ORTHOGRAPHIES>, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<(), Axis>{
-        let columns: Vec<_> = self.definition.columns_by_set.keys().cloned().collect();
-        let rows: Vec<_> = self.definition.rows_by_set.keys().cloned().collect();
+        let columns: Vec<_> = self.definition.columns_by_set.keys().copied().collect();
+        let rows: Vec<_> = self.definition.rows_by_set.keys().copied().collect();
         for column in &columns {
             let column_set = language.get_set(column).unwrap();
             let phoneme_set = phoneme_set.intersection(column_set);
@@ -788,7 +786,7 @@ impl Table2D<'_> {
 
     fn build_grid_row(&self, columns: &Vec<&HeaderDef>, row_def: &HeaderDef) -> GridRow {
         let mut row = GridRow::new();
-        row.push_header(RowHeader::row_header(row_def.caption.to_owned(), 1,"elbie-phonemes-row-header"));
+        row.push_header(RowHeader::new(row_def.caption.to_owned(), 1,"elbie-phonemes-row-header"));
 
         for column in columns {
 
@@ -877,7 +875,7 @@ impl Table1DDef {
     pub(crate) fn new(caption: &'static str) -> Self {
         Self {
             header: HeaderDef { caption, order: 0 },
-            rows_by_set: Default::default()
+            rows_by_set: HashMap::default()
         }
     }
 
@@ -895,7 +893,7 @@ impl<'definition> Table1D<'definition> {
     pub(crate) fn new(definition: &'definition Table1DDef) -> Self {
         Self {
             definition,
-            cells: Default::default()
+            cells: HashMap::default()
         }
     }
 
@@ -905,7 +903,7 @@ impl<'definition> Table1D<'definition> {
 impl Table1D<'_> {
 
     pub(crate) fn add_phonemes<const ORTHOGRAPHIES: usize>(&mut self, language: &Language<ORTHOGRAPHIES>, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<(), Axis> {
-        let rows: Vec<_> = self.definition.rows_by_set.keys().cloned().collect();
+        let rows: Vec<_> = self.definition.rows_by_set.keys().copied().collect();
 
 
         for row in &rows {
@@ -913,7 +911,7 @@ impl Table1D<'_> {
             let phoneme_set = phoneme_set.intersection(row_set);
 
             for phoneme in phoneme_set.iter() {
-                _ = self.add_phoneme(&row, phoneme, unprinted_phonemes)?;
+                _ = self.add_phoneme(row, phoneme, unprinted_phonemes)?;
 
             }
 
@@ -927,7 +925,7 @@ impl Table1D<'_> {
 
     fn build_grid_row(&self, row_def: &HeaderDef) -> GridRow {
         let mut row = GridRow::new();
-        row.push_header(RowHeader::row_header(row_def.caption.to_owned(), 1,"elbie-phonemes-row-header"));
+        row.push_header(RowHeader::new(row_def.caption.to_owned(), 1,"elbie-phonemes-row-header"));
 
         let key = row_def.order;
 
@@ -998,7 +996,7 @@ pub struct Table0DDef {
 
 impl Table0DDef {
 
-    pub(crate) fn new(caption: &'static str) -> Self {
+    pub(crate) const fn new(caption: &'static str) -> Self {
         Self {
             header: HeaderDef { caption, order: 0 }
         }
@@ -1018,7 +1016,7 @@ impl<'definition> Table0D<'definition> {
     pub(crate) fn new(definition: &'definition Table0DDef) -> Self {
         Self {
             definition,
-            phonemes: Default::default()
+            phonemes: HashSet::default()
         }
     }
 
@@ -1075,18 +1073,18 @@ impl sealed::InnerTable for Table0D<'_> {
     }
 
 
-    fn phoneme_sets_to_cells_key(&self, _: &()) -> Result<(),Axis> {
+    fn phoneme_sets_to_cells_key(&self, (): &()) -> Result<(),Axis> {
         Ok(())
 
     }
 
-    fn phoneme_set(&mut self, _: ()) -> Result<&mut HashSet<PhonemeDisplay>, Axis> {
+    fn phoneme_set(&mut self, (): ()) -> Result<&mut HashSet<PhonemeDisplay>, Axis> {
         Ok(&mut self.phonemes)
 
     }
 
 
-    fn get_cell(&self, _: &()) -> Option<&HashSet<PhonemeDisplay>> {
+    fn get_cell(&self, (): &()) -> Option<&HashSet<PhonemeDisplay>> {
         Some(&self.phonemes)
     }
 

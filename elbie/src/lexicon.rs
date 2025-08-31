@@ -1,10 +1,8 @@
-use std::fmt::Write;
-
-
-use html_builder::Html5;
-
-use crate::grid::GridStyle;
+use core::fmt::Write;
 use crate::Word;
+use crate::grid::GridStyle;
+use html_builder::Html5 as _;
+use json::object::Object as JSONObject;
 
 
 pub struct LexiconEntry<const ORTHOGRAPHIES: usize> {
@@ -15,7 +13,7 @@ pub struct LexiconEntry<const ORTHOGRAPHIES: usize> {
 
 impl<const ORTHOGRAPHIES: usize> LexiconEntry<ORTHOGRAPHIES> {
 
-    pub(crate) fn new(word: Word, spelling: [String; ORTHOGRAPHIES], definition: String) -> Self {
+    pub(crate) const fn new(word: Word, spelling: [String; ORTHOGRAPHIES], definition: String) -> Self {
         Self {
             word,
             spelling,
@@ -24,14 +22,17 @@ impl<const ORTHOGRAPHIES: usize> LexiconEntry<ORTHOGRAPHIES> {
 
     }
 
-    pub fn word(&self) -> &Word {
+    #[must_use]
+    pub const fn word(&self) -> &Word {
         &self.word
     }
 
-    pub fn spelling(&self) -> &[String; ORTHOGRAPHIES] {
+    #[must_use]
+    pub const fn spelling(&self) -> &[String; ORTHOGRAPHIES] {
         &self.spelling
     }
 
+    #[must_use]
     pub fn definition(&self) -> &str {
         &self.definition
     }
@@ -46,7 +47,7 @@ pub struct Lexicon<const ORTHOGRAPHIES: usize>{
 
 impl<const ORTHOGRAPHIES: usize> Lexicon<ORTHOGRAPHIES> {
 
-    pub(crate) fn new(orthographies: [&'static str; ORTHOGRAPHIES], primary_orthography: usize) -> Self {
+    pub(crate) const fn new(orthographies: [&'static str; ORTHOGRAPHIES], primary_orthography: usize) -> Self {
         Self {
             primary_orthography,
             orthographies,
@@ -58,7 +59,7 @@ impl<const ORTHOGRAPHIES: usize> Lexicon<ORTHOGRAPHIES> {
         self.entries.push(entry);
     }
 
-    pub fn format_entry<Output: Write>(style: &GridStyle, main_spelling: &str, other_spellings: Vec<(&str,&str)>, word: Word, definition: &str, output: &mut Output) {
+    pub fn format_entry<Output: Write>(style: &GridStyle, main_spelling: &str, other_spellings: Vec<(&str,&str)>, word: &Word, definition: &str, output: &mut Output) {
         match style {
             GridStyle::Plain |
             GridStyle::Terminal { .. } => {
@@ -68,7 +69,7 @@ impl<const ORTHOGRAPHIES: usize> Lexicon<ORTHOGRAPHIES> {
                 }
                 write!(output,"): {definition}").expect("Could not write orthography");
             }
-            GridStyle::Markdown { .. } => {
+            GridStyle::Markdown => {
                 write!(output,"**{main_spelling}**. ({word}").expect("Could not write orthography");
                 for (orthography,spelling) in other_spellings {
                     write!(output,"; {orthography}: *{spelling}*").expect("Could not write orthography");
@@ -89,7 +90,7 @@ impl<const ORTHOGRAPHIES: usize> Lexicon<ORTHOGRAPHIES> {
                 write!(output,"{}",buffer.finish()).expect("Could not write html");
             },
             GridStyle::JSON => {
-                let mut spellings = json::object::Object::new();
+                let mut spellings = JSONObject::new();
                 for (orthography,spelling) in other_spellings {
                     spellings.insert(orthography, spelling.into());
                 }
@@ -99,13 +100,16 @@ impl<const ORTHOGRAPHIES: usize> Lexicon<ORTHOGRAPHIES> {
                     "other_spellings": spellings,
                     "definition": definition
                 };
-                write!(output,"{:#}",object).expect("Could not write json")
+                write!(output,"{object:#}").expect("Could not write json")
 
             }
         }
 
     }
 
+    /// # Panics
+    /// panics if the `self.primary_orthography' is not a valid index in the supplied orthographies.
+    #[must_use]
     pub fn into_string(self, style: &GridStyle) -> String {
 
         let mut result = String::new();
@@ -132,7 +136,7 @@ impl<const ORTHOGRAPHIES: usize> Lexicon<ORTHOGRAPHIES> {
             }
             assert_ne!(main_spelling.len(),0,"Missing spelling for orthography {} in {}",self.primary_orthography,entry.word);
 
-            Self::format_entry(style,main_spelling,other_spellings,entry.word,&entry.definition,&mut result);
+            Self::format_entry(style,main_spelling,other_spellings,&entry.word,&entry.definition,&mut result);
 
         }
 

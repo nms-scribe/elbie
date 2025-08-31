@@ -1,11 +1,11 @@
-use std::collections::HashMap;
-
-use std::fmt::Write as _;
+use core::fmt::Write as _;
 use html_builder::Html5 as _;
+use std::collections::HashMap;
 use tabled::builder::Builder;
-use tabled::settings::themes::BorderCorrection;
 use tabled::settings::Span;
 use tabled::settings::Style;
+use tabled::settings::object::Cell as TabledCell;
+use tabled::settings::themes::BorderCorrection;
 
 pub enum TextStyle {
     Plain,
@@ -17,17 +17,19 @@ impl TextStyle {
 
     fn column_header(&self, text: &str) -> String {
         match self {
-            TextStyle::Plain |
-            TextStyle::Terminal { .. } => text.to_owned(),
-            TextStyle::Markdown { .. } => format!("**{text}**"),
+            Self::Plain |
+            // FUTURE: I reserve the right to make this look different (perhaps use ansi codes to bold it?)
+            Self::Terminal => text.to_owned(),
+            Self::Markdown => format!("**{text}**"),
         }
     }
 
     fn row_header(&self, text: &str) -> String {
         match self {
-            TextStyle::Plain |
-            TextStyle::Terminal { .. } => text.to_owned(),
-            TextStyle::Markdown { .. } => format!("**{text}**"),
+            Self::Plain |
+            // FUTURE: I reserve the right to make this look different (perhaps use ansi codes to bold it?)
+            Self::Terminal => text.to_owned(),
+            Self::Markdown => format!("**{text}**"),
         }
     }
 
@@ -37,7 +39,7 @@ impl TextStyle {
 pub enum GridStyle {
     Plain,
     Terminal{ spans: bool },
-    Markdown{ spans: bool },
+    Markdown,
     HTML{ spans: bool },
     JSON,
 }
@@ -45,14 +47,14 @@ pub enum GridStyle {
 
 impl GridStyle {
 
-    fn to_text_style(&self) -> TextStyle {
+    const fn to_text_style(&self) -> TextStyle {
         match self {
-            GridStyle::Plain => TextStyle::Plain,
-            GridStyle::Terminal { .. } => TextStyle::Terminal,
-            GridStyle::Markdown { .. } => TextStyle::Markdown,
+            Self::Plain |
             // HTML style has it's own ways of specifying this stuff, so it just returns plain.
-            GridStyle::HTML { .. } => TextStyle::Plain,
-            GridStyle::JSON => TextStyle::Plain
+            Self::HTML { .. } |
+            Self::JSON => TextStyle::Plain,
+            Self::Terminal { .. } => TextStyle::Terminal,
+            Self::Markdown => TextStyle::Markdown,
         }
     }
 }
@@ -66,7 +68,8 @@ pub struct ColumnHeader {
 
 impl ColumnHeader {
 
-    pub fn new(text: String, colspan: usize, class: &'static str) -> Self {
+    #[must_use]
+    pub const fn new(text: String, colspan: usize, class: &'static str) -> Self {
         Self {
             text,
             colspan,
@@ -90,7 +93,8 @@ pub enum RowHeader {
 impl RowHeader {
 
 
-    pub fn row_header(text: String, rowspan: usize, class: &'static str) -> Self {
+    #[must_use]
+    pub const fn new(text: String, rowspan: usize, class: &'static str) -> Self {
         Self::RowHeader{
             text,
             rowspan,
@@ -102,7 +106,8 @@ impl RowHeader {
     ///
     /// This is simpler than trying to maintain row state and track the missing cells for the rowspan when building the final grid.
     ///
-    pub fn row_header_span() -> Self {
+    #[must_use]
+    pub const fn row_header_span() -> Self {
         Self::RowHeaderSpan
     }
 
@@ -125,14 +130,16 @@ pub enum Cell {
 impl Cell {
 
 
-    pub fn content(text: String, class: &'static str) -> Self {
+    #[must_use]
+    pub const fn content(text: String, class: &'static str) -> Self {
         Self::Content{
             text,
             class
         }
     }
 
-    pub fn multi_col_cell(cells: Vec<String>, class: &'static str) -> Self {
+    #[must_use]
+    pub const fn multi_col_cell(cells: Vec<String>, class: &'static str) -> Self {
         Self::MultiColumnCell{
             cells,
             class
@@ -144,6 +151,7 @@ impl Cell {
 
 }
 
+
 pub struct GridRow {
     headers: Vec<RowHeader>,
     cells: Vec<Cell>
@@ -151,7 +159,8 @@ pub struct GridRow {
 
 impl GridRow {
 
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             headers: Vec::new(),
             cells: Vec::new()
@@ -176,7 +185,8 @@ pub struct Grid {
 
 impl Grid {
 
-    pub fn new(class: &'static str) -> Self {
+    #[must_use]
+    pub const fn new(class: &'static str) -> Self {
         Self {
             class,
             headers: Vec::new(),
@@ -184,6 +194,8 @@ impl Grid {
         }
     }
 
+    /// # Panics
+    /// If there is a header row in the grid already, the sum of the first row's colspan values is compared to that of this one, and if they differ this will panic.
     pub fn push_header_row(&mut self, row: Vec<ColumnHeader>) {
         if let Some(first_row) = self.headers.first() {
             let new_len: usize = row.iter().map(|c| c.colspan).sum();
@@ -193,6 +205,8 @@ impl Grid {
         self.headers.push(row);
     }
 
+    /// # Panics
+    /// If there is a row in the grid already, and the new row does not match it's dimensions, then this will panic.
     pub fn push_body_row(&mut self, row: GridRow) {
         if let Some(first_row) = self.body.first() {
             assert_eq!(first_row.headers.len(),row.headers.len(),"Body row headers must have the same length.");
@@ -248,7 +262,8 @@ impl Grid {
 
 
     // NOTE: I don't ordinarily like single-letter type names, but I'm just trying to match the Style
-    pub fn into_tabled<T, B, L, R, H, V, const HSIZE: usize, const VSIZE: usize>(mut self, with_span: bool, text_style: TextStyle, table_style: Style<T, B, L, R, H, V, HSIZE, VSIZE>) -> tabled::Table {
+    #[must_use]
+    pub fn into_tabled<T, B, L, R, H, V, const HSIZE: usize, const VSIZE: usize>(mut self, with_span: bool, text_style: &TextStyle, table_style: Style<T, B, L, R, H, V, HSIZE, VSIZE>) -> tabled::Table {
 
         self.blend_columns_to_text();
 
@@ -257,9 +272,9 @@ impl Grid {
         let mut col_spans = Vec::new();
 
         // need to know this for creating "corner" cell in the top-left
-        let row_header_offset = self.body.first().map(|first| {
+        let row_header_offset = self.body.first().map_or(0,|first| {
             first.headers.len()
-        }).unwrap_or(0);
+        });
         let column_header_offset = self.headers.len();
 
         for (row_idx,row) in self.headers.iter().enumerate() {
@@ -313,11 +328,11 @@ impl Grid {
                         // (this get's written over, so I can't use this mechanism for blending stuff... )
                         record.push(String::new());
                     }
-                };
+                }
 
             }
 
-            for cell in row.cells.iter() {
+            for cell in &row.cells {
                 let text = match cell {
                     Cell::Content{ text, class: _ } => text.to_owned(),
                     Cell::MultiColumnCell{..} => {
@@ -333,10 +348,10 @@ impl Grid {
         let mut table = builder.build();
         if with_span {
             for (row,col,span) in row_spans {
-                _ = table.modify(tabled::settings::object::Cell::new(row,col), Span::row(span as isize));
+                _ = table.modify(TabledCell::new(row,col), Span::row(span as isize));
             }
             for (row,col,span) in col_spans {
-                _ = table.modify(tabled::settings::object::Cell::new(row,col), Span::column(span as isize));
+                _ = table.modify(TabledCell::new(row,col), Span::column(span as isize));
             }
 
             _ = table.with(BorderCorrection::span());
@@ -352,12 +367,13 @@ impl Grid {
         table
     }
 
+    #[must_use]
     pub fn into_html(self,with_span: bool) -> String {
 
         // need to know this for creating "corner" cell in the top-left
-        let row_header_offset = self.body.first().map(|first| {
+        let row_header_offset = self.body.first().map_or(0, |first| {
             first.headers.len()
-        }).unwrap_or(0);
+        });
         let column_header_offset = self.headers.len();
 
         let mut buffer = html_builder::Buffer::new();
@@ -443,6 +459,7 @@ impl Grid {
         buffer.finish()
     }
 
+    #[must_use]
     pub fn into_json(self) -> json::JsonValue {
 
 
@@ -502,15 +519,16 @@ impl Grid {
 
     }
 
+    #[must_use]
     pub fn into_string(self, style: &GridStyle) -> String {
 
         let text_style = style.to_text_style();
 
         match style {
-            GridStyle::Plain => self.into_tabled(false,text_style,Style::blank()).to_string(),
-            GridStyle::Terminal { spans } => self.into_tabled(*spans,text_style,Style::modern()).to_string(),
-            GridStyle::Markdown { spans } => self.into_tabled(*spans,text_style,Style::markdown()).to_string(),
-            GridStyle::HTML { spans } => self.into_html(*spans).to_string(),
+            GridStyle::Plain => self.into_tabled(false,&text_style,Style::blank()).to_string(),
+            GridStyle::Terminal { spans } => self.into_tabled(*spans,&text_style,Style::modern()).to_string(),
+            GridStyle::Markdown => self.into_tabled(false,&text_style,Style::markdown()).to_string(),
+            GridStyle::HTML { spans } => self.into_html(*spans),
             GridStyle::JSON => self.into_json().pretty(2)
         }
 

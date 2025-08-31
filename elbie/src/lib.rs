@@ -1,20 +1,40 @@
 
+pub use crate::grid::GridStyle;
+pub use crate::phoneme_table::Axis;
+pub use crate::phoneme_table::HeaderDef;
+pub use crate::phoneme_table::Table0DDef;
+pub use crate::phoneme_table::Table1DDef;
+pub use crate::phoneme_table::Table2DDef;
+pub use crate::phoneme_table::Table3DDef;
+pub use crate::phoneme_table::Table4DDef;
 use core::array;
 use core::cmp::Ordering;
-use std::collections::HashMap;
-use core::fmt;
+use core::error::Error;
+use core::fmt::Display;
 use core::fmt::Formatter;
+use core::fmt;
 use core::iter::Enumerate;
 use core::iter::Peekable;
+use core::slice::Iter;
+use crate::grid::Cell;
+use crate::grid::ColumnHeader;
+use crate::grid::Grid;
+use crate::grid::GridRow;
+use crate::lexicon::Lexicon;
+use crate::lexicon::LexiconEntry;
+use crate::phoneme_table::Table as _;
+use crate::phoneme_table::Table0D;
+use crate::phoneme_table::Table1D;
+use crate::phoneme_table::Table2D;
+use crate::phoneme_table::Table3D;
+use crate::phoneme_table::Table4D;
+use csv::Reader;
+use rand::Rng as _;
+use rand::prelude::ThreadRng;
+use rand::seq::IndexedRandom as _;
+use std::collections::HashMap;
 use std::process;
 use std::rc::Rc;
-use core::error::Error;
-use core::slice::Iter;
-use rand::Rng as _;
-use rand::seq::IndexedRandom as _;
-use rand::prelude::ThreadRng;
-use csv::Reader;
-use core::fmt::Display;
 
 mod phoneme_table;
 pub mod grid;
@@ -22,26 +42,7 @@ pub mod lexicon;
 #[cfg(test)] mod test;
 
 
-use crate::grid::Cell;
-use crate::grid::ColumnHeader;
-use crate::grid::Grid;
-use crate::grid::GridRow;
-use crate::lexicon::Lexicon;
-use crate::lexicon::LexiconEntry;
-pub use crate::phoneme_table::Axis;
-pub use crate::phoneme_table::HeaderDef;
-use crate::phoneme_table::Table;
-use crate::phoneme_table::Table0D;
-pub use crate::phoneme_table::Table0DDef;
-use crate::phoneme_table::Table1D;
-pub use crate::phoneme_table::Table1DDef;
-use crate::phoneme_table::Table2D;
-pub use crate::phoneme_table::Table2DDef;
-use crate::phoneme_table::Table3D;
-pub use crate::phoneme_table::Table3DDef;
-use crate::phoneme_table::Table4D;
-pub use crate::phoneme_table::Table4DDef;
-pub use crate::grid::GridStyle;
+
 
 /*
 Elbie = LB, Language Builder, and is a bunch of tools for building a constructed language.
@@ -79,6 +80,22 @@ FUTURE: Is there some way to use types or something else to make languages easie
 
 */
 
+/*
+TODO: Going back to the tables:
+* [ ] Instead of Multi-Cells, and blending, think of column groups
+  1. Get rid of blending option
+  2. But, when you have subcolumns, you always put them in a MultiCell anyway. (now colled ColumnGroup)
+  3. Plus, the headings still span, even when using the MultiCells.
+  4. On output, it is up to the GridStyle to figure out how to *style* those cells so that they don't have borders.
+     -- the "class" can be used for this, possibly? But, basically if a multi-column has more than one cell, the following cells remove their left border, or get a class which can do this if styled.
+  5. Also, I need a Multi-Column option for the subcolumns, so they can be styled differently if you want.
+* [ ] Similarly, I could have Multi-Rows:
+  1. The GridRow becomes an enum, one of which looks like right now, and the other of which allows for multiple rows at once
+  2. If we set this up so that the multi-row can only have one primary row header (but two subrow headers), then I no longer need rowspan either, I can calculate that.
+  3. All this does is create an inner loop to go through these and output data.
+  4. And then, we can style it so the later ones remove their "top" border.
+* [ ] Need to standardize the styles and make them constants
+*/
 
 pub const PHONEME: &str = "phoneme";
 pub const EMPTY: &str = "empty";
@@ -579,13 +596,14 @@ impl TableDef {
   }
 
   /// The table is just a column header and a single cell containing all phonemes
-  pub fn new_single_cell(caption: &'static str) -> Self {
+  #[must_use]
+  pub const fn new_single_cell(caption: &'static str) -> Self {
       let definition = Table0DDef::new(caption);
 
       Self::OneCell(definition)
   }
 
-  pub fn with(self, option: TableOption) -> Result<Self,LanguageError> {
+  pub fn with(self, option: &TableOption) -> Result<Self,LanguageError> {
       match (self,&option) {
         (Self::TableWithSubcolumnsAndSubrows(mut definition), TableOption::HideSubcolumnCaptions) => {
             definition.hide_subcolumn_captions(true);
@@ -609,16 +627,14 @@ impl TableDef {
             definition.blend_subcolumns(true);
             Ok(Self::TableWithSubcolumns(definition))
         },
-        (Self::TableWithSubcolumns(_), TableOption::HideSubrowCaptions) |
-        (Self::OneCell(_), TableOption::HideSubcolumnCaptions) |
-        (Self::OneCell(_), TableOption::BlendSubcolumns) |
-        (Self::OneCell(_), TableOption::HideSubrowCaptions) |
-        (Self::ListTable(_), TableOption::HideSubcolumnCaptions) |
-        (Self::ListTable(_), TableOption::BlendSubcolumns) |
-        (Self::ListTable(_), TableOption::HideSubrowCaptions) |
-        (Self::SimpleTable(_), TableOption::HideSubcolumnCaptions) |
-        (Self::SimpleTable(_), TableOption::BlendSubcolumns) |
-        (Self::SimpleTable(_), TableOption::HideSubrowCaptions) => Err(LanguageError::InvalidOptionForTable(option.clone()))
+        (Self::TableWithSubcolumns(_) |
+         Self::OneCell(_) |
+         Self::ListTable(_) |
+         Self::SimpleTable(_), TableOption::HideSubrowCaptions) |
+        (Self::OneCell(_) |
+         Self::ListTable(_) |
+         Self::SimpleTable(_), TableOption::HideSubcolumnCaptions |
+                               TableOption::BlendSubcolumns) => Err(LanguageError::InvalidOptionForTable(option.clone()))
     }
 
   }
@@ -1363,16 +1379,20 @@ fn parse_args<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Ar
     match arg.as_ref() {
       "--format=plain" => set_grid_style!(GridStyle::Plain),
       "--format=terminal" => set_grid_style!(GridStyle::Terminal{ spans: spanning }),
-      "--format=markdown" => set_grid_style!(GridStyle::Markdown{ spans: spanning }),
+      "--format=markdown" => set_grid_style!(GridStyle::Markdown),
       "--format=html" => set_grid_style!(GridStyle::HTML { spans: spanning }),
       "--format=json" => set_grid_style!(GridStyle::JSON),
       "--no-spans" => if let Some(style) = &mut grid_style {
           match style {
             GridStyle::Plain |
-            GridStyle::JSON => (),
+            GridStyle::JSON |
+            GridStyle::Markdown => (),
             GridStyle::Terminal { spans } |
-            GridStyle::Markdown { spans } |
-            GridStyle::HTML { spans } => *spans = false
+            GridStyle::HTML { spans } => if *spans {
+                *spans = false
+            } else {
+                panic!("--no-spans specified twice")
+            }
         }
       } else {
           spanning = false
