@@ -87,6 +87,20 @@ impl<const ORTHOGRAPHIES: usize> Lexicon<ORTHOGRAPHIES> {
                 }
                 write!(p,"): {definition}").expect("Could not write to html node");
                 write!(output,"{}",buffer.finish()).expect("Could not write html");
+            },
+            GridStyle::JSON => {
+                let mut spellings = json::object::Object::new();
+                for (orthography,spelling) in other_spellings {
+                    spellings.insert(orthography, spelling.into());
+                }
+                let object = json::object!{
+                    "entry": main_spelling,
+                    "word": word.to_string(),
+                    "other_spellings": spellings,
+                    "definition": definition
+                };
+                write!(output,"{:#}",object).expect("Could not write json")
+
             }
         }
 

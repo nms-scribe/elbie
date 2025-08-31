@@ -28,6 +28,8 @@ use crate::grid::Grid;
 use crate::grid::GridRow;
 use crate::lexicon::Lexicon;
 use crate::lexicon::LexiconEntry;
+pub use crate::phoneme_table::Axis;
+pub use crate::phoneme_table::HeaderDef;
 use crate::phoneme_table::Table;
 use crate::phoneme_table::Table0D;
 pub use crate::phoneme_table::Table0DDef;
@@ -126,7 +128,9 @@ pub enum LanguageError {
   // word reading errors
   UnknownPhonemeWhileReading(String,String),
   // table def errors
-  InvalidOptionForTable(TableOption)
+  InvalidOptionForTable(TableOption),
+  DuplicateTableDef(Axis,HeaderDef),
+  InvalidAxisForPhoneme(Axis)
 }
 
 impl Display for LanguageError {
@@ -152,7 +156,9 @@ impl Display for LanguageError {
 
       Self::UnknownPhonemeWhileReading(source,problem) => write!(f,"In word '{source}': unknown phoneme starting at '{problem}'."),
 
-      Self::InvalidOptionForTable(option) => write!(f,"Invalid option for phoneme table: '{option:?}'.")
+      Self::InvalidOptionForTable(option) => write!(f,"Invalid option for phoneme table: '{option:?}'."),
+      Self::DuplicateTableDef(axis,def) => write!(f,"Duplicate phoneme {axis:?} definition: '{def:?}'."),
+      Self::InvalidAxisForPhoneme(axis) => write!(f,"Phoneme set was not added as an {axis:?} to the phoneme table.")
     }
 
   }
@@ -516,7 +522,7 @@ pub enum TableDef {
 
 impl TableDef {
 
-  pub fn new_with_subcolumns_and_subrows(axis_1: &[(&'static str,&'static str)], axis_2: &[(&'static str,&'static str)], axis_3: &[(&'static str,&'static str)], axis_4: &[(&'static str,&'static str)]) -> Self {
+  pub fn new_with_subcolumns_and_subrows(axis_1: &[(&'static str,&'static str)], axis_2: &[(&'static str,&'static str)], axis_3: &[(&'static str,&'static str)], axis_4: &[(&'static str,&'static str)]) -> Result<Self,LanguageError> {
       let columns: Vec<_> = axis_1.iter().map(Into::into).collect();
       let rows: Vec<_> = axis_2.iter().map(Into::into).collect();
       let subcolumns: Vec<_> = axis_3.iter().map(Into::into).collect();
@@ -525,16 +531,15 @@ impl TableDef {
       let mut definition = Table4DDef::default();
 
       // fill rows
-      // TODO: These should be language errors
-      definition.add_columns(&columns).expect("Duplicate column in table definition");
-      definition.add_subcolumns(&subcolumns).expect("Duplicate subcolumn in table definition");
-      definition.add_rows(&rows).expect("Duplicate row in table definition");
-      definition.add_subrows(&subrows).expect("Duplicate subrow in table definition");
+      definition.add_columns(&columns).map_err(|err| LanguageError::DuplicateTableDef(Axis::Column,err))?;
+      definition.add_subcolumns(&subcolumns).map_err(|err| LanguageError::DuplicateTableDef(Axis::Subcolumn,err))?;
+      definition.add_rows(&rows).map_err(|err| LanguageError::DuplicateTableDef(Axis::Row,err))?;
+      definition.add_subrows(&subrows).map_err(|err| LanguageError::DuplicateTableDef(Axis::Subrow,err))?;
 
-      Self::TableWithSubcolumnsAndSubrows(definition)
+      Ok(Self::TableWithSubcolumnsAndSubrows(definition))
   }
 
-  pub fn new_with_subcolumns(axis_1: &[(&'static str,&'static str)], axis_2: &[(&'static str,&'static str)], axis_3: &[(&'static str,&'static str)]) -> Self {
+  pub fn new_with_subcolumns(axis_1: &[(&'static str,&'static str)], axis_2: &[(&'static str,&'static str)], axis_3: &[(&'static str,&'static str)]) -> Result<Self,LanguageError> {
       let columns: Vec<_> = axis_1.iter().map(Into::into).collect();
       let rows: Vec<_> = axis_2.iter().map(Into::into).collect();
       let subcolumns: Vec<_> = axis_3.iter().map(Into::into).collect();
@@ -542,38 +547,35 @@ impl TableDef {
       let mut definition = Table3DDef::default();
 
       // fill rows
-      // TODO: These should be language errors
-      definition.add_columns(&columns).expect("Duplicate column in table definition");
-      definition.add_subcolumns(&subcolumns).expect("Duplicate subcolumn in table definition");
-      definition.add_rows(&rows).expect("Duplicate row in table definition");
+      definition.add_columns(&columns).map_err(|err| LanguageError::DuplicateTableDef(Axis::Column,err))?;
+      definition.add_subcolumns(&subcolumns).map_err(|err| LanguageError::DuplicateTableDef(Axis::Subcolumn,err))?;
+      definition.add_rows(&rows).map_err(|err| LanguageError::DuplicateTableDef(Axis::Row,err))?;
 
-      Self::TableWithSubcolumns(definition)
+      Ok(Self::TableWithSubcolumns(definition))
   }
 
-  pub fn new_simple_table(axis_1: &[(&'static str,&'static str)], axis_2: &[(&'static str,&'static str)]) -> Self {
+  pub fn new_simple_table(axis_1: &[(&'static str,&'static str)], axis_2: &[(&'static str,&'static str)]) -> Result<Self,LanguageError> {
       let columns: Vec<_> = axis_1.iter().map(Into::into).collect();
       let rows: Vec<_> = axis_2.iter().map(Into::into).collect();
 
       let mut definition = Table2DDef::default();
 
       // fill rows
-      // TODO: These should be language errors
-      definition.add_columns(&columns).expect("Duplicate column in table definition");
-      definition.add_rows(&rows).expect("Duplicate row in table definition");
+      definition.add_columns(&columns).map_err(|err| LanguageError::DuplicateTableDef(Axis::Column,err))?;
+      definition.add_rows(&rows).map_err(|err| LanguageError::DuplicateTableDef(Axis::Row,err))?;
 
-      Self::SimpleTable(definition)
+      Ok(Self::SimpleTable(definition))
   }
 
-  pub fn new_list_table(caption: &'static str, axis_1: &[(&'static str,&'static str)]) -> Self {
+  pub fn new_list_table(caption: &'static str, axis_1: &[(&'static str,&'static str)]) -> Result<Self,LanguageError> {
       let rows: Vec<_> = axis_1.iter().map(Into::into).collect();
 
       let mut definition = Table1DDef::new(caption);
 
       // fill rows
-      // TODO: These should be language errors
-      definition.add_rows(&rows).expect("Duplicate column in table definition");
+      definition.add_rows(&rows).map_err(|err| LanguageError::DuplicateTableDef(Axis::Column,err))?;
 
-      Self::ListTable(definition)
+      Ok(Self::ListTable(definition))
   }
 
   /// The table is just a column header and a single cell containing all phonemes
@@ -1116,30 +1118,27 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
         Ok(Word::new(&word))
     }
 
-    fn build_phoneme_grid(&self, master_set: &Bag<Rc<Phoneme>>, table: &TableDef, override_column_blending: bool, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<Grid,LanguageError> {
+    fn build_phoneme_grid(&self, master_set: &Bag<Rc<Phoneme>>, table_def: &TableDef, override_column_blending: bool, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<Grid,LanguageError> {
 
-        match table {
+        match table_def {
             TableDef::OneCell(definition) => {
                 let mut table = Table0D::new(definition);
 
-                // TODO: Should be language error
-                table.add_phonemes(self, master_set, unprinted_phonemes).expect("A phoneme was added with an non-existing axis");
+                table.add_phonemes(self, master_set, unprinted_phonemes).map_err(LanguageError::InvalidAxisForPhoneme)?;
 
                 Ok(table.build_grid())
             },
             TableDef::ListTable(definition) => {
                 let mut table = Table1D::new(definition);
 
-                // TODO: Should be language error
-                table.add_phonemes(self, master_set, unprinted_phonemes).expect("A phoneme was added with an non-existing axis");
+                table.add_phonemes(self, master_set, unprinted_phonemes).map_err(LanguageError::InvalidAxisForPhoneme)?;
 
                 Ok(table.build_grid())
             },
             TableDef::SimpleTable(definition) => {
                 let mut table = Table2D::new(definition);
 
-                // TODO: Should be language error
-                table.add_phonemes(self, master_set, unprinted_phonemes).expect("A phoneme was added with an non-existing axis");
+                table.add_phonemes(self, master_set, unprinted_phonemes).map_err(LanguageError::InvalidAxisForPhoneme)?;
 
                 Ok(table.build_grid())
             },
@@ -1150,8 +1149,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
                     table.dont_blend_columns();
                 }
 
-                // TODO: Should be language error
-                table.add_phonemes(self, master_set, unprinted_phonemes).expect("A phoneme was added with an non-existing axis");
+                table.add_phonemes(self, master_set, unprinted_phonemes).map_err(LanguageError::InvalidAxisForPhoneme)?;
 
                 Ok(table.build_grid())
             },
@@ -1163,8 +1161,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
                     table.dont_blend_columns();
                 }
 
-                // TODO: Should be language error
-                table.add_phonemes(self, master_set, unprinted_phonemes).expect("A phoneme was added with an non-existing axis");
+                table.add_phonemes(self, master_set, unprinted_phonemes).map_err(LanguageError::InvalidAxisForPhoneme)?;
 
                 Ok(table.build_grid())
             },
@@ -1368,13 +1365,14 @@ fn parse_args<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Ar
       "--format=terminal" => set_grid_style!(GridStyle::Terminal{ spans: spanning }),
       "--format=markdown" => set_grid_style!(GridStyle::Markdown{ spans: spanning }),
       "--format=html" => set_grid_style!(GridStyle::HTML { spans: spanning }),
-      "--format=latex" => todo!(), //set_grid_style!(TableStyle::LaTeX),
+      "--format=json" => set_grid_style!(GridStyle::JSON),
       "--no-spans" => if let Some(style) = &mut grid_style {
           match style {
-            GridStyle::Plain => (),
-            GridStyle::Terminal { spans } => *spans = false,
-            GridStyle::Markdown { spans } => *spans = false,
-            GridStyle::HTML { spans } => *spans = false,
+            GridStyle::Plain |
+            GridStyle::JSON => (),
+            GridStyle::Terminal { spans } |
+            GridStyle::Markdown { spans } |
+            GridStyle::HTML { spans } => *spans = false
         }
       } else {
           spanning = false
@@ -1478,14 +1476,14 @@ fn show_spelling<const ORTHOGRAPHIES: usize>(grid_style: Option<GridStyle>, lang
     }
 }
 
-fn show_phonemes<const ORTHOGRAPHIES: usize>(grid_style: Option<GridStyle>, language: &Language<ORTHOGRAPHIES>, table: Option<&String>) {
-    let style = grid_style.as_ref().unwrap_or(&GridStyle::Terminal{ spans: true });
+fn show_phonemes<const ORTHOGRAPHIES: usize>(grid_style: Option<&GridStyle>, language: &Language<ORTHOGRAPHIES>, table: Option<&String>) {
+    let style = grid_style.unwrap_or(&GridStyle::Terminal{ spans: true });
     let override_column_blending = matches!(style,GridStyle::HTML { .. });
     let result = match table {
         Some(table) => match language.build_phoneme_table(table,override_column_blending) {
             Ok(Some(grid)) => {
                 println!("{}:",grid.0);
-                println!("{}",grid.1.into_string(&style));
+                println!("{}",grid.1.into_string(style));
                 Ok(())
             },
             Ok(None) => {
@@ -1498,7 +1496,7 @@ fn show_phonemes<const ORTHOGRAPHIES: usize>(grid_style: Option<GridStyle>, lang
             Ok(grids) => {
                 for grid in grids {
                     println!("{}:",grid.1);
-                    println!("{}",grid.2.into_string(&style));
+                    println!("{}",grid.2.into_string(style));
                     println!();
 
                 }
@@ -1563,7 +1561,7 @@ fn validate_words<const ORTHOGRAPHIES: usize>(language: &Language<ORTHOGRAPHIES>
     }
 }
 
-fn generate_words<const ORTHOGRAPHIES: usize>(grid_style: Option<GridStyle>, language: &Language<ORTHOGRAPHIES>, count: usize) {
+fn generate_words<const ORTHOGRAPHIES: usize>(grid_style: Option<&GridStyle>, language: &Language<ORTHOGRAPHIES>, count: usize) {
     let mut grid = Grid::new("elbie-generated-words");
 
     // FUTURE: Should I have a header?
@@ -1592,23 +1590,21 @@ fn generate_words<const ORTHOGRAPHIES: usize>(grid_style: Option<GridStyle>, lan
 
         grid.push_body_row(row);
     }
-    println!("{}",grid.into_string(grid_style.as_ref().unwrap_or(&GridStyle::Plain)));
+    println!("{}",grid.into_string(grid_style.unwrap_or(&GridStyle::Plain)));
 }
 
 
 pub fn run_main<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHOGRAPHIES: usize>(args: &mut Args, language: Result<Language<ORTHOGRAPHIES>,LanguageError>) {
   let (grid_style,command) = parse_args(&mut args.skip(1));
 
-  // TODO: I need two more styles: HTML and JSON (which formats everything into a form of json for use in other tools)
-  // TODO: How about a CSV style? I've already got a CSV reader.
 
   match language {
       Ok(language) => {
 
         match command {
-            Command::GenerateWords(count) => generate_words(grid_style, &language, count),
+            Command::GenerateWords(count) => generate_words(grid_style.as_ref(), &language, count),
             Command::ValidateWords(words,option) => validate_words(&language, words, &option),
-            Command::ShowPhonemes(table) => show_phonemes(grid_style, &language, table.as_ref()),
+            Command::ShowPhonemes(table) => show_phonemes(grid_style.as_ref(), &language, table.as_ref()),
             Command::ShowSpelling(columns) => show_spelling(grid_style, &language, columns),
             Command::ProcessLexicon(path,ortho_index) => format_lexicon(grid_style, &language, path, ortho_index),
             Command::ShowUsage => show_usage(&language),

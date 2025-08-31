@@ -16,8 +16,8 @@ use crate::Language;
 use crate::Phoneme;
 use crate::ColumnDef;
 
-#[derive(Debug)]
-pub(crate) enum Axis {
+#[derive(Debug,Clone)]
+pub enum Axis {
     Column,
     Subcolumn,
     Row,
@@ -26,7 +26,7 @@ pub(crate) enum Axis {
 
 
 #[derive(Clone,Debug)]
-pub(crate) struct HeaderDef {
+pub struct HeaderDef {
     caption: &'static str,
     order: usize
 }

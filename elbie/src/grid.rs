@@ -33,12 +33,13 @@ impl TextStyle {
 
 }
 
-
+// FUTURE: How about a CSV style? I've already got a CSV reader.
 pub enum GridStyle {
     Plain,
     Terminal{ spans: bool },
     Markdown{ spans: bool },
     HTML{ spans: bool },
+    JSON,
 }
 
 
@@ -51,6 +52,7 @@ impl GridStyle {
             GridStyle::Markdown { .. } => TextStyle::Markdown,
             // HTML style has it's own ways of specifying this stuff, so it just returns plain.
             GridStyle::HTML { .. } => TextStyle::Plain,
+            GridStyle::JSON => TextStyle::Plain
         }
     }
 }
@@ -441,6 +443,65 @@ impl Grid {
         buffer.finish()
     }
 
+    pub fn into_json(self) -> json::JsonValue {
+
+
+        let result = json::object!{
+            "type": "elbie-grid",
+            "class": self.class,
+            "headers": [
+                self.headers.iter().map(|header| {
+                    header.iter().map(|header| {
+                        json::object!{
+                            "type": "column-header",
+                            "class": *header.class,
+                            "colspan": header.colspan,
+                            "text": header.text.as_str()
+                        }
+
+                    }).collect::<Vec<_>>()
+                }).collect::<Vec<_>>()
+            ],
+            "body": self.body.iter().map(|row| {
+                json::object!{
+
+                    "headers": row.headers.iter().map(|header| {
+                        match header {
+                            RowHeader::RowHeader { text, rowspan, class } => json::object! {
+                                "type": "row-header",
+                                "class": *class,
+                                "rowspan": *rowspan,
+                                "text": text.as_str()
+                            },
+                            RowHeader::RowHeaderSpan => json::object! {
+                                "type": "row-header-span"
+                            },
+                        }
+                    }).collect::<Vec<_>>(),
+                    "cells": row.cells.iter().map(|cell| {
+                        match cell {
+                            Cell::Content { text, class } => json::object!{
+                                "type": "cell",
+                                "class": *class,
+                                "text": text.as_str(),
+                            },
+                            Cell::MultiColumnCell { cells, class } => json::object!{
+                                "type": "multi-cell",
+                                "class": *class,
+                                "cells": cells.iter().map(String::as_str).collect::<Vec<_>>()
+                            },
+                        }
+                    }).collect::<Vec<_>>()
+                }
+            }).collect::<Vec<_>>()
+
+
+        };
+
+        result
+
+    }
+
     pub fn into_string(self, style: &GridStyle) -> String {
 
         let text_style = style.to_text_style();
@@ -450,6 +511,7 @@ impl Grid {
             GridStyle::Terminal { spans } => self.into_tabled(*spans,text_style,Style::modern()).to_string(),
             GridStyle::Markdown { spans } => self.into_tabled(*spans,text_style,Style::markdown()).to_string(),
             GridStyle::HTML { spans } => self.into_html(*spans).to_string(),
+            GridStyle::JSON => self.into_json().pretty(2)
         }
 
     }
