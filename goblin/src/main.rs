@@ -394,30 +394,3 @@ fn create_goblin_language() -> Result<Language<1>,LanguageError> {
 fn main() {
   run_main(&mut env::args(),create_goblin_language());
 }
-
-
-/*
-TODO: Working output for --phonemes
-
-Consonants (unvoiced ~ voiced / unaspirated ~ aspirated):
-|                    | Bilabial  | Labiodental | Dental | Alveolar   | Post-alveolar | Palatal | Velar       | Uvular | Glottal |
-| Nasal              |     | /m/ |     |       |     |  |     | /n/  |         |     |  | /ɲ/  |      | /ŋ/  |  |     |     |   |
-| Plosive            | /p/ | /b/ |     |       |     |  | /t/ | /d/  |         |     |  |      | /k/  | /g/  |  |     |     |   |
-| Fricative          |     |     | /f/ | /v/   | /θ/ |  | /s/ | /z/  | /ʃ/     |     |  |      | /x/  | /ɣ/  |  |     | /h/ |   |
-|                    |     |     |     | /vʰ/  |     |  |     | /zʰ/ |         |     |  |      |      | /ɣʰ/ |  |     |     |   |
-| Reversed Affricate |     |     |     |       |     |  |     |      | /ʃ͜t̠/    |     |  |      | /x͜k/ | /ɣ͜ɡ/ |  |     |     |   |
-| Approximant        |     |     |     |       |     |  | /ɹ̥/ | /ɹ/  |         |     |  | /j/  |      |      |  |     |     |   |
-| Lateral            |     |     |     |       |     |  |     | /l/  |         |     |  |      |      |      |  |     |     |   |
-| Tap                |     |     |     |       |     |  |     |      |         |     |  |      |      |      |  | /ɢ̆/ |     |   |
-
-Vowels:
-|            | Front | Central | Back |
-| Close      | /i/   |         | /u/  |
-| Near-close | /ɪ/   |         |      |
-| Open-mid   | /ɛ/   |         | /ɔ/  |
-| Open       | /a/   |         | /ɒ/  |
-
-Diphthongs:
-| /au̯/ /ɒi̯/ /ɔi̯/ /ɛu̯/ |
-
- */

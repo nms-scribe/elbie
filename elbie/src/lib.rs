@@ -558,7 +558,7 @@ impl TableDef {
 
   /// The table is just a column header and a single cell containing all phonemes
   #[must_use]
-  pub fn new_single_cell(caption: &'static str) -> Self {
+  pub const fn new_single_cell(caption: &'static str) -> Self {
       let definition = Table0DDef::new(caption);
 
       Self::OneCell(definition)

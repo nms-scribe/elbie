@@ -1,9 +1,15 @@
 use core::fmt::Write as _;
 use std::collections::HashMap;
-use std::fmt::Display;
+use std::fmt;
+use core::fmt::Display;
 use std::hash::RandomState;
+use std::io;
 use html_builder::Html5 as _;
+use prettytable::format::consts::FORMAT_BOX_CHARS;
+use prettytable::format::consts::FORMAT_CLEAN;
 use prettytable::format::FormatBuilder as PrettyFormatBuilder;
+use prettytable::format::LinePosition;
+use prettytable::format::LineSeparator;
 use prettytable::format::TableFormat as PrettyTableFormat;
 use prettytable::Table as PrettyTable;
 use prettytable::Row as PrettyRow;
@@ -53,11 +59,11 @@ pub enum TableClass {
 }
 
 impl Display for TableClass {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TableClass::ElbiePhonemes => write!(f,"elbie phonemes"),
-            TableClass::ElbieWords => write!(f,"elbie generated-words"),
-            TableClass::ElbieOrthography => write!(f,"elbie orthography"),
+            Self::ElbiePhonemes => write!(f,"elbie phonemes"),
+            Self::ElbieWords => write!(f,"elbie generated-words"),
+            Self::ElbieOrthography => write!(f,"elbie orthography"),
         }
     }
 }
@@ -68,10 +74,10 @@ pub enum TRHeadClass {
 }
 
 impl Display for TRHeadClass {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TRHeadClass::ColumnHead => write!(f,"column-head"),
-            TRHeadClass::SubColumnHead => write!(f,"subcolumn-head"),
+            Self::ColumnHead => write!(f,"column-head"),
+            Self::SubColumnHead => write!(f,"subcolumn-head"),
         }
     }
 }
@@ -84,12 +90,12 @@ pub enum TRBodyClass {
 }
 
 impl Display for TRBodyClass {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TRBodyClass::BodyRow => write!(f,"body-row"),
-            TRBodyClass::BodyRowGroupStart => write!(f,"body-row row-group-start"),
-            TRBodyClass::BodyRowGroupMiddle => write!(f,"body-row row-group-middle"),
-            TRBodyClass::BodyRowGroupEnd => write!(f,"body-row row-group-end"),
+            Self::BodyRow => write!(f,"body-row"),
+            Self::BodyRowGroupStart => write!(f,"body-row row-group-start"),
+            Self::BodyRowGroupMiddle => write!(f,"body-row row-group-middle"),
+            Self::BodyRowGroupEnd => write!(f,"body-row row-group-end"),
         }
     }
 }
@@ -101,10 +107,10 @@ pub enum THColumnClass {
 }
 
 impl Display for THColumnClass {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            THColumnClass::ColumnHeader => write!(f,"column-header"),
-            THColumnClass::SubColumnHeader => write!(f,"subcolumn-header"),
+            Self::ColumnHeader => write!(f,"column-header"),
+            Self::SubColumnHeader => write!(f,"subcolumn-header"),
         }
     }
 }
@@ -115,10 +121,10 @@ pub enum THRowClass {
 }
 
 impl Display for THRowClass {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            THRowClass::RowHeader => write!(f,"row-header"),
-            THRowClass::SubrowHeader => write!(f,"subrow-header"),
+            Self::RowHeader => write!(f,"row-header"),
+            Self::SubrowHeader => write!(f,"subrow-header"),
         }
     }
 }
@@ -130,11 +136,11 @@ pub enum TDClass {
 }
 
 impl Display for TDClass {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TDClass::ColumnGroupStart => write!(f,"column-group-start"),
-            TDClass::ColumnGroupMiddle => write!(f,"column-group-middle"),
-            TDClass::ColumnGroupEnd => write!(f,"column-group-end"),
+            Self::ColumnGroupStart => write!(f,"column-group-start"),
+            Self::ColumnGroupMiddle => write!(f,"column-group-middle"),
+            Self::ColumnGroupEnd => write!(f,"column-group-end"),
         }
     }
 }
@@ -244,6 +250,8 @@ pub enum Cell {
 impl Cell {
 
 
+    /// # Panics
+    /// Panics if any of the grid cells contain newlines
     #[must_use]
     pub fn content(text: String) -> Self {
         assert!(!text.contains('\n'),"Grid cells must not contain newlines");
@@ -252,6 +260,8 @@ impl Cell {
         }
     }
 
+    /// # Panics
+    /// Panics if any of the grid cells contain newlines
     #[must_use]
     pub fn cell_group(cells: Vec<String>) -> Self {
         assert!(!cells.iter().any(|c| c.contains('\n')),"Grid cells must not contain newlines.");
@@ -307,7 +317,8 @@ pub struct GridHead {
 }
 
 impl GridHead {
-    pub fn new(class: TRHeadClass) -> Self {
+    #[must_use]
+    pub const fn new(class: TRHeadClass) -> Self {
         Self {
             class,
             cells: Vec::new()
@@ -318,6 +329,40 @@ impl GridHead {
         self.cells.push(cell);
     }
 }
+
+
+pub enum TableOutput {
+    Pretty(PrettyTable),
+    // NOTE: PrettyTable has a 'write_html' function, but it uses style attributes and I can't control the class attributes
+    HTML(html_builder::Buffer),
+    JSON(json::JsonValue),
+    Text(String)
+}
+
+impl TableOutput {
+
+    #[must_use]
+    pub fn into_string(self) -> String {
+        match self {
+            Self::Pretty(table) => table.to_string(),
+            Self::HTML(buffer) => buffer.finish(),
+            Self::JSON(json_value) => json_value.pretty(2),
+            Self::Text(text) => text
+        }
+    }
+
+    pub fn print_to_stdout(self) -> Result<(),io::Error> {
+        match self {
+            Self::Pretty(table) => table.printstd(),
+            Self::HTML(buffer) => println!("{}",buffer.finish()),
+            Self::JSON(json_value) => println!("{}",json_value.pretty(2)),
+            Self::Text(text) => println!("{text}")
+        }
+
+        Ok(())
+    }
+}
+
 
 pub struct Grid {
     caption: String,
@@ -338,6 +383,7 @@ impl Grid {
         }
     }
 
+    #[must_use]
     pub fn caption(&self) -> &str {
         &self.caption
     }
@@ -363,41 +409,6 @@ impl Grid {
         self.body.push(row);
     }
 
-}
-
-pub enum TableOutput {
-    Pretty(PrettyTable),
-    // NOTE: PrettyTable has a 'write_html' function, but it uses style attributes and I can't control the class attributes
-    HTML(html_builder::Buffer),
-    JSON(json::JsonValue),
-    Text(String)
-}
-
-impl TableOutput {
-
-    pub fn into_string(self) -> String {
-        match self {
-            Self::Pretty(table) => table.to_string(),
-            Self::HTML(buffer) => buffer.finish(),
-            Self::JSON(json_value) => json_value.pretty(2),
-            Self::Text(text) => text
-        }
-    }
-
-    pub fn print_to_stdout(self) -> Result<(),std::io::Error> {
-        match self {
-            Self::Pretty(table) => table.printstd(),
-            Self::HTML(buffer) => println!("{}",buffer.finish()),
-            Self::JSON(json_value) => println!("{}",json_value.pretty(2)),
-            Self::Text(text) => println!("{text}")
-        }
-
-        Ok(())
-    }
-}
-
-
-impl Grid {
 
     #[must_use]
     pub fn into_html(self,with_span: bool) -> html_builder::Buffer {
@@ -480,7 +491,7 @@ impl Grid {
                         write!(tr.td(),"{text}").expect("Could not write to html node.")
                     },
                     Cell::Group{ cells } => {
-                        for (idx,cell) in cells.iter().enumerate() {
+                        for (idx,text) in cells.iter().enumerate() {
                             let class = if idx == 0 {
                                 TDClass::ColumnGroupStart
                             } else if idx == cells.len() - 1 {
@@ -488,7 +499,7 @@ impl Grid {
                             } else {
                                 TDClass::ColumnGroupMiddle
                             };
-                            write!(tr.td().attr(&format!("class=\"{class}\"")),"{cell}").expect("Could not write to html node.")
+                            write!(tr.td().attr(&format!("class=\"{class}\"")),"{text}").expect("Could not write to html node.")
                         }
                     },
                 }
@@ -562,9 +573,10 @@ impl Grid {
 
     }
 
+    #[allow(clippy::shadow_unrelated,reason="I'm doing a lot of stuff where using the same name makes sense")]
     fn blend_multi_columns(self) -> Self {
 
-        let mut plain_table_format = prettytable::format::consts::FORMAT_CLEAN.clone();
+        let mut plain_table_format = *FORMAT_CLEAN;
         plain_table_format.padding(0, 0);
         plain_table_format.column_separator(' ');
 
@@ -604,8 +616,8 @@ impl Grid {
 
             let cells = cells.into_iter().enumerate().map(|(col_idx,cell)| {
                 match cell {
-                    Cell::Group { cells, .. } => {
-                        extracted_multi_cells.entry(col_idx).or_insert(Vec::new()).push((row_idx,cells));
+                    Cell::Group { cells: items, .. } => {
+                        extracted_multi_cells.entry(col_idx).or_insert(Vec::new()).push((row_idx,items));
                         None
                     },
                     cell => Some(cell)
@@ -629,6 +641,7 @@ impl Grid {
 
         }));
 
+        #[allow(clippy::shadow_unrelated,reason="It is, in face, related")]
         let body = body_extracted.into_iter().enumerate().map(|(row_idx,(headers,some_cells,class))| {
 
             let cells = some_cells.into_iter().enumerate().map(|(col_idx,cell)| {
@@ -636,7 +649,7 @@ impl Grid {
                     Some(cell) => cell,
                     None => match formatted_multi_cells.get_mut(&col_idx) {
                         Some(indexed_rows) => match indexed_rows.remove(&row_idx) {
-                            Some(line) => Cell::content(line.to_owned()),
+                            Some(line) => Cell::content(line),
                             None => Cell::content(String::new()),
                         },
                         None => Cell::content(String::new()),
@@ -647,9 +660,9 @@ impl Grid {
 
 
             GridRow {
+                class,
                 headers,
-                cells,
-                class
+                cells
             }
         }).collect();
 
@@ -663,6 +676,7 @@ impl Grid {
 
     }
 
+    #[must_use]
     pub fn into_pretty(self, with_spans: bool, text_style: &TextStyle, format: PrettyTableFormat) -> PrettyTable {
 
         let row_header_offset = self.body.first().map_or(0, |first| {
@@ -682,7 +696,7 @@ impl Grid {
                 row.add_cell(cell);
             }
 
-            for header in header_row.cells.iter() {
+            for header in &header_row.cells {
                 let text = text_style.column_header(&header.text);
                 let cell = PrettyCell::new(&text).with_style(prettytable::Attr::Bold);
                 if with_spans && let colspan @ 2.. = header.colspan {
@@ -710,14 +724,14 @@ impl Grid {
 
         }
 
-        for body_row in self.body.iter() {
+        for body_row in &self.body {
             let mut row = PrettyRow::empty();
 
-            for header in body_row.headers.iter() {
+            for header in &body_row.headers {
                 // FUTURE: PrettyTable does not support rowspanning, but maybe I can figure out how to "hide" the lower border?
                 match header {
                     RowHeader::RowHeader { text, rowspan: _, class: _ } => {
-                        let text = text_style.row_header(&text);
+                        let text = text_style.row_header(text);
                         row.add_cell(PrettyCell::new(&text).with_style(prettytable::Attr::Bold))
                     },
                     RowHeader::RowHeaderSpan => {
@@ -726,12 +740,12 @@ impl Grid {
                 }
             }
 
-            for cell in body_row.cells.iter() {
+            for cell in &body_row.cells {
                 match cell {
-                    Cell::Content { text } => row.add_cell(PrettyCell::new(&text)),
-                    Cell::Group { cells } => for cell in cells.iter() {
+                    Cell::Content { text } => row.add_cell(PrettyCell::new(text)),
+                    Cell::Group { cells } => for text in cells {
                         // FUTURE: Figure out how to hide the border between these?
-                        row.add_cell(PrettyCell::new(cell));
+                        row.add_cell(PrettyCell::new(text));
                     },
                 }
             }
@@ -751,8 +765,8 @@ impl Grid {
         PrettyFormatBuilder::new().
             column_separator('|').
             separator(
-                prettytable::format::LinePosition::Title,
-                prettytable::format::LineSeparator::new('-', '|', '|', '|')
+                LinePosition::Title,
+                LineSeparator::new('-', '|', '|', '|')
             ).
             left_border('|').
             right_border('|').
@@ -761,13 +775,14 @@ impl Grid {
 
     }
 
+    #[must_use]
     pub fn into_output(self, style: &GridStyle) -> TableOutput {
 
         match style {
             GridStyle::Plain => {
                 // yes span the plain style, it makes it look much cleaner.
                 let me = self.blend_multi_columns();
-                let table = me.into_pretty(true,&TextStyle::Plain, prettytable::format::consts::FORMAT_CLEAN.clone());
+                let table = me.into_pretty(true,&TextStyle::Plain, *FORMAT_CLEAN);
                 TableOutput::Pretty(table)
             },
             GridStyle::Markdown => {
@@ -776,7 +791,7 @@ impl Grid {
             },
             GridStyle::Terminal { spans } => {
                 let me = self.blend_multi_columns();
-                let table = me.into_pretty(*spans,&TextStyle::Terminal, prettytable::format::consts::FORMAT_BOX_CHARS.clone());
+                let table = me.into_pretty(*spans,&TextStyle::Terminal, *FORMAT_BOX_CHARS);
                 TableOutput::Pretty(table)
             },
             GridStyle::HTML { spans } => TableOutput::HTML(self.into_html(*spans)),
