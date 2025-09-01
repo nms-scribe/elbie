@@ -1,5 +1,10 @@
 
+use crate::grid::GridHead;
 pub use crate::grid::GridStyle;
+use crate::grid::THColumnClass;
+use crate::grid::TRBodyClass;
+use crate::grid::TRHeadClass;
+use crate::grid::TableClass;
 pub use crate::phoneme_table::Axis;
 pub use crate::phoneme_table::HeaderDef;
 pub use crate::phoneme_table::Table0DDef;
@@ -80,41 +85,9 @@ FUTURE: Is there some way to use types or something else to make languages easie
 
 */
 
-/*
-TODO: Going back to the tables:
-* [ ] Need to standardize the styles and make them constants
-  * class for elbie grid and elbie phoneme
-  * class for "column" vs "subcolumn" vs "row" vs "subrow" on th
-  * class for "cell group" on td
-  * class for "cell group not-first" on td, so you can remove borders from previous cell
-*/
 
 pub const PHONEME: &str = "phoneme";
 pub const EMPTY: &str = "empty";
-
-/* NMS: Seems to be implemented in core now
-trait UsizeHelper {
-
-  fn div_ceil(&self, rhs: Self) -> Self;
-
-
-}
-
-impl UsizeHelper for usize {
-
-  fn div_ceil(&self, rhs: Self) -> Self {
-    let d = self / rhs;
-    let r = self % rhs;
-    if r > 0 && rhs > 0 {
-        d + 1
-    } else {
-        d
-    }
-  }
-
-}
-*/
-
 
 #[derive(Debug,Clone)]
 pub enum LanguageError {
@@ -1215,13 +1188,13 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
       let phonemes: Bag<Rc<Phoneme>> = self.get_set(PHONEME)?.clone();
       let phonemes = phonemes.list();
 
-      let mut grid = Grid::new("elbie-spelling");
+      let mut grid = Grid::new(TableClass::ElbieOrthography);
 
-      let mut header = Vec::new();
+      let mut header = GridHead::new(TRHeadClass::ColumnHead);
       for _ in 0..columns {
-        header.push(ColumnHeader::new("Phoneme".to_owned(),1,"elbie-spelling-phoneme-header"));
+        header.push(ColumnHeader::new("Phoneme".to_owned(),1,THColumnClass::ColumnHeader));
         for orthography in self.orthographies {
-          header.push(ColumnHeader::new(orthography.to_owned(),1,"elbie-spelling-orthography-header"));
+          header.push(ColumnHeader::new(orthography.to_owned(),1,THColumnClass::ColumnHeader));
         }
       }
       grid.push_header_row(header);
@@ -1233,22 +1206,22 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
       let mut chunks: Vec<Iter<Rc<Phoneme>>> = phonemes.chunks(length).map(|a| a.iter()).collect();
 
       for _ in 0..length {
-        let mut row = GridRow::new();
+        let mut row = GridRow::new(TRBodyClass::BodyRow);
 
         for chunk in &mut chunks {
           if let Some(phoneme) = chunk.next() {
-            row.push_cell(Cell::content(phoneme.to_string(),"elbie-spelling-phoneme-cell"));
+            row.push_cell(Cell::content(phoneme.to_string()));
             for i in 0..ORTHOGRAPHIES {
               let mut cell = String::new();
               self.spell_phoneme(phoneme, i, &mut cell, None);
-              row.push_cell(Cell::content(cell,"elbie-spelling-orthography-cell"));
+              row.push_cell(Cell::content(cell));
             }
 
           } else {
             // add blank cells to make the table rectangular.
-            row.push_cell(Cell::content(String::new(),"elbie-spelling-blank-cell"));
+            row.push_cell(Cell::content(String::new()));
             for _ in 0..ORTHOGRAPHIES {
-                row.push_cell(Cell::content(String::new(),"elbie-spelling-blank-cell"));
+                row.push_cell(Cell::content(String::new()));
             }
           }
         }
@@ -1552,19 +1525,19 @@ fn validate_words<const ORTHOGRAPHIES: usize>(language: &Language<ORTHOGRAPHIES>
 }
 
 fn generate_words<const ORTHOGRAPHIES: usize>(grid_style: Option<&GridStyle>, language: &Language<ORTHOGRAPHIES>, count: usize) {
-    let mut grid = Grid::new("elbie-generated-words");
+    let mut grid = Grid::new(TableClass::ElbieWords);
 
     // FUTURE: Should I have a header?
 
     for _ in 0..count {
-        let mut row = GridRow::new();
+        let mut row = GridRow::new(TRBodyClass::BodyRow);
 
         match language.make_word() {
             Ok(word) => {
                 for orthography in 0..language.orthographies.len() {
-                    row.push_cell(Cell::content(language.spell_word(&word,orthography),"elbie-generated-spelling"));
+                    row.push_cell(Cell::content(language.spell_word(&word,orthography)));
                 }
-                row.push_cell(Cell::content(format!("{word}"),"elbie-generated-word"));
+                row.push_cell(Cell::content(format!("{word}")));
 
                 // the following is a sanity check. It might catch some logic errors, but really it's just GIGO.
                 if let Err(err) = language.check_word(&word,&|_,_| { /* eat message, no need to report */}) {

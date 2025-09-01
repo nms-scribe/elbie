@@ -1,3 +1,6 @@
+use crate::grid::THRowClass;
+use crate::grid::TRBodyClass;
+use crate::grid::TableClass;
 use crate::Bag;
 use crate::ColumnDef;
 use crate::Language;
@@ -58,6 +61,9 @@ impl Display for PhonemeDisplay {
 
 mod sealed {
     use crate::grid::ColumnHeader;
+    use crate::grid::GridHead;
+    use crate::grid::THColumnClass;
+    use crate::grid::TRHeadClass;
     use crate::phoneme_table::PhonemeDisplay;
     // Basically, I want to keep the functions on InnerTable private, and since trait functions are automatically public, this is the convoluted way I have to do it.
     use crate::phoneme_table::Axis;
@@ -86,11 +92,11 @@ mod sealed {
         /// * `col_header_level_count`: The number of column header rows the final table will have, used for creating the blank "corner" square. `0` is treated as `1`
         /// * `row_header_level_count`: The number of row header columns the final table will have, used for creating the blank "corner" square. `0` is valid.
         /// * `colspan_for_each_header`: How manu columns each header will take up, allowing for subheaders. `0` is treated as `1`
-        fn build_header_row(columns: &[&HeaderDef], colspan_for_each_header: usize) -> Vec<ColumnHeader> {
+        fn build_header_row(columns: &[&HeaderDef], colspan_for_each_header: usize) -> GridHead {
             // main column headers:
-            let mut row = Vec::new();
+            let mut row = GridHead::new(TRHeadClass::ColumnHead);
 
-            Self::build_column_headers(columns, colspan_for_each_header, &mut row, "elbie-phonemes-column-header");
+            Self::build_column_headers(columns, colspan_for_each_header, &mut row, THColumnClass::ColumnHeader);
             row
         }
 
@@ -100,12 +106,12 @@ mod sealed {
         /// * `row_header_count`: The number of row header columns the final table will have, used for creating the blank "corner" square. `0` is valid.
         /// * `repeat_count`: The number of times to repeat the headers. On a single subheader, the subheaders should repeat for each primary header.
         /// * `colspan_for_each_header`: How manu columns each header will take up, allowing for subheaders. `0` is treated as `1`
-        fn build_subheader_row(subcolumns: &Vec<&HeaderDef>, repeat_count: usize, colspan_for_each_header: usize) -> Vec<ColumnHeader> {
+        fn build_subheader_row(subcolumns: &Vec<&HeaderDef>, repeat_count: usize, colspan_for_each_header: usize) -> GridHead {
             // subcolumn headers
-            let mut row = Vec::new();
+            let mut row = GridHead::new(TRHeadClass::SubColumnHead);
 
             for _ in 0..repeat_count.max(1) {
-                Self::build_column_headers(subcolumns, colspan_for_each_header, &mut row, "elbie-phonemes-subcolumn-header");
+                Self::build_column_headers(subcolumns, colspan_for_each_header, &mut row, THColumnClass::SubColumnHeader);
             }
             row
         }
@@ -114,10 +120,10 @@ mod sealed {
         ///
         /// * `columns`: List of headers to output. It is only a HeaderDef to reduce the need to map the struct. The headers should already be in the expected order.
         /// * `colspan_for_each_header`: How manu columns each header will take up, allowing for subheaders. `0` is treated as `1`
-        fn build_column_headers(columns: &[&HeaderDef], colspan_for_each: usize, row: &mut Vec<ColumnHeader>, class: &'static str) {
+        fn build_column_headers(columns: &[&HeaderDef], colspan_for_each: usize, row: &mut GridHead, class: THColumnClass) {
             let colspan_for_each = colspan_for_each.max(1);
             for column_def in columns {
-                row.push(ColumnHeader::new(column_def.caption.to_owned(), colspan_for_each, class));
+                row.push(ColumnHeader::new(column_def.caption.to_owned(), colspan_for_each, class.clone()));
             }
         }
 
@@ -125,14 +131,14 @@ mod sealed {
         ///
         /// * `cells_key`: Specify the key into the cells (see `get_cell`) from which to retrieve phonemes
         /// * `merge_to_right`: If true, then tables which format with borders should hide their right border. (Used with some subcolumn options)
-        fn build_cell(&self, cells_key: Self::CellsKey, class: &'static str) -> Cell {
+        fn build_cell(&self, cells_key: Self::CellsKey) -> Cell {
             let phonemes = self.get_phoneme_text(&cells_key).join(" ");
-            Cell::content(phonemes, class)
+            Cell::content(phonemes)
         }
 
-        fn build_cell_group(&self, cells_keys: &[Self::CellsKey], class: &'static str) -> Cell {
+        fn build_cell_group(&self, cells_keys: &[Self::CellsKey]) -> Cell {
             let content = cells_keys.iter().map(|cells_key| self.get_phoneme_text(cells_key).join(" ")).collect();
-            Cell::cell_group(content,class)
+            Cell::cell_group(content)
         }
 
         fn get_phoneme_text(&self, cells_key: &<Self as InnerTable>::CellsKey) -> Vec<String> {
@@ -218,7 +224,7 @@ pub(crate) trait Table: sealed::InnerTable {
 
     fn build_grid(&self) -> Grid {
 
-        let mut grid = Grid::new("elbie-phonemes-table");
+        let mut grid = Grid::new(TableClass::ElbiePhonemes);
         self.build_cells(&mut grid);
 
         grid
@@ -342,9 +348,20 @@ impl Table4D<'_> {
     }
 
     fn build_grid_row(&self, columns: &Vec<&HeaderDef>, subcolumns: &Vec<&HeaderDef>, row_def: &HeaderDef, subrows_count: usize, subrow_def: &HeaderDef) -> GridRow {
-        let mut row = GridRow::new();
+
+        let row_class = if subrows_count == 1 {
+            TRBodyClass::BodyRow
+        } else if subrow_def.order == 0 {
+            TRBodyClass::BodyRowGroupStart
+        } else if subrow_def.order == subrows_count - 1 {
+            TRBodyClass::BodyRowGroupEnd
+        } else {
+            TRBodyClass::BodyRowGroupMiddle
+        };
+
+        let mut row = GridRow::new(row_class);
         if subrow_def.order == 0 {
-            row.push_header(RowHeader::new(row_def.caption.to_owned(), subrows_count,"elbie-phonemes-row-header"));
+            row.push_header(RowHeader::new(row_def.caption.to_owned(), subrows_count,THRowClass::RowHeader));
         } else {
             // still adding a span fill even if we aren't showing subrow headers.
             row.push_header(RowHeader::row_header_span());
@@ -352,7 +369,7 @@ impl Table4D<'_> {
 
 
         if !self.definition.hide_subrow_captions {
-            row.push_header(RowHeader::new(subrow_def.caption.to_owned(), 1, "elbie-phonemes-subrow-header"));
+            row.push_header(RowHeader::new(subrow_def.caption.to_owned(), 1, THRowClass::SubrowHeader));
         }
 
         for column in columns {
@@ -366,13 +383,13 @@ impl Table4D<'_> {
 
             if self.definition.hide_subcolumn_captions {
                 // combine them into a cell group for easier styling
-                let content = self.build_cell_group(&keys.collect::<Vec<_>>(),"elbie-phonemes-blended-cell");
+                let content = self.build_cell_group(&keys.collect::<Vec<_>>());
                 row.push_cell(content);
 
             } else {
                 for key in keys {
 
-                    let content = self.build_cell(key,"elbie-phonemes-cell");
+                    let content = self.build_cell(key);
                     row.push_cell(content);
                 };
 
@@ -549,8 +566,8 @@ impl Table3D<'_> {
     }
 
     fn build_grid_row(&self, columns: &Vec<&HeaderDef>, subcolumns: &Vec<&HeaderDef>, row_def: &HeaderDef) -> GridRow {
-        let mut row = GridRow::new();
-        row.push_header(RowHeader::new(row_def.caption.to_owned(), 1, "elbie-phonemes-row-header"));
+        let mut row = GridRow::new(TRBodyClass::BodyRow);
+        row.push_header(RowHeader::new(row_def.caption.to_owned(), 1, THRowClass::RowHeader));
 
         for column in columns {
 
@@ -562,13 +579,13 @@ impl Table3D<'_> {
 
             if self.definition.hide_subcolumn_captions {
                 // combine them into a cell group for easier styling
-                let content = self.build_cell_group(&keys.collect::<Vec<_>>(),"elbie-phonemes-blended-cell");
+                let content = self.build_cell_group(&keys.collect::<Vec<_>>());
                 row.push_cell(content);
 
             } else {
                 for key in keys {
 
-                    let content = self.build_cell(key,"elbie-phonemes-cell");
+                    let content = self.build_cell(key);
 
                     row.push_cell(content);
                 };
@@ -721,8 +738,8 @@ impl Table2D<'_> {
 
 
     fn build_grid_row(&self, columns: &Vec<&HeaderDef>, row_def: &HeaderDef) -> GridRow {
-        let mut row = GridRow::new();
-        row.push_header(RowHeader::new(row_def.caption.to_owned(), 1,"elbie-phonemes-row-header"));
+        let mut row = GridRow::new(TRBodyClass::BodyRow);
+        row.push_header(RowHeader::new(row_def.caption.to_owned(), 1,THRowClass::RowHeader));
 
         for column in columns {
 
@@ -731,7 +748,7 @@ impl Table2D<'_> {
                 row: row_def.order
             };
 
-            let content = self.build_cell(key,"elbie-phonemes-cell");
+            let content = self.build_cell(key);
 
             row.push_cell(content);
 
@@ -860,12 +877,12 @@ impl Table1D<'_> {
 
 
     fn build_grid_row(&self, row_def: &HeaderDef) -> GridRow {
-        let mut row = GridRow::new();
-        row.push_header(RowHeader::new(row_def.caption.to_owned(), 1,"elbie-phonemes-row-header"));
+        let mut row = GridRow::new(TRBodyClass::BodyRow);
+        row.push_header(RowHeader::new(row_def.caption.to_owned(), 1,THRowClass::RowHeader));
 
         let key = row_def.order;
 
-        let content = self.build_cell(key,"elbie-phonemes-cell");
+        let content = self.build_cell(key);
 
         row.push_cell(content);
 
@@ -977,11 +994,11 @@ impl Table0D<'_> {
 
 
     fn build_grid_row(&self) -> GridRow {
-        let mut row = GridRow::new();
+        let mut row = GridRow::new(TRBodyClass::BodyRow);
 
         let key = ();
 
-        let content = self.build_cell(key,"elbie-phonemes-cell");
+        let content = self.build_cell(key);
 
         row.push_cell(content);
 

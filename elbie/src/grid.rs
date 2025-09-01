@@ -1,5 +1,6 @@
 use core::fmt::Write as _;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::hash::RandomState;
 use html_builder::Html5 as _;
 use prettytable::format::FormatBuilder as PrettyFormatBuilder;
@@ -45,6 +46,99 @@ Decision: I ended up going with pretty table, as it required the least customiza
 FUTURE: I could potentially pre-process the rows in the same way that I do for multi-columns, assuming that prettytable handles multi-line cells.
 */
 
+pub enum TableClass {
+    ElbiePhonemes,
+    ElbieWords,
+    ElbieOrthography
+}
+
+impl Display for TableClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TableClass::ElbiePhonemes => write!(f,"elbie phonemes"),
+            TableClass::ElbieWords => write!(f,"elbie generated-words"),
+            TableClass::ElbieOrthography => write!(f,"elbie orthography"),
+        }
+    }
+}
+
+pub enum TRHeadClass {
+    ColumnHead,
+    SubColumnHead
+}
+
+impl Display for TRHeadClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TRHeadClass::ColumnHead => write!(f,"column-head"),
+            TRHeadClass::SubColumnHead => write!(f,"subcolumn-head"),
+        }
+    }
+}
+
+pub enum TRBodyClass {
+    BodyRow,
+    BodyRowGroupStart,
+    BodyRowGroupMiddle,
+    BodyRowGroupEnd,
+}
+
+impl Display for TRBodyClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TRBodyClass::BodyRow => write!(f,"body-row"),
+            TRBodyClass::BodyRowGroupStart => write!(f,"body-row row-group-start"),
+            TRBodyClass::BodyRowGroupMiddle => write!(f,"body-row row-group-middle"),
+            TRBodyClass::BodyRowGroupEnd => write!(f,"body-row row-group-end"),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub enum THColumnClass {
+    ColumnHeader,
+    SubColumnHeader
+}
+
+impl Display for THColumnClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            THColumnClass::ColumnHeader => write!(f,"column-header"),
+            THColumnClass::SubColumnHeader => write!(f,"subcolumn-header"),
+        }
+    }
+}
+
+pub enum THRowClass {
+    RowHeader,
+    SubrowHeader
+}
+
+impl Display for THRowClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            THRowClass::RowHeader => write!(f,"row-header"),
+            THRowClass::SubrowHeader => write!(f,"subrow-header"),
+        }
+    }
+}
+
+pub enum TDClass {
+    ColumnGroupStart,
+    ColumnGroupMiddle,
+    ColumnGroupEnd
+}
+
+impl Display for TDClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TDClass::ColumnGroupStart => write!(f,"column-group-start"),
+            TDClass::ColumnGroupMiddle => write!(f,"column-group-middle"),
+            TDClass::ColumnGroupEnd => write!(f,"column-group-end"),
+        }
+    }
+}
+
 pub enum TextStyle {
     Plain,
     Terminal,
@@ -85,14 +179,14 @@ pub enum GridStyle {
 pub struct ColumnHeader {
     text: String,
     colspan: usize,
-    class: &'static str
+    class: THColumnClass
 }
 
 
 impl ColumnHeader {
 
     #[must_use]
-    pub const fn new(text: String, colspan: usize, class: &'static str) -> Self {
+    pub const fn new(text: String, colspan: usize, class: THColumnClass) -> Self {
         Self {
             text,
             colspan,
@@ -103,12 +197,11 @@ impl ColumnHeader {
 }
 
 
-#[derive(Debug)]
 pub enum RowHeader {
     RowHeader{
         text: String,
         rowspan: usize,
-        class: &'static str
+        class: THRowClass
     },
     RowHeaderSpan
 }
@@ -117,7 +210,7 @@ impl RowHeader {
 
 
     #[must_use]
-    pub const fn new(text: String, rowspan: usize, class: &'static str) -> Self {
+    pub const fn new(text: String, rowspan: usize, class: THRowClass) -> Self {
         Self::RowHeader{
             text,
             rowspan,
@@ -141,12 +234,10 @@ impl RowHeader {
 #[derive(Debug)]
 pub enum Cell {
     Content{
-        text: String,
-        class: &'static str
+        text: String
     },
     Group{
-        cells: Vec<String>,
-        class: &'static str
+        cells: Vec<String>
     },
 }
 
@@ -154,20 +245,18 @@ impl Cell {
 
 
     #[must_use]
-    pub fn content(text: String, class: &'static str) -> Self {
+    pub fn content(text: String) -> Self {
         assert!(!text.contains('\n'),"Grid cells must not contain newlines");
         Self::Content{
-            text,
-            class
+            text
         }
     }
 
     #[must_use]
-    pub fn cell_group(cells: Vec<String>, class: &'static str) -> Self {
+    pub fn cell_group(cells: Vec<String>) -> Self {
         assert!(!cells.iter().any(|c| c.contains('\n')),"Grid cells must not contain newlines.");
         Self::Group{
-            cells,
-            class
+            cells
         }
 
     }
@@ -178,6 +267,7 @@ impl Cell {
 
 
 pub struct GridRow {
+    class: TRBodyClass,
     headers: Vec<RowHeader>,
     cells: Vec<Cell>
 }
@@ -185,8 +275,9 @@ pub struct GridRow {
 impl GridRow {
 
     #[must_use]
-    pub const fn new() -> Self {
+    pub const fn new(class: TRBodyClass) -> Self {
         Self {
+            class,
             headers: Vec::new(),
             cells: Vec::new()
         }
@@ -210,32 +301,50 @@ pub enum TabledBorderRequest {
     CellGroupAfter
 }
 
+pub struct GridHead {
+    class: TRHeadClass,
+    cells: Vec<ColumnHeader>
+}
+
+impl GridHead {
+    pub fn new(class: TRHeadClass) -> Self {
+        Self {
+            class,
+            cells: Vec::new()
+        }
+    }
+
+    pub fn push(&mut self, cell: ColumnHeader) {
+        self.cells.push(cell);
+    }
+}
+
 pub struct Grid {
-    class: &'static str,
-    headers: Vec<Vec<ColumnHeader>>,
+    class: TableClass,
+    heads: Vec<GridHead>,
     body: Vec<GridRow>
 }
 
 impl Grid {
 
     #[must_use]
-    pub const fn new(class: &'static str) -> Self {
+    pub const fn new(class: TableClass) -> Self {
         Self {
             class,
-            headers: Vec::new(),
+            heads: Vec::new(),
             body: Vec::new()
         }
     }
 
     /// # Panics
     /// If there is a header row in the grid already, the sum of the first row's colspan values is compared to that of this one, and if they differ this will panic.
-    pub fn push_header_row(&mut self, row: Vec<ColumnHeader>) {
-        if let Some(first_row) = self.headers.first() {
-            let new_len: usize = row.iter().map(|c| c.colspan).sum();
-            let first_len: usize = first_row.iter().map(|c| c.colspan).sum();
+    pub fn push_header_row(&mut self, row: GridHead) {
+        if let Some(first_row) = self.heads.first() {
+            let new_len: usize = row.cells.iter().map(|c| c.colspan).sum();
+            let first_len: usize = first_row.cells.iter().map(|c| c.colspan).sum();
             assert_eq!(first_len,new_len,"Header rows must have the same length.");
         }
-        self.headers.push(row);
+        self.heads.push(row);
     }
 
     /// # Panics
@@ -291,13 +400,13 @@ impl Grid {
         let row_header_offset = self.body.first().map_or(0, |first| {
             first.headers.len()
         });
-        let column_header_offset = self.headers.len();
+        let column_header_offset = self.heads.len();
 
         let mut buffer = html_builder::Buffer::new();
         let mut table = buffer.table().attr(&format!("class=\"{}\"",self.class));
         let mut thead = table.thead();
-        for (i,headers) in self.headers.iter().enumerate() {
-            let mut tr = thead.tr();
+        for (i,headers) in self.heads.iter().enumerate() {
+            let mut tr = thead.tr().attr(&format!("class=\"{}\"",headers.class));
             if with_span {
                 if i == 0 {
                     let th = tr.th();
@@ -311,7 +420,7 @@ impl Grid {
                     }
 
                 }
-                for header in headers {
+                for header in &headers.cells {
                     let th = tr.th().attr(&format!("class=\"{}\"",header.class));
                     let mut th = if header.colspan > 1 {
                         th.attr(&format!("colspan={}",header.colspan))
@@ -324,7 +433,7 @@ impl Grid {
                 for _ in 0..row_header_offset {
                     _ = tr.th();
                 }
-                for header in headers {
+                for header in &headers.cells {
                     write!(tr.th().attr(&format!("class=\"{}\"",header.class)),"{}",header.text).expect("Could not write to html node");
                     for _ in 1..header.colspan {
                         _ = tr.td();
@@ -336,7 +445,7 @@ impl Grid {
         let mut tbody = table.tbody();
 
         for row in self.body {
-            let mut tr = tbody.tr();
+            let mut tr = tbody.tr().attr(&format!("class=\"{}\"",row.class));
             for header in row.headers {
                 match header {
                     RowHeader::RowHeader { text, rowspan, class } => {
@@ -359,11 +468,18 @@ impl Grid {
 
             for cell in row.cells {
                 match cell {
-                    Cell::Content{ text, class } => {
-                        write!(tr.td().attr(&format!("class=\"{class}\"")),"{text}").expect("Could not write to html node.")
+                    Cell::Content{ text } => {
+                        write!(tr.td(),"{text}").expect("Could not write to html node.")
                     },
-                    Cell::Group{ cells, class} => {
-                        for cell in cells {
+                    Cell::Group{ cells } => {
+                        for (idx,cell) in cells.iter().enumerate() {
+                            let class = if idx == 0 {
+                                TDClass::ColumnGroupStart
+                            } else if idx == cells.len() - 1 {
+                                TDClass::ColumnGroupEnd
+                            } else {
+                                TDClass::ColumnGroupMiddle
+                            };
                             write!(tr.td().attr(&format!("class=\"{class}\"")),"{cell}").expect("Could not write to html node.")
                         }
                     },
@@ -382,18 +498,22 @@ impl Grid {
 
         let result = json::object!{
             "type": "elbie-grid",
-            "class": self.class,
+            "class": self.class.to_string(),
             "headers": [
-                self.headers.iter().map(|header| {
-                    header.iter().map(|header| {
-                        json::object!{
-                            "type": "column-header",
-                            "class": *header.class,
-                            "colspan": header.colspan,
-                            "text": header.text.as_str()
-                        }
+                self.heads.iter().map(|head| {
+                    json::object!{
+                        "type": "column-head",
+                        class: head.class.to_string(),
+                        cells: head.cells.iter().map(|header| {
+                            json::object!{
+                                "type": "column-header",
+                                "class": header.class.to_string(),
+                                "colspan": header.colspan,
+                                "text": header.text.as_str()
+                            }
 
-                    }).collect::<Vec<_>>()
+                        }).collect::<Vec<_>>()
+                    }
                 }).collect::<Vec<_>>()
             ],
             "body": self.body.iter().map(|row| {
@@ -403,7 +523,7 @@ impl Grid {
                         match header {
                             RowHeader::RowHeader { text, rowspan, class } => json::object! {
                                 "type": "row-header",
-                                "class": *class,
+                                "class": class.to_string(),
                                 "rowspan": *rowspan,
                                 "text": text.as_str()
                             },
@@ -414,14 +534,12 @@ impl Grid {
                     }).collect::<Vec<_>>(),
                     "cells": row.cells.iter().map(|cell| {
                         match cell {
-                            Cell::Content { text, class } => json::object!{
+                            Cell::Content { text } => json::object!{
                                 "type": "cell",
-                                "class": *class,
                                 "text": text.as_str(),
                             },
-                            Cell::Group { cells, class } => json::object!{
+                            Cell::Group { cells } => json::object!{
                                 "type": "multi-cell",
-                                "class": *class,
                                 "cells": cells.iter().map(String::as_str).collect::<Vec<_>>()
                             },
                         }
@@ -444,15 +562,25 @@ impl Grid {
 
         let Self {
             class,
-            headers,
+            heads,
             body,
         } = self;
 
-        let headers = headers.into_iter().map(|header| {
-            header.into_iter().map(|mut cell| {
+        let headers = heads.into_iter().map(|head| {
+            let GridHead {
+                class,
+                cells,
+            } = head;
+
+            let cells = cells.into_iter().map(|mut cell| {
                 cell.colspan = 1;
                 cell
-            }).collect()
+            }).collect();
+
+            GridHead {
+                class,
+                cells,
+            }
 
         }).collect();
 
@@ -462,6 +590,7 @@ impl Grid {
             let GridRow {
                 headers,
                 cells,
+                class
             } = row;
 
             let cells = cells.into_iter().enumerate().map(|(col_idx,cell)| {
@@ -473,7 +602,7 @@ impl Grid {
                     cell => Some(cell)
                 }
             }).collect::<Vec<_>>();
-            (headers,cells)
+            (headers,cells,class)
 
         }).collect::<Vec<_>>();
 
@@ -491,17 +620,17 @@ impl Grid {
 
         }));
 
-        let body = body_extracted.into_iter().enumerate().map(|(row_idx,(headers,some_cells))| {
+        let body = body_extracted.into_iter().enumerate().map(|(row_idx,(headers,some_cells,class))| {
 
             let cells = some_cells.into_iter().enumerate().map(|(col_idx,cell)| {
                 match cell {
                     Some(cell) => cell,
                     None => match formatted_multi_cells.get_mut(&col_idx) {
                         Some(indexed_rows) => match indexed_rows.remove(&row_idx) {
-                            Some(line) => Cell::content(line.to_owned(),""),
-                            None => Cell::content(String::new(),""),
+                            Some(line) => Cell::content(line.to_owned()),
+                            None => Cell::content(String::new()),
                         },
-                        None => Cell::content(String::new(),""),
+                        None => Cell::content(String::new()),
                     }
                 }
 
@@ -510,14 +639,15 @@ impl Grid {
 
             GridRow {
                 headers,
-                cells
+                cells,
+                class
             }
         }).collect();
 
 
         Self {
             class,
-            headers,
+            heads: headers,
             body
         }
 
@@ -531,7 +661,7 @@ impl Grid {
 
         let mut table = PrettyTable::new();
 
-        for (row_idx,header_row) in self.headers.iter().enumerate() {
+        for (row_idx,header_row) in self.heads.iter().enumerate() {
             let mut row = PrettyRow::empty();
 
 
@@ -542,7 +672,7 @@ impl Grid {
                 row.add_cell(cell);
             }
 
-            for header in header_row.iter() {
+            for header in header_row.cells.iter() {
                 let text = text_style.column_header(&header.text);
                 let cell = PrettyCell::new(&text).with_style(prettytable::Attr::Bold);
                 if with_spans && let colspan @ 2.. = header.colspan {
@@ -588,8 +718,8 @@ impl Grid {
 
             for cell in body_row.cells.iter() {
                 match cell {
-                    Cell::Content { text, class: _  } => row.add_cell(PrettyCell::new(&text)),
-                    Cell::Group { cells, class: _  } => for cell in cells.iter() {
+                    Cell::Content { text } => row.add_cell(PrettyCell::new(&text)),
+                    Cell::Group { cells } => for cell in cells.iter() {
                         // FUTURE: Figure out how to hide the border between these?
                         row.add_cell(PrettyCell::new(cell));
                     },
