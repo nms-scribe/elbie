@@ -768,7 +768,8 @@ impl Grid {
                 TableOutput::Pretty(table)
             },
             GridStyle::Markdown => {
-                let table = self.into_pretty(false,&TextStyle::Markdown, Self::pretty_table_markdown());
+                let me = self.blend_multi_columns();
+                let table = me.into_pretty(false,&TextStyle::Markdown, Self::pretty_table_markdown());
                 TableOutput::Pretty(table)
             },
             GridStyle::Terminal { spans } => {
