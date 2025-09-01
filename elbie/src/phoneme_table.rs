@@ -78,6 +78,8 @@ mod sealed {
 
         type CellsKey;
 
+        fn caption(&self) -> &str;
+
         fn phoneme_sets_to_cells_key(&self, sets: &Self::PhonemeSets) -> Result<Self::CellsKey,Axis>;
 
         fn build_cells(&self, grid: &mut Grid);
@@ -224,7 +226,7 @@ pub(crate) trait Table: sealed::InnerTable {
 
     fn build_grid(&self) -> Grid {
 
-        let mut grid = Grid::new(TableClass::ElbiePhonemes);
+        let mut grid = Grid::new(TableClass::ElbiePhonemes, self.caption().to_owned());
         self.build_cells(&mut grid);
 
         grid
@@ -255,8 +257,9 @@ pub(crate) struct PhonemeSets4D {
     pub subrow: &'static str
 }
 
-#[derive(Debug,Default)]
+#[derive(Debug)]
 pub struct Table4DDef {
+    caption: String,
     columns_by_set: HashMap<&'static str,HeaderDef>,
     subcolumns_by_set: HashMap<&'static str,HeaderDef>,
     rows_by_set: HashMap<&'static str,HeaderDef>,
@@ -266,6 +269,18 @@ pub struct Table4DDef {
 }
 
 impl Table4DDef {
+
+    pub(crate) fn new(caption: String) -> Self {
+        Self {
+            caption,
+            columns_by_set: HashMap::new(),
+            subcolumns_by_set: HashMap::new(),
+            rows_by_set: HashMap::new(),
+            subrows_by_set: HashMap::new(),
+            hide_subcolumn_captions: false,
+            hide_subrow_captions: false,
+        }
+    }
 
     table_add_col_fn!(add_column, add_columns, columns_by_set);
     table_add_col_fn!(add_row, add_rows, rows_by_set);
@@ -408,6 +423,10 @@ impl sealed::InnerTable for Table4D<'_> {
 
     type CellsKey = Cells4DKey;
 
+    fn caption(&self) -> &str {
+        &self.definition.caption
+    }
+
     fn build_cells(&self, grid: &mut Grid) {
         let (columns,columns_count) = self.definition.columns_by_set.hashmap_to_captions_len();
         let (subcolumns,subcolumns_count) = self.definition.subcolumns_by_set.hashmap_to_captions_len();
@@ -482,8 +501,9 @@ pub(crate) struct PhonemeSets3D {
     pub row: &'static str
 }
 
-#[derive(Debug,Default)]
+#[derive(Debug)]
 pub struct Table3DDef {
+    caption: String,
     columns_by_set: HashMap<&'static str,HeaderDef>,
     subcolumns_by_set: HashMap<&'static str,HeaderDef>,
     rows_by_set: HashMap<&'static str,HeaderDef>,
@@ -491,6 +511,18 @@ pub struct Table3DDef {
 }
 
 impl Table3DDef {
+
+    pub(crate) fn new(caption: String) -> Self {
+        Self {
+            caption,
+            columns_by_set: HashMap::new(),
+            subcolumns_by_set: HashMap::new(),
+            rows_by_set: HashMap::new(),
+            hide_subcolumn_captions: false
+        }
+    }
+
+
 
     table_add_col_fn!(add_column, add_columns, columns_by_set);
     table_add_col_fn!(add_row, add_rows, rows_by_set);
@@ -604,6 +636,10 @@ impl sealed::InnerTable for Table3D<'_> {
 
     type CellsKey = Cells3DKey;
 
+    fn caption(&self) -> &str {
+        &self.definition.caption
+    }
+
     fn build_cells(&self, grid: &mut Grid) {
         let (columns,columns_count) = self.definition.columns_by_set.hashmap_to_captions_len();
         let (subcolumns,subcolumns_count) = self.definition.subcolumns_by_set.hashmap_to_captions_len();
@@ -673,13 +709,24 @@ pub(crate) struct PhonemeSets2D {
 }
 
 
-#[derive(Debug,Default)]
+#[derive(Debug)]
 pub struct Table2DDef {
+    caption: String,
     columns_by_set: HashMap<&'static str,HeaderDef>,
     rows_by_set: HashMap<&'static str,HeaderDef>
 }
 
 impl Table2DDef {
+
+    pub(crate) fn new(caption: String) -> Self {
+        Self {
+            caption,
+            columns_by_set: HashMap::new(),
+            rows_by_set: HashMap::new(),
+        }
+    }
+
+
 
     table_add_col_fn!(add_column, add_columns, columns_by_set);
     table_add_col_fn!(add_row, add_rows, rows_by_set);
@@ -765,6 +812,10 @@ impl sealed::InnerTable for Table2D<'_> {
 
     type CellsKey = Cells2DKey;
 
+    fn caption(&self) -> &str {
+        &self.definition.caption
+    }
+
     fn build_cells(&self, grid: &mut Grid) {
         let columns = self.definition.columns_by_set.hashmap_to_captions();
         let rows: Vec<_> = self.definition.rows_by_set.hashmap_to_captions();
@@ -825,9 +876,9 @@ impl Table1DDef {
 
     table_add_col_fn!(add_row, add_rows, rows_by_set);
 
-    pub(crate) fn new(caption: &'static str) -> Self {
+    pub(crate) fn new(header: &'static str) -> Self {
         Self {
-            header: HeaderDef { caption, order: 0 },
+            header: HeaderDef { caption: header, order: 0 },
             rows_by_set: HashMap::default()
         }
     }
@@ -898,6 +949,10 @@ impl sealed::InnerTable for Table1D<'_> {
 
     type CellsKey = usize;
 
+    fn caption(&self) -> &str {
+        self.definition.header.caption
+    }
+
     fn build_cells(&self, grid: &mut Grid) {
         let rows: Vec<_> = self.definition.rows_by_set.hashmap_to_captions();
 
@@ -949,9 +1004,9 @@ pub struct Table0DDef {
 
 impl Table0DDef {
 
-    pub(crate) const fn new(caption: &'static str) -> Self {
+    pub(crate) const fn new(header: &'static str) -> Self {
         Self {
-            header: HeaderDef { caption, order: 0 }
+            header: HeaderDef::new(header, 0)
         }
     }
 
@@ -984,8 +1039,6 @@ impl Table0D<'_> {
 
         for phoneme in phoneme_set.iter() {
             _ = self.add_phoneme(&(), phoneme, unprinted_phonemes)?;
-
-
         }
 
         Ok(())
@@ -1013,6 +1066,10 @@ impl sealed::InnerTable for Table0D<'_> {
     type PhonemeSets = ();
 
     type CellsKey = ();
+
+    fn caption(&self) -> &str {
+        self.definition.header.caption
+    }
 
     fn build_cells(&self, grid: &mut Grid) {
 

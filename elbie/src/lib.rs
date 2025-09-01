@@ -500,13 +500,13 @@ pub enum TableDef {
 
 impl TableDef {
 
-  pub fn new_with_subcolumns_and_subrows(axis_1: &[(&'static str,&'static str)], axis_2: &[(&'static str,&'static str)], axis_3: &[(&'static str,&'static str)], axis_4: &[(&'static str,&'static str)]) -> Result<Self,LanguageError> {
+  pub fn new_with_subcolumns_and_subrows(caption: &'static str, axis_1: &[(&'static str,&'static str)], axis_2: &[(&'static str,&'static str)], axis_3: &[(&'static str,&'static str)], axis_4: &[(&'static str,&'static str)]) -> Result<Self,LanguageError> {
       let columns: Vec<_> = axis_1.iter().map(Into::into).collect();
       let rows: Vec<_> = axis_2.iter().map(Into::into).collect();
       let subcolumns: Vec<_> = axis_3.iter().map(Into::into).collect();
       let subrows: Vec<_> = axis_4.iter().map(Into::into).collect();
 
-      let mut definition = Table4DDef::default();
+      let mut definition = Table4DDef::new(caption.to_owned());
 
       // fill rows
       definition.add_columns(&columns).map_err(|err| LanguageError::DuplicateTableDef(Axis::Column,err))?;
@@ -517,12 +517,12 @@ impl TableDef {
       Ok(Self::TableWithSubcolumnsAndSubrows(definition))
   }
 
-  pub fn new_with_subcolumns(axis_1: &[(&'static str,&'static str)], axis_2: &[(&'static str,&'static str)], axis_3: &[(&'static str,&'static str)]) -> Result<Self,LanguageError> {
+  pub fn new_with_subcolumns(caption: &'static str, axis_1: &[(&'static str,&'static str)], axis_2: &[(&'static str,&'static str)], axis_3: &[(&'static str,&'static str)]) -> Result<Self,LanguageError> {
       let columns: Vec<_> = axis_1.iter().map(Into::into).collect();
       let rows: Vec<_> = axis_2.iter().map(Into::into).collect();
       let subcolumns: Vec<_> = axis_3.iter().map(Into::into).collect();
 
-      let mut definition = Table3DDef::default();
+      let mut definition = Table3DDef::new(caption.to_owned());
 
       // fill rows
       definition.add_columns(&columns).map_err(|err| LanguageError::DuplicateTableDef(Axis::Column,err))?;
@@ -532,11 +532,11 @@ impl TableDef {
       Ok(Self::TableWithSubcolumns(definition))
   }
 
-  pub fn new_simple_table(axis_1: &[(&'static str,&'static str)], axis_2: &[(&'static str,&'static str)]) -> Result<Self,LanguageError> {
+  pub fn new_simple_table(caption: &'static str, axis_1: &[(&'static str,&'static str)], axis_2: &[(&'static str,&'static str)]) -> Result<Self,LanguageError> {
       let columns: Vec<_> = axis_1.iter().map(Into::into).collect();
       let rows: Vec<_> = axis_2.iter().map(Into::into).collect();
 
-      let mut definition = Table2DDef::default();
+      let mut definition = Table2DDef::new(caption.to_owned());
 
       // fill rows
       definition.add_columns(&columns).map_err(|err| LanguageError::DuplicateTableDef(Axis::Column,err))?;
@@ -545,10 +545,10 @@ impl TableDef {
       Ok(Self::SimpleTable(definition))
   }
 
-  pub fn new_list_table(caption: &'static str, axis_1: &[(&'static str,&'static str)]) -> Result<Self,LanguageError> {
+  pub fn new_list_table(header: &'static str, axis_1: &[(&'static str,&'static str)]) -> Result<Self,LanguageError> {
       let rows: Vec<_> = axis_1.iter().map(Into::into).collect();
 
-      let mut definition = Table1DDef::new(caption);
+      let mut definition = Table1DDef::new(header);
 
       // fill rows
       definition.add_rows(&rows).map_err(|err| LanguageError::DuplicateTableDef(Axis::Column,err))?;
@@ -558,7 +558,7 @@ impl TableDef {
 
   /// The table is just a column header and a single cell containing all phonemes
   #[must_use]
-  pub const fn new_single_cell(caption: &'static str) -> Self {
+  pub fn new_single_cell(caption: &'static str) -> Self {
       let definition = Table0DDef::new(caption);
 
       Self::OneCell(definition)
@@ -631,7 +631,6 @@ pub type ValidationTraceCallback = dyn Fn(usize, ValidationTraceMessage);
 #[derive(Debug)]
 struct TableEntry {
     id: &'static str,
-    caption: &'static str,
     set: &'static str,
     definition: TableDef
 }
@@ -842,10 +841,9 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
-    pub fn add_table(&mut self, id: &'static str, caption: &'static str, set: &'static str, def: TableDef) -> Result<(),LanguageError> {
+    pub fn add_table(&mut self, id: &'static str, set: &'static str, def: TableDef) -> Result<(),LanguageError> {
       self.tables.push(TableEntry {
         id,
-        caption,
         set,
         definition: def
       });
@@ -1128,7 +1126,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
         }
     }
 
-    pub fn build_all_phoneme_tables(&self) -> Result<Vec<(&'static str,&'static str,Grid)>,LanguageError> {
+    pub fn build_all_phoneme_tables(&self) -> Result<Vec<(&'static str,Grid)>,LanguageError> {
 
       let mut result = Vec::new();
 
@@ -1138,7 +1136,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
         let grid = self.build_phoneme_grid(self.get_set(entry.set)?, &entry.definition, &mut Some(&mut unprinted_phonemes))?;
 
-        result.push((entry.id,entry.caption,grid));
+        result.push((entry.id,grid));
 
 
       }
@@ -1146,7 +1144,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
       if !unprinted_phonemes.is_empty() {
 
         let grid = self.build_phoneme_grid(&unprinted_phonemes.clone(), &TableDef::OneCell(Table0DDef::new("Uncategorized Phonemes")), &mut Some(&mut unprinted_phonemes))?;
-        result.push(("uncategorized","Uncategorized",grid));
+        result.push(("uncategorized",grid));
 
       }
 
@@ -1154,14 +1152,14 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
-    pub fn build_phoneme_table(&self, table_name: &String) -> Result<Option<(&'static str,Grid)>,LanguageError> {
+    pub fn build_phoneme_table(&self, table_name: &String) -> Result<Option<Grid>,LanguageError> {
 
         if table_name == "uncategorized" { // FUTURE: Make that a constant
             // we need to build all of the tables to find the uncategorized phonemes
             let all_tables = self.build_all_phoneme_tables()?;
-            Ok(all_tables.into_iter().find_map(|(id,caption,grid)| {
+            Ok(all_tables.into_iter().find_map(|(id,grid)| {
                 if id == "uncategorized" {
-                    Some((caption,grid))
+                    Some(grid)
                 } else {
                     None
                 }
@@ -1169,11 +1167,11 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
         } else {
             let table = self.tables.iter().find(|entry| {
-               entry.id == table_name || entry.caption == table_name
+               entry.id == table_name
             });
 
             if let Some(entry) = table {
-                Ok(Some((entry.caption,self.build_phoneme_grid(self.get_set(entry.set)?, &entry.definition, &mut None)?)))
+                Ok(Some(self.build_phoneme_grid(self.get_set(entry.set)?, &entry.definition, &mut None)?))
 
 
             } else {
@@ -1188,7 +1186,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
       let phonemes: Bag<Rc<Phoneme>> = self.get_set(PHONEME)?.clone();
       let phonemes = phonemes.list();
 
-      let mut grid = Grid::new(TableClass::ElbieOrthography);
+      let mut grid = Grid::new(TableClass::ElbieOrthography, format!("Spelling for {}",self.name));
 
       let mut header = GridHead::new(TRHeadClass::ColumnHead);
       for _ in 0..columns {
@@ -1445,8 +1443,7 @@ fn show_phonemes<const ORTHOGRAPHIES: usize>(grid_style: Option<&GridStyle>, lan
     let result = match table {
         Some(table) => match language.build_phoneme_table(table) {
             Ok(Some(grid)) => {
-                println!("{}:",grid.0);
-                grid.1.into_output(style).print_to_stdout().expect("Could not display grid.");
+                grid.into_output(style).print_to_stdout().expect("Could not display grid.");
                 Ok(())
             },
             Ok(None) => {
@@ -1458,8 +1455,8 @@ fn show_phonemes<const ORTHOGRAPHIES: usize>(grid_style: Option<&GridStyle>, lan
         None => match language.build_all_phoneme_tables() {
             Ok(grids) => {
                 for grid in grids {
-                    println!("{}:",grid.1);
-                    grid.2.into_output(style).print_to_stdout().expect("Could not display grid.");
+                    println!("{}",grid.1.caption());
+                    grid.1.into_output(style).print_to_stdout().expect("Could not display grid.");
                     println!();
 
                 }
@@ -1525,7 +1522,7 @@ fn validate_words<const ORTHOGRAPHIES: usize>(language: &Language<ORTHOGRAPHIES>
 }
 
 fn generate_words<const ORTHOGRAPHIES: usize>(grid_style: Option<&GridStyle>, language: &Language<ORTHOGRAPHIES>, count: usize) {
-    let mut grid = Grid::new(TableClass::ElbieWords);
+    let mut grid = Grid::new(TableClass::ElbieWords, format!("Generated {count} words for {}",language.name));
 
     // FUTURE: Should I have a header?
 

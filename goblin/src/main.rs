@@ -366,7 +366,8 @@ fn create_goblin_language() -> Result<Language<1>,LanguageError> {
     ])
   ])?;
 
-  language.add_table("consonant","Consonants (unvoiced ~ voiced / unaspirated ~ aspirated)", CONSONANT, TableDef::new_with_subcolumns_and_subrows(
+  language.add_table("consonant", CONSONANT, TableDef::new_with_subcolumns_and_subrows(
+    "Consonants (unvoiced ~ voiced / unaspirated ~ aspirated)",
     &[("Bilabial",BILABIAL),("Labiodental",LABIODENTAL),("Dental",DENTAL),("Alveolar",ALVEOLAR),
         ("Post-alveolar",POSTALVEOLAR),("Palatal",PALATAL),("Velar",VELAR),("Uvular",UVULAR),("Glottal",GLOTTAL)],
     &[
@@ -378,12 +379,13 @@ fn create_goblin_language() -> Result<Language<1>,LanguageError> {
     &[("Aʹ",UNASPIRATED),("A",ASPIRATED)]
   )?.with(&TableOption::HideSubcolumnCaptions)?.with(&TableOption::HideSubrowCaptions)?)?;
 
-  language.add_table("vowel","Vowels",VOWEL, TableDef::new_simple_table(
+  language.add_table("vowel",VOWEL, TableDef::new_simple_table(
+    "Vowels",
     &[("Front",FRONT),("Back",BACK)],
     &[("Close",CLOSE),("Near-close",NEARCLOSE),("Open-mid",OPENMID),("Open",OPEN)]
   )?)?;
 
-  language.add_table("diphthong","Diphthongs",DIPHTHONG, TableDef::new_single_cell("Diphthongs"))?;
+  language.add_table("diphthong",DIPHTHONG, TableDef::new_single_cell("Diphthongs"))?;
 
   Ok(language)
 

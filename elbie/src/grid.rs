@@ -320,6 +320,7 @@ impl GridHead {
 }
 
 pub struct Grid {
+    caption: String,
     class: TableClass,
     heads: Vec<GridHead>,
     body: Vec<GridRow>
@@ -328,12 +329,17 @@ pub struct Grid {
 impl Grid {
 
     #[must_use]
-    pub const fn new(class: TableClass) -> Self {
+    pub const fn new(class: TableClass, caption: String) -> Self {
         Self {
+            caption,
             class,
             heads: Vec::new(),
             body: Vec::new()
         }
+    }
+
+    pub fn caption(&self) -> &str {
+        &self.caption
     }
 
     /// # Panics
@@ -404,6 +410,8 @@ impl Grid {
 
         let mut buffer = html_builder::Buffer::new();
         let mut table = buffer.table().attr(&format!("class=\"{}\"",self.class));
+        write!(table.caption(),"{}",self.caption).expect("Could not write to html node");
+
         let mut thead = table.thead();
         for (i,headers) in self.heads.iter().enumerate() {
             let mut tr = thead.tr().attr(&format!("class=\"{}\"",headers.class));
@@ -561,12 +569,13 @@ impl Grid {
         plain_table_format.column_separator(' ');
 
         let Self {
+            caption,
             class,
             heads,
             body,
         } = self;
 
-        let headers = heads.into_iter().map(|head| {
+        let heads = heads.into_iter().map(|head| {
             let GridHead {
                 class,
                 cells,
@@ -646,8 +655,9 @@ impl Grid {
 
 
         Self {
+            caption,
             class,
-            heads: headers,
+            heads,
             body
         }
 
