@@ -433,7 +433,11 @@ impl sealed::InnerTable for Table4D<'_> {
         let rows: Vec<_> = self.definition.rows_by_set.hashmap_to_captions();
         let (subrows,subrows_count) = self.definition.subrows_by_set.hashmap_to_captions_len();
 
-        let colspan_for_each_header = subcolumns_count;
+        let colspan_for_each_header = if self.definition.hide_subcolumn_captions {
+            1
+        } else {
+            subcolumns_count
+        };
 
         grid.push_header_row(Self::build_header_row(&columns, colspan_for_each_header));
 
@@ -645,7 +649,11 @@ impl sealed::InnerTable for Table3D<'_> {
         let (subcolumns,subcolumns_count) = self.definition.subcolumns_by_set.hashmap_to_captions_len();
         let rows: Vec<_> = self.definition.rows_by_set.hashmap_to_captions();
 
-        let colspan_for_each_header = subcolumns_count;
+        let colspan_for_each_header = if self.definition.hide_subcolumn_captions {
+            1
+        } else {
+            subcolumns_count
+        };
 
         grid.push_header_row(Self::build_header_row(&columns, colspan_for_each_header));
 

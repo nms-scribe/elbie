@@ -587,24 +587,6 @@ impl Grid {
             body,
         } = self;
 
-        let heads = heads.into_iter().map(|head| {
-            let GridHead {
-                class,
-                cells,
-            } = head;
-
-            let cells = cells.into_iter().map(|mut cell| {
-                cell.colspan = 1;
-                cell
-            }).collect();
-
-            GridHead {
-                class,
-                cells,
-            }
-
-        }).collect();
-
         let mut extracted_multi_cells = HashMap::new();
 
         let body_extracted = body.into_iter().enumerate().map(|(row_idx,row)| {
