@@ -130,9 +130,9 @@ mod sealed {
             Cell::content(phonemes, class)
         }
 
-        fn build_multi_col_cell(&self, cells_keys: &[Self::CellsKey], class: &'static str) -> Cell {
+        fn build_cell_group(&self, cells_keys: &[Self::CellsKey], class: &'static str) -> Cell {
             let content = cells_keys.iter().map(|cells_key| self.get_phoneme_text(cells_key).join(" ")).collect();
-            Cell::multi_col_cell(content,class)
+            Cell::cell_group(content,class)
         }
 
         fn get_phoneme_text(&self, cells_key: &<Self as InnerTable>::CellsKey) -> Vec<String> {
@@ -256,8 +256,6 @@ pub struct Table4DDef {
     rows_by_set: HashMap<&'static str,HeaderDef>,
     subrows_by_set: HashMap<&'static str,HeaderDef>,
     hide_subcolumn_captions: bool,
-    // if true, hidden subcolumns will cause the phonemes from all subcolumns to be placed into one, but in the order of those subcolumns. Ignored if hide_subcolumn_captions is false or the table is not using spans.
-    blend_subcolumns: bool,
     hide_subrow_captions: bool
 }
 
@@ -273,24 +271,15 @@ impl Table4DDef {
         self.hide_subcolumn_captions = value;
     }
 
-    pub(crate) const fn blend_subcolumns(&mut self, value: bool) {
-        self.blend_subcolumns = value;
-    }
-
     pub(crate) const fn hide_subrow_captions(&mut self, value: bool) {
         self.hide_subrow_captions = value;
     }
 }
 
-#[derive(Debug)]
-struct TableOverrides {
-    dont_blend_columns: bool
-}
 
 #[derive(Debug)]
 pub(crate) struct Table4D<'definition> {
     definition: &'definition Table4DDef,
-    override_: Option<TableOverrides>,
     cells: HashMap<Cells4DKey,HashSet<PhonemeDisplay>>,
 }
 
@@ -300,18 +289,7 @@ impl<'definition> Table4D<'definition> {
     pub(crate) fn new(definition: &'definition Table4DDef) -> Self {
         Self {
             definition,
-            override_: None,
             cells: HashMap::default()
-        }
-    }
-
-    pub(crate) const fn dont_blend_columns(&mut self) {
-        if let Some(override_) = &mut self.override_ {
-            override_.dont_blend_columns = true
-        } else {
-            self.override_ = Some(TableOverrides {
-                dont_blend_columns: true
-            })
         }
     }
 
@@ -363,16 +341,6 @@ impl Table4D<'_> {
         Ok(())
     }
 
-    const fn blend_subcolumns(&self) -> bool {
-        if let Some(override_) = &self.override_ {
-            !override_.dont_blend_columns
-        } else {
-            self.definition.blend_subcolumns
-        }
-    }
-
-
-
     fn build_grid_row(&self, columns: &Vec<&HeaderDef>, subcolumns: &Vec<&HeaderDef>, row_def: &HeaderDef, subrows_count: usize, subrow_def: &HeaderDef) -> GridRow {
         let mut row = GridRow::new();
         if subrow_def.order == 0 {
@@ -396,8 +364,9 @@ impl Table4D<'_> {
                 subrow: subrow_def.order,
             });
 
-            if self.definition.hide_subcolumn_captions && self.blend_subcolumns() {
-                let content = self.build_multi_col_cell(&keys.collect::<Vec<_>>(),"elbie-phonemes-blended-cell");
+            if self.definition.hide_subcolumn_captions {
+                // combine them into a cell group for easier styling
+                let content = self.build_cell_group(&keys.collect::<Vec<_>>(),"elbie-phonemes-blended-cell");
                 row.push_cell(content);
 
             } else {
@@ -428,11 +397,7 @@ impl sealed::InnerTable for Table4D<'_> {
         let rows: Vec<_> = self.definition.rows_by_set.hashmap_to_captions();
         let (subrows,subrows_count) = self.definition.subrows_by_set.hashmap_to_captions_len();
 
-        let colspan_for_each_header = if self.blend_subcolumns() {
-            1
-        } else {
-            subcolumns_count
-        };
+        let colspan_for_each_header = subcolumns_count;
 
         grid.push_header_row(Self::build_header_row(&columns, colspan_for_each_header));
 
@@ -506,8 +471,6 @@ pub struct Table3DDef {
     subcolumns_by_set: HashMap<&'static str,HeaderDef>,
     rows_by_set: HashMap<&'static str,HeaderDef>,
     hide_subcolumn_captions: bool,
-    // if true, hidden subcolumns will cause the phonemes from all subcolumns to be placed into one, but in the order of those subcolumns. Ignored if hide_subcolumn_captions is false or the table is not using spans.
-    blend_subcolumns: bool
 }
 
 impl Table3DDef {
@@ -521,9 +484,6 @@ impl Table3DDef {
         self.hide_subcolumn_captions = value;
     }
 
-    pub(crate) const fn blend_subcolumns(&mut self, value: bool) {
-        self.blend_subcolumns = value;
-    }
 
 }
 
@@ -532,7 +492,6 @@ impl Table3DDef {
 #[derive(Debug)]
 pub(crate) struct Table3D<'definition> {
     definition: &'definition Table3DDef,
-    override_: Option<TableOverrides>,
     cells: HashMap<Cells3DKey,HashSet<PhonemeDisplay>>,
 }
 
@@ -542,18 +501,7 @@ impl<'definition> Table3D<'definition> {
     pub(crate) fn new(definition: &'definition Table3DDef) -> Self {
         Self {
             definition,
-            override_: None,
             cells: HashMap::default()
-        }
-    }
-
-    pub(crate) const fn dont_blend_columns(&mut self) {
-        if let Some(override_) = &mut self.override_ {
-            override_.dont_blend_columns = true
-        } else {
-            self.override_ = Some(TableOverrides {
-                dont_blend_columns: true
-            })
         }
     }
 
@@ -600,15 +548,6 @@ impl Table3D<'_> {
         Ok(())
     }
 
-    const fn blend_subcolumns(&self) -> bool {
-        if let Some(override_) = &self.override_ {
-            !override_.dont_blend_columns
-        } else {
-            self.definition.blend_subcolumns
-        }
-    }
-
-
     fn build_grid_row(&self, columns: &Vec<&HeaderDef>, subcolumns: &Vec<&HeaderDef>, row_def: &HeaderDef) -> GridRow {
         let mut row = GridRow::new();
         row.push_header(RowHeader::new(row_def.caption.to_owned(), 1, "elbie-phonemes-row-header"));
@@ -621,8 +560,9 @@ impl Table3D<'_> {
                 row: row_def.order,
             });
 
-            if self.definition.hide_subcolumn_captions && self.blend_subcolumns() {
-                let content = self.build_multi_col_cell(&keys.collect::<Vec<_>>(),"elbie-phonemes-blended-cell");
+            if self.definition.hide_subcolumn_captions {
+                // combine them into a cell group for easier styling
+                let content = self.build_cell_group(&keys.collect::<Vec<_>>(),"elbie-phonemes-blended-cell");
                 row.push_cell(content);
 
             } else {
@@ -652,11 +592,7 @@ impl sealed::InnerTable for Table3D<'_> {
         let (subcolumns,subcolumns_count) = self.definition.subcolumns_by_set.hashmap_to_captions_len();
         let rows: Vec<_> = self.definition.rows_by_set.hashmap_to_captions();
 
-        let colspan_for_each_header = if self.blend_subcolumns() {
-            1
-        } else {
-            subcolumns_count
-        };
+        let colspan_for_each_header = subcolumns_count;
 
         grid.push_header_row(Self::build_header_row(&columns, colspan_for_each_header));
 

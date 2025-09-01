@@ -82,19 +82,11 @@ FUTURE: Is there some way to use types or something else to make languages easie
 
 /*
 TODO: Going back to the tables:
-* [ ] Instead of Multi-Cells, and blending, think of column groups
-  1. Get rid of blending option
-  2. But, when you have subcolumns, you always put them in a MultiCell anyway. (now colled ColumnGroup)
-  3. Plus, the headings still span, even when using the MultiCells.
-  4. On output, it is up to the GridStyle to figure out how to *style* those cells so that they don't have borders.
-     -- the "class" can be used for this, possibly? But, basically if a multi-column has more than one cell, the following cells remove their left border, or get a class which can do this if styled.
-  5. Also, I need a Multi-Column option for the subcolumns, so they can be styled differently if you want.
-* [ ] Similarly, I could have Multi-Rows:
-  1. The GridRow becomes an enum, one of which looks like right now, and the other of which allows for multiple rows at once
-  2. If we set this up so that the multi-row can only have one primary row header (but two subrow headers), then I no longer need rowspan either, I can calculate that.
-  3. All this does is create an inner loop to go through these and output data.
-  4. And then, we can style it so the later ones remove their "top" border.
 * [ ] Need to standardize the styles and make them constants
+  * class for elbie grid and elbie phoneme
+  * class for "column" vs "subcolumn" vs "row" vs "subrow" on th
+  * class for "cell group" on td
+  * class for "cell group not-first" on td, so you can remove borders from previous cell
 */
 
 pub const PHONEME: &str = "phoneme";
@@ -514,10 +506,6 @@ impl From<(&'static str, &'static str)> for ColumnDef {
 pub enum TableOption {
     /// For 3D and 4D phoneme tables, this will hide the captions for the subcolumns, which can compress the "appearance" of the table.
     HideSubcolumnCaptions,
-    /// For 3D and 4D phoneme tables, this will hide the captions for the subcolumns, and blend the contents of the cells into one, while retaining order of phonemes and alignment of the subcolumns. Note that certain output styles, such as HTML, disable this if it's turned off, so it's more like "BlendSubcolumnsIfFeasible".
-    ///
-    /// This is probably most commonly used for the Voiced/Unvoiced dimension on consonants.
-    BlendSubcolumns,
     /// For 4D phoneme tables, this will hide the captions for subrows, which can compress the "appearance" of the table.
     HideSubrowCaptions,
 }
@@ -609,11 +597,6 @@ impl TableDef {
             definition.hide_subcolumn_captions(true);
             Ok(Self::TableWithSubcolumnsAndSubrows(definition))
         },
-        (Self::TableWithSubcolumnsAndSubrows(mut definition), TableOption::BlendSubcolumns) => {
-            definition.hide_subcolumn_captions(true);
-            definition.blend_subcolumns(true);
-            Ok(Self::TableWithSubcolumnsAndSubrows(definition))
-        },
         (Self::TableWithSubcolumnsAndSubrows(mut definition), TableOption::HideSubrowCaptions) => {
             definition.hide_subrow_captions(true);
             Ok(Self::TableWithSubcolumnsAndSubrows(definition))
@@ -622,19 +605,13 @@ impl TableDef {
             definition.hide_subcolumn_captions(true);
             Ok(Self::TableWithSubcolumns(definition))
         },
-        (Self::TableWithSubcolumns(mut definition), TableOption::BlendSubcolumns) => {
-            definition.hide_subcolumn_captions(true);
-            definition.blend_subcolumns(true);
-            Ok(Self::TableWithSubcolumns(definition))
-        },
         (Self::TableWithSubcolumns(_) |
          Self::OneCell(_) |
          Self::ListTable(_) |
          Self::SimpleTable(_), TableOption::HideSubrowCaptions) |
         (Self::OneCell(_) |
          Self::ListTable(_) |
-         Self::SimpleTable(_), TableOption::HideSubcolumnCaptions |
-                               TableOption::BlendSubcolumns) => Err(LanguageError::InvalidOptionForTable(option.clone()))
+         Self::SimpleTable(_), TableOption::HideSubcolumnCaptions) => Err(LanguageError::InvalidOptionForTable(option.clone()))
     }
 
   }
@@ -1134,7 +1111,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
         Ok(Word::new(&word))
     }
 
-    fn build_phoneme_grid(&self, master_set: &Bag<Rc<Phoneme>>, table_def: &TableDef, override_column_blending: bool, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<Grid,LanguageError> {
+    fn build_phoneme_grid(&self, master_set: &Bag<Rc<Phoneme>>, table_def: &TableDef, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<Grid,LanguageError> {
 
         match table_def {
             TableDef::OneCell(definition) => {
@@ -1161,9 +1138,6 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
             TableDef::TableWithSubcolumns(definition) => {
                 let mut table = Table3D::new(definition);
 
-                if override_column_blending {
-                    table.dont_blend_columns();
-                }
 
                 table.add_phonemes(self, master_set, unprinted_phonemes).map_err(LanguageError::InvalidAxisForPhoneme)?;
 
@@ -1173,9 +1147,6 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
                 let mut table = Table4D::new(definition);
 
-                if override_column_blending {
-                    table.dont_blend_columns();
-                }
 
                 table.add_phonemes(self, master_set, unprinted_phonemes).map_err(LanguageError::InvalidAxisForPhoneme)?;
 
@@ -1184,7 +1155,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
         }
     }
 
-    pub fn build_all_phoneme_tables(&self, override_column_blending: bool) -> Result<Vec<(&'static str,&'static str,Grid)>,LanguageError> {
+    pub fn build_all_phoneme_tables(&self) -> Result<Vec<(&'static str,&'static str,Grid)>,LanguageError> {
 
       let mut result = Vec::new();
 
@@ -1192,7 +1163,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
       for entry in &self.tables {
 
-        let grid = self.build_phoneme_grid(self.get_set(entry.set)?, &entry.definition, override_column_blending, &mut Some(&mut unprinted_phonemes))?;
+        let grid = self.build_phoneme_grid(self.get_set(entry.set)?, &entry.definition, &mut Some(&mut unprinted_phonemes))?;
 
         result.push((entry.id,entry.caption,grid));
 
@@ -1201,7 +1172,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
       if !unprinted_phonemes.is_empty() {
 
-        let grid = self.build_phoneme_grid(&unprinted_phonemes.clone(), &TableDef::OneCell(Table0DDef::new("Uncategorized Phonemes")), override_column_blending, &mut Some(&mut unprinted_phonemes))?;
+        let grid = self.build_phoneme_grid(&unprinted_phonemes.clone(), &TableDef::OneCell(Table0DDef::new("Uncategorized Phonemes")), &mut Some(&mut unprinted_phonemes))?;
         result.push(("uncategorized","Uncategorized",grid));
 
       }
@@ -1210,11 +1181,11 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
-    pub fn build_phoneme_table(&self, table_name: &String, override_column_blending: bool) -> Result<Option<(&'static str,Grid)>,LanguageError> {
+    pub fn build_phoneme_table(&self, table_name: &String) -> Result<Option<(&'static str,Grid)>,LanguageError> {
 
         if table_name == "uncategorized" { // FUTURE: Make that a constant
             // we need to build all of the tables to find the uncategorized phonemes
-            let all_tables = self.build_all_phoneme_tables(override_column_blending)?;
+            let all_tables = self.build_all_phoneme_tables()?;
             Ok(all_tables.into_iter().find_map(|(id,caption,grid)| {
                 if id == "uncategorized" {
                     Some((caption,grid))
@@ -1229,7 +1200,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
             });
 
             if let Some(entry) = table {
-                Ok(Some((entry.caption,self.build_phoneme_grid(self.get_set(entry.set)?, &entry.definition, override_column_blending, &mut None)?)))
+                Ok(Some((entry.caption,self.build_phoneme_grid(self.get_set(entry.set)?, &entry.definition, &mut None)?)))
 
 
             } else {
@@ -1437,7 +1408,7 @@ fn show_usage<const ORTHOGRAPHIES: usize>(language: &Language<ORTHOGRAPHIES>) {
     println!("usage: {} [options] <command>",language.name);
     println!("default command: --generate 1");
     println!("options:");
-    println!("   --format=<plain | terminal | markdown | latex>");
+    println!("   --format=<plain | terminal | markdown | html | json | csv>");
     println!("      changes the format of grid output. Default is \"plain\" for generate and lexicon, and \"terminal\" for phonemes and spelling.");
     println!("commands:");
     println!("   --no-spans");
@@ -1487,7 +1458,7 @@ fn format_lexicon<const ORTHOGRAPHIES: usize>(grid_style: Option<GridStyle>, lan
 fn show_spelling<const ORTHOGRAPHIES: usize>(grid_style: Option<GridStyle>, language: &Language<ORTHOGRAPHIES>, columns: usize) {
     match language.display_spelling(columns) {
         Ok(grid) => {
-            println!("{}",grid.into_string(&grid_style.unwrap_or(GridStyle::Terminal { spans: false })));
+            grid.into_output(&grid_style.unwrap_or(GridStyle::Terminal { spans: false })).print_to_stdout().expect("Could not display grid.");
         },
         Err(err) => {
             eprintln!("!!! Couldn't display spelling: {err}");
@@ -1498,12 +1469,11 @@ fn show_spelling<const ORTHOGRAPHIES: usize>(grid_style: Option<GridStyle>, lang
 
 fn show_phonemes<const ORTHOGRAPHIES: usize>(grid_style: Option<&GridStyle>, language: &Language<ORTHOGRAPHIES>, table: Option<&String>) {
     let style = grid_style.unwrap_or(&GridStyle::Terminal{ spans: true });
-    let override_column_blending = matches!(style,GridStyle::HTML { .. });
     let result = match table {
-        Some(table) => match language.build_phoneme_table(table,override_column_blending) {
+        Some(table) => match language.build_phoneme_table(table) {
             Ok(Some(grid)) => {
                 println!("{}:",grid.0);
-                println!("{}",grid.1.into_string(style));
+                grid.1.into_output(style).print_to_stdout().expect("Could not display grid.");
                 Ok(())
             },
             Ok(None) => {
@@ -1512,11 +1482,11 @@ fn show_phonemes<const ORTHOGRAPHIES: usize>(grid_style: Option<&GridStyle>, lan
             }
             Err(err) => Err(err),
         },
-        None => match language.build_all_phoneme_tables(override_column_blending) {
+        None => match language.build_all_phoneme_tables() {
             Ok(grids) => {
                 for grid in grids {
                     println!("{}:",grid.1);
-                    println!("{}",grid.2.into_string(style));
+                    grid.2.into_output(style).print_to_stdout().expect("Could not display grid.");
                     println!();
 
                 }
@@ -1610,7 +1580,7 @@ fn generate_words<const ORTHOGRAPHIES: usize>(grid_style: Option<&GridStyle>, la
 
         grid.push_body_row(row);
     }
-    println!("{}",grid.into_string(grid_style.unwrap_or(&GridStyle::Plain)));
+    grid.into_output(grid_style.unwrap_or(&GridStyle::Plain)).print_to_stdout().expect("Could not display grid.");
 }
 
 

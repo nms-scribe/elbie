@@ -376,7 +376,7 @@ fn create_goblin_language() -> Result<Language<1>,LanguageError> {
     // FUTURE: Note that this is only differentiated in fricatives. In a real language table, one should simply make a Fricative and a Fricative Aspirated classes.
     // But I'm using this to test subrows, in case those are needed.
     &[("Aʹ",UNASPIRATED),("A",ASPIRATED)]
-  )?.with(&TableOption::BlendSubcolumns)?.with(&TableOption::HideSubrowCaptions)?)?;
+  )?.with(&TableOption::HideSubcolumnCaptions)?.with(&TableOption::HideSubrowCaptions)?)?;
 
   language.add_table("vowel","Vowels",VOWEL, TableDef::new_simple_table(
     &[("Front",FRONT),("Back",BACK)],
