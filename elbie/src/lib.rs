@@ -21,6 +21,7 @@ use core::fmt;
 use core::iter::Enumerate;
 use core::iter::Peekable;
 use core::slice::Iter;
+use std::collections::HashSet;
 use crate::grid::Cell;
 use crate::grid::ColumnHeader;
 use crate::grid::Grid;
@@ -37,6 +38,7 @@ use csv::Reader;
 use rand::Rng as _;
 use rand::prelude::ThreadRng;
 use rand::seq::IndexedRandom as _;
+use thiserror::Error;
 use std::collections::HashMap;
 use std::process;
 use std::rc::Rc;
@@ -89,66 +91,59 @@ FUTURE: Is there some way to use types or something else to make languages easie
 pub const PHONEME: &str = "phoneme";
 pub const EMPTY: &str = "empty";
 
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,Error)]
 pub enum LanguageError {
-  SetIsEmpty(&'static str),
-  SetIsEmptyWithFilter(&'static str),
-  UnknownSet(&'static str),
-  UnknownPhoneme(&'static str),
-  PhonemeAlreadyExists(&'static str),
-  SetAlreadyExists(&'static str),
-  EnvironmentAlreadyExists(&'static str),
-  UnknownEnvironment(&'static str),
-  NoEnvironmentChoices(&'static str),
-  IncompleteBranches(&'static str),
-  // word validation errors
+    #[error("Set {0} has no phonemes.")]
+    SetIsEmpty(&'static str),
+    #[error("Set {0} as filtered has no phonemes.")]
+    SetIsEmptyWithFilter(&'static str),
+    #[error("Unknown set {0}.")]
+    UnknownSet(&'static str),
+    #[error("Unknown phoneme {0}.")]
+    UnknownPhoneme(&'static str),
+    #[error("Phoneme {0} already exists.")]
+    PhonemeAlreadyExists(&'static str),
+    #[error("Set {0} already exists.")]
+    SetAlreadyExists(&'static str),
+    #[error( "Environment {0} already exists.")]
+    EnvironmentAlreadyExists(&'static str),
+    #[error("Unknown environment {0}.")]
+    UnknownEnvironment(&'static str),
+    #[error("Environment {0} is missing some branch environment choices.")]
+    NoEnvironmentChoices(&'static str),
+    #[error("Environment {0} is missing some possible branches.")]
+    IncompleteBranches(&'static str),
+
+  // word validation errors //
+  #[error("Word is empty")]
   EmptyWord,
+  #[error("[Environment {3} at {0}]: Expected {2}, found phoneme ({1}).")]
   IncorrectPhoneme(usize, Rc<Phoneme>, &'static str, &'static str),
+  #[error("[Environment {2} at {0}]: Expected end2 word, found phoneme ({1})")]
   ExpectedEndOfWord(usize, Rc<Phoneme>, &'static str),
+  #[error("[Environment {2} at {0}]: Expected {2}, found end of word")]
   ExpectedPhonemeFoundEndOfWord(usize, &'static str, &'static str),
+  #[error("[Environment {2} at {0}]: Phoneme ({2}) does not match any branch.")]
   NoBranchFitsPhoneme(usize, Rc<Phoneme>, &'static str),
-  // word reading errors
+
+  // word reading errors //
+  #[error("In word '{0}': unknown phoneme starting at '{1}'.")]
   UnknownPhonemeWhileReading(String,String),
-  // table def errors
+
+  // table def errors //
+  #[error("Invalid option for phoneme table: '{0:?}'.")]
   InvalidOptionForTable(TableOption),
-  DuplicateTableDef(Axis,HeaderDef),
-  InvalidAxisForPhoneme(Axis)
+  #[error("Duplicate phoneme {0:?} definition: '{1:?}'.")]
+  DuplicateTableHeaderDef(Axis,HeaderDef),
+  #[error("Duplicate table definition for id '{0}'.")]
+  DuplicateTableDef(String),
+  #[error("Phoneme set was not added as an {0:?} to the phoneme table.")]
+  InvalidAxisForPhoneme(Axis),
+  #[error("Phoneme tables are limited to a maximum of four axes.")]
+  TooManyAxisses
 }
 
-impl Display for LanguageError {
 
-  fn fmt(&self, f: &mut Formatter) -> Result<(),fmt::Error> {
-    match self {
-      Self::SetIsEmpty(name) => write!(f,"Set {name} has no phonemes."),
-      Self::SetIsEmptyWithFilter(name) => write!(f,"Set {name} as filtered has no phonemes."),
-      Self::UnknownSet(name) => write!(f,"Unknown set {name}."),
-      Self::UnknownPhoneme(name) => write!(f,"Unknown phoneme {name}."),
-      Self::PhonemeAlreadyExists(name) => write!(f,"Phoneme {name} already exists."),
-      Self::SetAlreadyExists(name) => write!(f,"Set {name} already exists."),
-      Self::EnvironmentAlreadyExists(name) => write!(f, "Environment {name} already exists."),
-      Self::UnknownEnvironment(name) => write!(f,"Unknown environment {name}."),
-      Self::NoEnvironmentChoices(name) => write!(f,"Environment {name} is missing some branch environment choices."),
-      Self::IncompleteBranches(name) => write!(f,"Environment {name} is missing some possible branches."),
-
-      Self::EmptyWord => write!(f,"Word is empty"),
-      Self::IncorrectPhoneme(index,phoneme,set,environment) => write!(f,"[Environment {environment} at {index}]: Expected {set}, found phoneme ({phoneme})."),
-      Self::ExpectedEndOfWord(index,phoneme,environment) => write!(f,"[Environment {environment} at {index}]: Expected end of word, found phoneme ({phoneme})"),
-      Self::ExpectedPhonemeFoundEndOfWord(index,set,environment) => write!(f,"[Environment {environment} at {index}]: Expected {set}, found end of word"),
-      Self::NoBranchFitsPhoneme(index,phoneme,environment) => write!(f,"[Environment {environment} at {index}]: Phoneme ({phoneme}) does not match any branch."),
-
-      Self::UnknownPhonemeWhileReading(source,problem) => write!(f,"In word '{source}': unknown phoneme starting at '{problem}'."),
-
-      Self::InvalidOptionForTable(option) => write!(f,"Invalid option for phoneme table: '{option:?}'."),
-      Self::DuplicateTableDef(axis,def) => write!(f,"Duplicate phoneme {axis:?} definition: '{def:?}'."),
-      Self::InvalidAxisForPhoneme(axis) => write!(f,"Phoneme set was not added as an {axis:?} to the phoneme table.")
-    }
-
-  }
-}
-
-impl Error for LanguageError {
-
-}
 
 // A set that I can random access. It's more efficient than random access of a HashSet, but probably could be better.
 #[derive(Debug,Clone)]
@@ -475,7 +470,7 @@ impl From<(&'static str, &'static str)> for ColumnDef {
 }
 
 /// These are options you can add to some `TableDef`
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,Hash,Eq,PartialEq)]
 pub enum TableOption {
     /// For 3D and 4D phoneme tables, this will hide the captions for the subcolumns, which can compress the "appearance" of the table.
     HideSubcolumnCaptions,
@@ -500,83 +495,16 @@ pub enum TableDef {
 
 impl TableDef {
 
-  pub fn new_with_subcolumns_and_subrows(caption: &'static str, axis_1: &[(&'static str,&'static str)], axis_2: &[(&'static str,&'static str)], axis_3: &[(&'static str,&'static str)], axis_4: &[(&'static str,&'static str)]) -> Result<Self,LanguageError> {
-      let columns: Vec<_> = axis_1.iter().map(Into::into).collect();
-      let rows: Vec<_> = axis_2.iter().map(Into::into).collect();
-      let subcolumns: Vec<_> = axis_3.iter().map(Into::into).collect();
-      let subrows: Vec<_> = axis_4.iter().map(Into::into).collect();
-
-      let mut definition = Table4DDef::new(caption.to_owned());
-
-      // fill rows
-      definition.add_columns(&columns).map_err(|err| LanguageError::DuplicateTableDef(Axis::Column,err))?;
-      definition.add_subcolumns(&subcolumns).map_err(|err| LanguageError::DuplicateTableDef(Axis::Subcolumn,err))?;
-      definition.add_rows(&rows).map_err(|err| LanguageError::DuplicateTableDef(Axis::Row,err))?;
-      definition.add_subrows(&subrows).map_err(|err| LanguageError::DuplicateTableDef(Axis::Subrow,err))?;
-
-      Ok(Self::TableWithSubcolumnsAndSubrows(definition))
-  }
-
-  pub fn new_with_subcolumns(caption: &'static str, axis_1: &[(&'static str,&'static str)], axis_2: &[(&'static str,&'static str)], axis_3: &[(&'static str,&'static str)]) -> Result<Self,LanguageError> {
-      let columns: Vec<_> = axis_1.iter().map(Into::into).collect();
-      let rows: Vec<_> = axis_2.iter().map(Into::into).collect();
-      let subcolumns: Vec<_> = axis_3.iter().map(Into::into).collect();
-
-      let mut definition = Table3DDef::new(caption.to_owned());
-
-      // fill rows
-      definition.add_columns(&columns).map_err(|err| LanguageError::DuplicateTableDef(Axis::Column,err))?;
-      definition.add_subcolumns(&subcolumns).map_err(|err| LanguageError::DuplicateTableDef(Axis::Subcolumn,err))?;
-      definition.add_rows(&rows).map_err(|err| LanguageError::DuplicateTableDef(Axis::Row,err))?;
-
-      Ok(Self::TableWithSubcolumns(definition))
-  }
-
-  pub fn new_simple_table(caption: &'static str, axis_1: &[(&'static str,&'static str)], axis_2: &[(&'static str,&'static str)]) -> Result<Self,LanguageError> {
-      let columns: Vec<_> = axis_1.iter().map(Into::into).collect();
-      let rows: Vec<_> = axis_2.iter().map(Into::into).collect();
-
-      let mut definition = Table2DDef::new(caption.to_owned());
-
-      // fill rows
-      definition.add_columns(&columns).map_err(|err| LanguageError::DuplicateTableDef(Axis::Column,err))?;
-      definition.add_rows(&rows).map_err(|err| LanguageError::DuplicateTableDef(Axis::Row,err))?;
-
-      Ok(Self::SimpleTable(definition))
-  }
-
-  pub fn new_list_table(header: &'static str, axis_1: &[(&'static str,&'static str)]) -> Result<Self,LanguageError> {
-      let rows: Vec<_> = axis_1.iter().map(Into::into).collect();
-
-      let mut definition = Table1DDef::new(header);
-
-      // fill rows
-      definition.add_rows(&rows).map_err(|err| LanguageError::DuplicateTableDef(Axis::Column,err))?;
-
-      Ok(Self::ListTable(definition))
-  }
-
-  /// The table is just a column header and a single cell containing all phonemes
-  #[must_use]
-  pub const fn new_single_cell(caption: &'static str) -> Self {
-      let definition = Table0DDef::new(caption);
-
-      Self::OneCell(definition)
-  }
-
-  pub fn with(self, option: &TableOption) -> Result<Self,LanguageError> {
+  pub fn set_option(&mut self, option: &TableOption) -> Result<(),LanguageError> {
       match (self,&option) {
-        (Self::TableWithSubcolumnsAndSubrows(mut definition), TableOption::HideSubcolumnCaptions) => {
+        (Self::TableWithSubcolumnsAndSubrows(definition), TableOption::HideSubcolumnCaptions) => {
             definition.hide_subcolumn_captions(true);
-            Ok(Self::TableWithSubcolumnsAndSubrows(definition))
         },
-        (Self::TableWithSubcolumnsAndSubrows(mut definition), TableOption::HideSubrowCaptions) => {
+        (Self::TableWithSubcolumnsAndSubrows(definition), TableOption::HideSubrowCaptions) => {
             definition.hide_subrow_captions(true);
-            Ok(Self::TableWithSubcolumnsAndSubrows(definition))
         },
-        (Self::TableWithSubcolumns(mut definition), TableOption::HideSubcolumnCaptions) => {
+        (Self::TableWithSubcolumns(definition), TableOption::HideSubcolumnCaptions) => {
             definition.hide_subcolumn_captions(true);
-            Ok(Self::TableWithSubcolumns(definition))
         },
         (Self::TableWithSubcolumns(_) |
          Self::OneCell(_) |
@@ -584,8 +512,9 @@ impl TableDef {
          Self::SimpleTable(_), TableOption::HideSubrowCaptions) |
         (Self::OneCell(_) |
          Self::ListTable(_) |
-         Self::SimpleTable(_), TableOption::HideSubcolumnCaptions) => Err(LanguageError::InvalidOptionForTable(option.clone()))
+         Self::SimpleTable(_), TableOption::HideSubcolumnCaptions) => Err(LanguageError::InvalidOptionForTable(option.clone()))?
     }
+    Ok(())
 
   }
 
@@ -633,6 +562,121 @@ struct TableEntry {
     id: &'static str,
     set: &'static str,
     definition: TableDef
+}
+
+pub struct TableBuilder<'language, const ORTHOGRAPHIES: usize> {
+    id: &'static str,
+    language: &'language mut Language<ORTHOGRAPHIES>,
+    caption: &'static str,
+    master_set: &'static str,
+    axisses: Option<(
+               &'language [(&'static str,&'static str)],
+               Option<(
+                   &'language [(&'static str,&'static str)],
+                   Option<(
+                       &'language [(&'static str,&'static str)],
+                       Option<&'language [(&'static str,&'static str)]>
+                   )>
+               )>
+            )>,
+    options: HashSet<TableOption>
+}
+
+impl<'language, const ORTHOGRAPHIES: usize> TableBuilder<'language, ORTHOGRAPHIES> {
+
+    fn new(language: &'language mut Language<ORTHOGRAPHIES>, id: &'static str, caption: &'static str, master_set: &'static str) -> Self {
+        Self {
+            id,
+            language,
+            master_set,
+            caption,
+            axisses: None,
+            options: HashSet::new()
+        }
+    }
+
+    #[must_use]
+    pub fn axis(mut self,new_axis: &'language [(&'static str,&'static str)]) -> Result<Self,LanguageError> {
+        self.axisses = match self.axisses {
+            Some((_axis_1,Some((_axis_2,Some((_axis_3,Some(_axis_4))))))) => {
+                Err(LanguageError::TooManyAxisses)?
+            },
+            Some((axis_1,Some((axis_2,Some((axis_3,None)))))) => {
+                Some((axis_1,Some((axis_2,Some((axis_3,Some(new_axis)))))))
+            },
+            Some((axis_1,Some((axis_2,None)))) => {
+                Some((axis_1,Some((axis_2,Some((new_axis,None))))))
+            },
+            Some((axis_1,None)) => {
+                Some((axis_1,Some((new_axis,None))))
+            },
+            None => {
+                Some((new_axis,None))
+            }
+        };
+
+
+        Ok(self)
+    }
+
+    pub fn option(mut self,option: TableOption) -> Self {
+        _ = self.options.insert(option);
+        self
+    }
+
+    pub fn add(self) -> Result<(),LanguageError> {
+        let mut table_def = match self.axisses {
+            Some((axis_1,Some((axis_2,Some((axis_3,Some(axis_4))))))) => {
+                let mut def = Table4DDef::new(self.caption.to_owned());
+                _ = def.add_columns(&axis_1.into_iter().map(Into::into).collect::<Vec<_>>());
+                _ = def.add_rows(&axis_2.into_iter().map(Into::into).collect::<Vec<_>>());
+                _ = def.add_subcolumns(&axis_3.into_iter().map(Into::into).collect::<Vec<_>>());
+                _ = def.add_subrows(&axis_4.into_iter().map(Into::into).collect::<Vec<_>>());
+                TableDef::TableWithSubcolumnsAndSubrows(def)
+            },
+            Some((axis_1,Some((axis_2,Some((axis_3,None)))))) => {
+                let mut def = Table3DDef::new(self.caption.to_owned());
+                _ = def.add_columns(&axis_1.into_iter().map(Into::into).collect::<Vec<_>>());
+                _ = def.add_rows(&axis_2.into_iter().map(Into::into).collect::<Vec<_>>());
+                _ = def.add_subcolumns(&axis_3.into_iter().map(Into::into).collect::<Vec<_>>());
+                TableDef::TableWithSubcolumns(def)
+            },
+            Some((axis_1,Some((axis_2,None)))) => {
+                let mut def = Table2DDef::new(self.caption.to_owned());
+                _ = def.add_columns(&axis_1.into_iter().map(Into::into).collect::<Vec<_>>());
+                _ = def.add_rows(&axis_2.into_iter().map(Into::into).collect::<Vec<_>>());
+                TableDef::SimpleTable(def)
+            },
+            Some((axis_1,None)) => {
+                let mut def = Table1DDef::new(self.caption);
+                _ = def.add_rows(&axis_1.into_iter().map(Into::into).collect::<Vec<_>>());
+                TableDef::ListTable(def)
+            },
+            None => {
+                let def = Table0DDef::new(self.caption);
+                TableDef::OneCell(def)
+
+            }
+        };
+
+        for option in self.options {
+            table_def.set_option(&option)?;
+        }
+
+        if self.language.tables.iter().any(|t| t.id == self.id) {
+            Err(LanguageError::DuplicateTableDef(self.id.to_owned()))?;
+        }
+
+        self.language.tables.push(TableEntry {
+          id: self.id,
+          set: self.master_set,
+          definition: table_def
+        });
+
+        Ok(())
+
+    }
+
 }
 
 #[derive(Debug)]
@@ -841,13 +885,9 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
-    pub fn add_table(&mut self, id: &'static str, set: &'static str, def: TableDef) -> Result<(),LanguageError> {
-      self.tables.push(TableEntry {
-        id,
-        set,
-        definition: def
-      });
-      Ok(())
+    pub fn new_table(&mut self, id: &'static str, set: &'static str, caption: &'static str) -> TableBuilder<ORTHOGRAPHIES> {
+        TableBuilder::new(self, id, caption, set)
+
     }
 
     fn new_set(&self, set: &'static str, exclude_phonemes: &[&Rc<Phoneme>]) -> Result<Bag<Rc<Phoneme>>,LanguageError> {

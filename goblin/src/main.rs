@@ -6,7 +6,6 @@ use core::slice::Iter;
 use elbie::Language;
 use elbie::Phoneme;
 use elbie::LanguageError;
-use elbie::TableDef;
 use elbie::TableOption;
 use elbie::PHONEME;
 use elbie::EnvironmentBranch;
@@ -366,26 +365,24 @@ fn create_goblin_language() -> Result<Language<1>,LanguageError> {
     ])
   ])?;
 
-  language.add_table("consonant", CONSONANT, TableDef::new_with_subcolumns_and_subrows(
-    "Consonants (unvoiced ~ voiced / unaspirated ~ aspirated)",
-    &[("Bilabial",BILABIAL),("Labiodental",LABIODENTAL),("Dental",DENTAL),("Alveolar",ALVEOLAR),
-        ("Post-alveolar",POSTALVEOLAR),("Palatal",PALATAL),("Velar",VELAR),("Uvular",UVULAR),("Glottal",GLOTTAL)],
-    &[
-        ("Nasal",NASAL),("Plosive",PLOSIVE),("Fricative",FRICATIVE),("Reversed Affricate",REV_AFFRICATE),
-        ("Approximant",NONLATERALAPPROXIMANT,),("Lateral",LATERAL),("Tap",TAP)],
-    &[("Vʹ",UNVOICED),("V",VOICED)],
-    // FUTURE: Note that this is only differentiated in fricatives. In a real language table, one should simply make a Fricative and a Fricative Aspirated classes.
-    // But I'm using this to test subrows, in case those are needed.
-    &[("Aʹ",UNASPIRATED),("A",ASPIRATED)]
-  )?.with(&TableOption::HideSubcolumnCaptions)?.with(&TableOption::HideSubrowCaptions)?)?;
+  language.new_table("consonant", CONSONANT, "Consonants (unvoiced ~ voiced / unaspirated ~ aspirated)").
+      axis(&[("Bilabial",BILABIAL),("Labiodental",LABIODENTAL),("Dental",DENTAL),("Alveolar",ALVEOLAR),
+          ("Post-alveolar",POSTALVEOLAR),("Palatal",PALATAL),("Velar",VELAR),("Uvular",UVULAR),("Glottal",GLOTTAL)])?.
+      axis(&[
+          ("Nasal",NASAL),("Plosive",PLOSIVE),("Fricative",FRICATIVE),("Reversed Affricate",REV_AFFRICATE),
+          ("Approximant",NONLATERALAPPROXIMANT,),("Lateral",LATERAL),("Tap",TAP)])?.
+      axis(&[("Vʹ",UNVOICED),("V",VOICED)])?.
+      axis(&[("Aʹ",UNASPIRATED),("A",ASPIRATED)])?.
+      option(TableOption::HideSubcolumnCaptions).
+      option(TableOption::HideSubrowCaptions).
+      add()?;
 
-  language.add_table("vowel",VOWEL, TableDef::new_simple_table(
-    "Vowels",
-    &[("Front",FRONT),("Back",BACK)],
-    &[("Close",CLOSE),("Near-close",NEARCLOSE),("Open-mid",OPENMID),("Open",OPEN)]
-  )?)?;
+  language.new_table("vowel", VOWEL, "Vowels").
+      axis(&[("Front",FRONT),("Back",BACK)])?.
+      axis(&[("Close",CLOSE),("Near-close",NEARCLOSE),("Open-mid",OPENMID),("Open",OPEN)])?.
+      add()?;
 
-  language.add_table("diphthong",DIPHTHONG, TableDef::new_single_cell("Diphthongs"))?;
+  language.new_table("dipthong", DIPHTHONG, "Diphthongs").add()?;
 
   Ok(language)
 
