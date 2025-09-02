@@ -61,9 +61,7 @@ impl Display for PhonemeDisplay {
 
 mod sealed {
     use crate::grid::ColumnHeader;
-    use crate::grid::GridHead;
-    use crate::grid::THColumnClass;
-    use crate::grid::TRHeadClass;
+    use crate::grid::SubcolumnHeader;
     use crate::phoneme_table::PhonemeDisplay;
     // Basically, I want to keep the functions on InnerTable private, and since trait functions are automatically public, this is the convoluted way I have to do it.
     use crate::phoneme_table::Axis;
@@ -94,11 +92,11 @@ mod sealed {
         /// * `col_header_level_count`: The number of column header rows the final table will have, used for creating the blank "corner" square. `0` is treated as `1`
         /// * `row_header_level_count`: The number of row header columns the final table will have, used for creating the blank "corner" square. `0` is valid.
         /// * `colspan_for_each_header`: How manu columns each header will take up, allowing for subheaders. `0` is treated as `1`
-        fn build_header_row(columns: &[&HeaderDef], colspan_for_each_header: usize) -> GridHead {
+        fn build_header_row(columns: &[&HeaderDef], colspan_for_each_header: usize) -> Vec<ColumnHeader> {
             // main column headers:
-            let mut row = GridHead::new(TRHeadClass::ColumnHead);
+            let mut row = Vec::new();
 
-            Self::build_column_headers(columns, colspan_for_each_header, &mut row, THColumnClass::ColumnHeader);
+            Self::build_column_headers(columns, colspan_for_each_header, &mut row);
             row
         }
 
@@ -108,12 +106,12 @@ mod sealed {
         /// * `row_header_count`: The number of row header columns the final table will have, used for creating the blank "corner" square. `0` is valid.
         /// * `repeat_count`: The number of times to repeat the headers. On a single subheader, the subheaders should repeat for each primary header.
         /// * `colspan_for_each_header`: How manu columns each header will take up, allowing for subheaders. `0` is treated as `1`
-        fn build_subheader_row(subcolumns: &Vec<&HeaderDef>, repeat_count: usize, colspan_for_each_header: usize) -> GridHead {
+        fn build_subheader_row(subcolumns: &Vec<&HeaderDef>, repeat_count: usize) -> Vec<SubcolumnHeader> {
             // subcolumn headers
-            let mut row = GridHead::new(TRHeadClass::SubColumnHead);
+            let mut row = Vec::new();
 
             for _ in 0..repeat_count.max(1) {
-                Self::build_column_headers(subcolumns, colspan_for_each_header, &mut row, THColumnClass::SubColumnHeader);
+                Self::build_subcolumn_headers(subcolumns, &mut row);
             }
             row
         }
@@ -122,10 +120,20 @@ mod sealed {
         ///
         /// * `columns`: List of headers to output. It is only a HeaderDef to reduce the need to map the struct. The headers should already be in the expected order.
         /// * `colspan_for_each_header`: How manu columns each header will take up, allowing for subheaders. `0` is treated as `1`
-        fn build_column_headers(columns: &[&HeaderDef], colspan_for_each: usize, row: &mut GridHead, class: THColumnClass) {
+        fn build_column_headers(columns: &[&HeaderDef], colspan_for_each: usize, row: &mut Vec<ColumnHeader>) {
             let colspan_for_each = colspan_for_each.max(1);
             for column_def in columns {
-                row.push(ColumnHeader::new(column_def.caption.to_owned(), colspan_for_each, class.clone()));
+                row.push(ColumnHeader::new(column_def.caption.to_owned(), colspan_for_each));
+            }
+        }
+
+        /// Adds headers to the specified rows
+        ///
+        /// * `columns`: List of headers to output. It is only a HeaderDef to reduce the need to map the struct. The headers should already be in the expected order.
+        /// * `colspan_for_each_header`: How manu columns each header will take up, allowing for subheaders. `0` is treated as `1`
+        fn build_subcolumn_headers(columns: &[&HeaderDef], row: &mut Vec<SubcolumnHeader>) {
+            for column_def in columns {
+                row.push(SubcolumnHeader::new(column_def.caption.to_owned()));
             }
         }
 
@@ -439,10 +447,10 @@ impl sealed::InnerTable for Table4D<'_> {
             subcolumns_count
         };
 
-        grid.push_header_row(Self::build_header_row(&columns, colspan_for_each_header));
+        grid.set_headers(Self::build_header_row(&columns, colspan_for_each_header));
 
         if !self.definition.hide_subcolumn_captions {
-            grid.push_header_row(Self::build_subheader_row(&subcolumns, columns_count, 1));
+            grid.set_subheaders(Self::build_subheader_row(&subcolumns, columns_count));
 
         }
 
@@ -655,10 +663,10 @@ impl sealed::InnerTable for Table3D<'_> {
             subcolumns_count
         };
 
-        grid.push_header_row(Self::build_header_row(&columns, colspan_for_each_header));
+        grid.set_headers(Self::build_header_row(&columns, colspan_for_each_header));
 
         if !self.definition.hide_subcolumn_captions {
-            grid.push_header_row(Self::build_subheader_row(&subcolumns, columns_count, 1));
+            grid.set_subheaders(Self::build_subheader_row(&subcolumns, columns_count));
         }
 
         // rows
@@ -829,7 +837,7 @@ impl sealed::InnerTable for Table2D<'_> {
         let rows: Vec<_> = self.definition.rows_by_set.hashmap_to_captions();
 
 
-        grid.push_header_row(Self::build_header_row(&columns, 1));
+        grid.set_headers(Self::build_header_row(&columns, 1));
 
         // rows
         for row in &rows {
@@ -965,7 +973,7 @@ impl sealed::InnerTable for Table1D<'_> {
         let rows: Vec<_> = self.definition.rows_by_set.hashmap_to_captions();
 
 
-        grid.push_header_row(Self::build_header_row(&[&self.definition.header], 1));
+        grid.set_headers(Self::build_header_row(&[&self.definition.header], 1));
 
         // rows
         for row in &rows {
@@ -1082,7 +1090,7 @@ impl sealed::InnerTable for Table0D<'_> {
     fn build_cells(&self, grid: &mut Grid) {
 
 
-        grid.push_header_row(Self::build_header_row(&[&self.definition.header], 1));
+        grid.set_headers(Self::build_header_row(&[&self.definition.header], 1));
 
         let row = self.build_grid_row();
         grid.push_body_row(row);

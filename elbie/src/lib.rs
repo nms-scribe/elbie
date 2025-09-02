@@ -1,9 +1,5 @@
-
-use crate::grid::GridHead;
 pub use crate::grid::GridStyle;
-use crate::grid::THColumnClass;
 use crate::grid::TRBodyClass;
-use crate::grid::TRHeadClass;
 use crate::grid::TableClass;
 pub use crate::phoneme_table::Axis;
 pub use crate::phoneme_table::HeaderDef;
@@ -512,7 +508,7 @@ impl TableDef {
          Self::SimpleTable(_), TableOption::HideSubrowCaptions) |
         (Self::OneCell(_) |
          Self::ListTable(_) |
-         Self::SimpleTable(_), TableOption::HideSubcolumnCaptions) => Err(LanguageError::InvalidOptionForTable(option.clone()))?
+         Self::SimpleTable(_), TableOption::HideSubcolumnCaptions) => return Err(LanguageError::InvalidOptionForTable(option.clone()))
     }
     Ok(())
 
@@ -564,21 +560,23 @@ struct TableEntry {
     definition: TableDef
 }
 
+type Axisses<'language> = Option<(
+           &'language [(&'static str,&'static str)],
+           Option<(
+               &'language [(&'static str,&'static str)],
+               Option<(
+                   &'language [(&'static str,&'static str)],
+                   Option<&'language [(&'static str,&'static str)]>
+               )>
+           )>
+        )>;
+
 pub struct TableBuilder<'language, const ORTHOGRAPHIES: usize> {
     id: &'static str,
     language: &'language mut Language<ORTHOGRAPHIES>,
     caption: &'static str,
     master_set: &'static str,
-    axisses: Option<(
-               &'language [(&'static str,&'static str)],
-               Option<(
-                   &'language [(&'static str,&'static str)],
-                   Option<(
-                       &'language [(&'static str,&'static str)],
-                       Option<&'language [(&'static str,&'static str)]>
-                   )>
-               )>
-            )>,
+    axisses: Axisses<'language>,
     options: HashSet<TableOption>
 }
 
@@ -595,11 +593,10 @@ impl<'language, const ORTHOGRAPHIES: usize> TableBuilder<'language, ORTHOGRAPHIE
         }
     }
 
-    #[must_use]
     pub fn axis(mut self,new_axis: &'language [(&'static str,&'static str)]) -> Result<Self,LanguageError> {
         self.axisses = match self.axisses {
             Some((_axis_1,Some((_axis_2,Some((_axis_3,Some(_axis_4))))))) => {
-                Err(LanguageError::TooManyAxisses)?
+                return Err(LanguageError::TooManyAxisses)
             },
             Some((axis_1,Some((axis_2,Some((axis_3,None)))))) => {
                 Some((axis_1,Some((axis_2,Some((axis_3,Some(new_axis)))))))
@@ -619,6 +616,7 @@ impl<'language, const ORTHOGRAPHIES: usize> TableBuilder<'language, ORTHOGRAPHIE
         Ok(self)
     }
 
+    #[must_use]
     pub fn option(mut self,option: TableOption) -> Self {
         _ = self.options.insert(option);
         self
@@ -628,28 +626,28 @@ impl<'language, const ORTHOGRAPHIES: usize> TableBuilder<'language, ORTHOGRAPHIE
         let mut table_def = match self.axisses {
             Some((axis_1,Some((axis_2,Some((axis_3,Some(axis_4))))))) => {
                 let mut def = Table4DDef::new(self.caption.to_owned());
-                _ = def.add_columns(&axis_1.into_iter().map(Into::into).collect::<Vec<_>>());
-                _ = def.add_rows(&axis_2.into_iter().map(Into::into).collect::<Vec<_>>());
-                _ = def.add_subcolumns(&axis_3.into_iter().map(Into::into).collect::<Vec<_>>());
-                _ = def.add_subrows(&axis_4.into_iter().map(Into::into).collect::<Vec<_>>());
+                _ = def.add_columns(&axis_1.iter().map(Into::into).collect::<Vec<_>>());
+                _ = def.add_rows(&axis_2.iter().map(Into::into).collect::<Vec<_>>());
+                _ = def.add_subcolumns(&axis_3.iter().map(Into::into).collect::<Vec<_>>());
+                _ = def.add_subrows(&axis_4.iter().map(Into::into).collect::<Vec<_>>());
                 TableDef::TableWithSubcolumnsAndSubrows(def)
             },
             Some((axis_1,Some((axis_2,Some((axis_3,None)))))) => {
                 let mut def = Table3DDef::new(self.caption.to_owned());
-                _ = def.add_columns(&axis_1.into_iter().map(Into::into).collect::<Vec<_>>());
-                _ = def.add_rows(&axis_2.into_iter().map(Into::into).collect::<Vec<_>>());
-                _ = def.add_subcolumns(&axis_3.into_iter().map(Into::into).collect::<Vec<_>>());
+                _ = def.add_columns(&axis_1.iter().map(Into::into).collect::<Vec<_>>());
+                _ = def.add_rows(&axis_2.iter().map(Into::into).collect::<Vec<_>>());
+                _ = def.add_subcolumns(&axis_3.iter().map(Into::into).collect::<Vec<_>>());
                 TableDef::TableWithSubcolumns(def)
             },
             Some((axis_1,Some((axis_2,None)))) => {
                 let mut def = Table2DDef::new(self.caption.to_owned());
-                _ = def.add_columns(&axis_1.into_iter().map(Into::into).collect::<Vec<_>>());
-                _ = def.add_rows(&axis_2.into_iter().map(Into::into).collect::<Vec<_>>());
+                _ = def.add_columns(&axis_1.iter().map(Into::into).collect::<Vec<_>>());
+                _ = def.add_rows(&axis_2.iter().map(Into::into).collect::<Vec<_>>());
                 TableDef::SimpleTable(def)
             },
             Some((axis_1,None)) => {
                 let mut def = Table1DDef::new(self.caption);
-                _ = def.add_rows(&axis_1.into_iter().map(Into::into).collect::<Vec<_>>());
+                _ = def.add_rows(&axis_1.iter().map(Into::into).collect::<Vec<_>>());
                 TableDef::ListTable(def)
             },
             None => {
@@ -659,12 +657,13 @@ impl<'language, const ORTHOGRAPHIES: usize> TableBuilder<'language, ORTHOGRAPHIE
             }
         };
 
+        #[allow(clippy::iter_over_hash_type,reason="The order that options are set doesn't matter.")]
         for option in self.options {
             table_def.set_option(&option)?;
         }
 
         if self.language.tables.iter().any(|t| t.id == self.id) {
-            Err(LanguageError::DuplicateTableDef(self.id.to_owned()))?;
+            return Err(LanguageError::DuplicateTableDef(self.id.to_owned()));
         }
 
         self.language.tables.push(TableEntry {
@@ -1228,14 +1227,14 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
       let mut grid = Grid::new(TableClass::ElbieOrthography, format!("Spelling for {}",self.name));
 
-      let mut header = GridHead::new(TRHeadClass::ColumnHead);
+      let mut header = Vec::new();
       for _ in 0..columns {
-        header.push(ColumnHeader::new("Phoneme".to_owned(),1,THColumnClass::ColumnHeader));
+        header.push(ColumnHeader::new("Phoneme".to_owned(),1));
         for orthography in self.orthographies {
-          header.push(ColumnHeader::new(orthography.to_owned(),1,THColumnClass::ColumnHeader));
+          header.push(ColumnHeader::new(orthography.to_owned(),1));
         }
       }
-      grid.push_header_row(header);
+      grid.set_headers(header);
 
 
       // once div_ceil is stable in the library, the existence of this will cause an error.

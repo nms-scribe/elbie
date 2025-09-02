@@ -2,8 +2,8 @@ use core::fmt::Write as _;
 use std::collections::HashMap;
 use std::fmt;
 use core::fmt::Display;
-use std::hash::RandomState;
 use std::io;
+use core::num::NonZeroUsize;
 use html_builder::Html5 as _;
 use prettytable::format::consts::FORMAT_BOX_CHARS;
 use prettytable::format::consts::FORMAT_CLEAN;
@@ -68,6 +68,7 @@ impl Display for TableClass {
     }
 }
 
+#[derive(Clone)]
 pub enum TRHeadClass {
     ColumnHead,
     SubColumnHead
@@ -182,23 +183,104 @@ pub enum GridStyle {
     JSON
 }
 
-pub struct ColumnHeader {
-    text: String,
-    colspan: usize,
-    class: THColumnClass
+
+pub enum TableOutput {
+    Pretty(PrettyTable),
+    // NOTE: PrettyTable has a 'write_html' function, but it uses style attributes and I can't control the class attributes
+    HTML(html_builder::Buffer),
+    JSON(json::JsonValue),
+    Text(String)
+}
+
+impl TableOutput {
+
+    #[must_use]
+    pub fn into_string(self) -> String {
+        match self {
+            Self::Pretty(table) => table.to_string(),
+            Self::HTML(buffer) => buffer.finish(),
+            Self::JSON(json_value) => json_value.pretty(2),
+            Self::Text(text) => text
+        }
+    }
+
+    pub fn print_to_stdout(self) -> Result<(),io::Error> {
+        match self {
+            Self::Pretty(table) => table.printstd(),
+            Self::HTML(buffer) => println!("{}",buffer.finish()),
+            Self::JSON(json_value) => println!("{}",json_value.pretty(2)),
+            Self::Text(text) => println!("{text}")
+        }
+
+        Ok(())
+    }
 }
 
 
+trait ColumnHeaderCell {
+
+    fn into_pretty(self, with_spans: bool, text_style: &TextStyle, row: &mut PrettyRow);
+
+    fn into_html_with_span(self, tr: &mut html_builder::Node<'_>);
+
+    fn into_html_without_span(self, tr: &mut html_builder::Node<'_>);
+
+
+}
+
+#[derive(Clone)]
+pub struct ColumnHeader {
+    text: String,
+    colspan: NonZeroUsize
+}
+
 impl ColumnHeader {
 
+
+    /// # Panics
+    /// Panics if 1 is somehow equal to zero or less
     #[must_use]
-    pub const fn new(text: String, colspan: usize, class: THColumnClass) -> Self {
+    pub fn new(text: String, colspan: usize) -> Self {
         Self {
             text,
-            colspan,
-            class
+            colspan: NonZeroUsize::new(colspan).unwrap_or(NonZeroUsize::new(1).unwrap())
         }
     }
+
+}
+
+impl ColumnHeaderCell for ColumnHeader {
+
+    fn into_pretty(self, with_spans: bool, text_style: &TextStyle, row: &mut PrettyRow) {
+        let text = text_style.column_header(&self.text);
+        let cell = PrettyCell::new(&text).with_style(prettytable::Attr::Bold);
+        if with_spans && let colspan @ 2.. = self.colspan.get() {
+            row.add_cell(cell.with_hspan(colspan));
+        } else {
+            row.add_cell(cell);
+            for _ in 1..self.colspan.get() {
+                row.add_cell(PrettyCell::new(""));
+            }
+        }
+    }
+
+    fn into_html_with_span(self, tr: &mut html_builder::Node<'_>) {
+        let th = tr.th().attr(&format!("class=\"{}\"",THColumnClass::ColumnHeader));
+        let mut th = if self.colspan.get() > 1 {
+            th.attr(&format!("colspan={}",self.colspan))
+        } else {
+            th
+        };
+        write!(th,"{}",self.text).expect("Could not write to html node");
+    }
+
+    fn into_html_without_span(self, tr: &mut html_builder::Node<'_>) {
+        write!(tr.th().attr(&format!("class=\"{}\"",THColumnClass::ColumnHeader)),"{}",self.text).expect("Could not write to html node");
+        for _ in 1..self.colspan.get() {
+            _ = tr.td();
+        }
+    }
+
 
 }
 
@@ -206,7 +288,7 @@ impl ColumnHeader {
 pub enum RowHeader {
     RowHeader{
         text: String,
-        rowspan: usize,
+        rowspan: NonZeroUsize,
         class: THRowClass
     },
     RowHeaderSpan
@@ -215,11 +297,13 @@ pub enum RowHeader {
 impl RowHeader {
 
 
+    /// # Panics
+    /// Panics if 1 is somehow equal to 0 or less.
     #[must_use]
-    pub const fn new(text: String, rowspan: usize, class: THRowClass) -> Self {
+    pub fn new(text: String, rowspan: usize, class: THRowClass) -> Self {
         Self::RowHeader{
             text,
-            rowspan,
+            rowspan: NonZeroUsize::new(rowspan).unwrap_or(NonZeroUsize::new(1).unwrap()),
             class
         }
     }
@@ -276,6 +360,8 @@ impl Cell {
 }
 
 
+// TODO: Headers should be an Option<RowHeader,Option<SubrowHeader>>, similar to how columns and subcolumns are added.
+// TODO: And SubrowHeader can't be a span.
 pub struct GridRow {
     class: TRBodyClass,
     headers: Vec<RowHeader>,
@@ -302,72 +388,160 @@ impl GridRow {
     }
 }
 
-pub enum TabledBorderRequest {
-    // upper_left and lower_left must remove notches
-    MainHeaderAfter,
-    // lower_left must remove notches
-    SubHeaderAfter,
-    // lower_left must remove notch, and left must have a 'space' border
-    CellGroupAfter
+trait GridHeadRow: Sized {
+
+    type CellType: ColumnHeaderCell;
+
+    fn into_cells(self) -> impl Iterator<Item = Self::CellType>;
+
+    fn get_class() -> TRHeadClass;
+
+    fn into_html(self, row_header_offset: usize, column_header_offset: usize, with_span: bool, add_corner: bool, thead: &mut html_builder::Node<'_>) {
+        let mut tr = thead.tr().attr(&format!("class=\"{}\"",Self::get_class()));
+        if with_span {
+            if add_corner {
+                let th = tr.th();
+                let th = if column_header_offset > 1 {
+                    th.attr(&format!("colspan={column_header_offset}"))
+                } else {
+                    th
+                };
+                if row_header_offset > 1 {
+                    _ = th.attr(&format!("rowspan={row_header_offset}"));
+                }
+
+            }
+            for header in self.into_cells() {
+                header.into_html_with_span(&mut tr);
+            }
+        } else {
+            for _ in 0..row_header_offset {
+                _ = tr.th();
+            }
+            for header in self.into_cells() {
+                header.into_html_without_span(&mut tr);
+            }
+        }
+    }
+
+    fn into_pretty(self, with_spans: bool, text_style: &TextStyle, row_header_offset: usize) -> PrettyRow {
+        let mut row = PrettyRow::empty();
+
+
+        // need a corner square
+        if row_header_offset > 0 {
+            // FUTURE: PrettyTable does not support rowspanning, but maybe I can figure something out?
+            let cell = PrettyCell::new("").with_hspan(row_header_offset);
+            row.add_cell(cell);
+        }
+
+        for header in self.into_cells() {
+            header.into_pretty(with_spans, text_style, &mut row);
+        }
+        row
+    }
+
 }
 
-pub struct GridHead {
-    class: TRHeadClass,
-    cells: Vec<ColumnHeader>
+impl GridHeadRow for Vec<ColumnHeader> {
+
+    type CellType = ColumnHeader;
+
+    fn into_cells(self) -> impl Iterator<Item = Self::CellType> {
+        self.into_iter()
+    }
+
+    fn get_class() -> TRHeadClass {
+        TRHeadClass::ColumnHead
+    }
+
+
+
 }
 
-impl GridHead {
+
+#[derive(Clone)]
+pub struct SubcolumnHeader {
+    text: String
+}
+
+impl SubcolumnHeader {
+
     #[must_use]
-    pub const fn new(class: TRHeadClass) -> Self {
+    pub const fn new(text: String) -> Self {
         Self {
-            class,
-            cells: Vec::new()
+            text
         }
     }
 
-    pub fn push(&mut self, cell: ColumnHeader) {
-        self.cells.push(cell);
+}
+
+impl ColumnHeaderCell for SubcolumnHeader {
+
+    fn into_pretty(self, _with_spans: bool, text_style: &TextStyle, row: &mut PrettyRow) {
+        let text = text_style.column_header(&self.text);
+        let cell = PrettyCell::new(&text).with_style(prettytable::Attr::Bold);
+        row.add_cell(cell);
     }
+
+    fn into_html_with_span(self, tr: &mut html_builder::Node<'_>) {
+        self.into_html_without_span(tr);
+    }
+
+    fn into_html_without_span(self, tr: &mut html_builder::Node<'_>) {
+        write!(tr.th().attr(&format!("class=\"{}\"",THColumnClass::SubColumnHeader)),"{}",self.text).expect("Could not write to html node");
+    }
+
 }
 
 
-pub enum TableOutput {
-    Pretty(PrettyTable),
-    // NOTE: PrettyTable has a 'write_html' function, but it uses style attributes and I can't control the class attributes
-    HTML(html_builder::Buffer),
-    JSON(json::JsonValue),
-    Text(String)
+
+impl GridHeadRow for Vec<SubcolumnHeader> {
+
+    type CellType = SubcolumnHeader;
+
+    fn into_cells(self) -> impl Iterator<Item = Self::CellType> {
+        self.into_iter()
+    }
+
+    fn get_class() -> TRHeadClass {
+        TRHeadClass::SubColumnHead
+    }
+
+
+
+
 }
 
-impl TableOutput {
 
-    #[must_use]
-    pub fn into_string(self) -> String {
+
+
+trait ZeroOneOrTwo {
+
+    fn len(&self) -> usize;
+}
+
+impl<FirstType,SecondType> ZeroOneOrTwo for Option<(FirstType,Option<SecondType>)> {
+    fn len(&self) -> usize {
         match self {
-            Self::Pretty(table) => table.to_string(),
-            Self::HTML(buffer) => buffer.finish(),
-            Self::JSON(json_value) => json_value.pretty(2),
-            Self::Text(text) => text
+            Some((_,Some(_))) => 2,
+            Some((_,None)) => 1,
+            None => 0,
         }
-    }
-
-    pub fn print_to_stdout(self) -> Result<(),io::Error> {
-        match self {
-            Self::Pretty(table) => table.printstd(),
-            Self::HTML(buffer) => println!("{}",buffer.finish()),
-            Self::JSON(json_value) => println!("{}",json_value.pretty(2)),
-            Self::Text(text) => println!("{text}")
-        }
-
-        Ok(())
     }
 }
 
-
+// TODO: Consider a generic Grid, where we have:
+// GridHeadType, which could either be ColumnHeader or (),
+// SubcolumnHeaderType, similar
+// RowHeaderType,
+// SubRowHeaderType,
+// -- then see how much we can implement separately...
 pub struct Grid {
-    caption: String,
     class: TableClass,
-    heads: Vec<GridHead>,
+    caption: String,
+    // TODO: Second should be a GridSubHead, I think.
+    head: Option<(Vec<ColumnHeader>,Option<Vec<SubcolumnHeader>>)>,
     body: Vec<GridRow>
 }
 
@@ -378,7 +552,7 @@ impl Grid {
         Self {
             caption,
             class,
-            heads: Vec::new(),
+            head: None,
             body: Vec::new()
         }
     }
@@ -389,76 +563,64 @@ impl Grid {
     }
 
     /// # Panics
-    /// If there is a header row in the grid already, the sum of the first row's colspan values is compared to that of this one, and if they differ this will panic.
-    pub fn push_header_row(&mut self, row: GridHead) {
-        if let Some(first_row) = self.heads.first() {
-            let new_len: usize = row.cells.iter().map(|c| c.colspan).sum();
-            let first_len: usize = first_row.cells.iter().map(|c| c.colspan).sum();
-            assert_eq!(first_len,new_len,"Header rows must have the same length.");
-        }
-        self.heads.push(row);
+    /// Function panics if column headers are already set
+    pub fn set_headers(&mut self, row: Vec<ColumnHeader>) {
+        assert!(self.head.is_none(),"Column headers are already set");
+        self.head = Some((row,None))
+
     }
 
     /// # Panics
-    /// If there is a row in the grid already, and the new row does not match it's dimensions, then this will panic.
+    /// Function panics if column headers are not set yet, if subheaders are already set, or the length of the subheaders does not match the length of the column headers (including colspan)
+    pub fn set_subheaders(&mut self, row: Vec<SubcolumnHeader>) {
+        let Some((head,subhead)) = &mut self.head else {
+            panic!("Column headers must be set before subheaders")
+        };
+
+        assert!(subhead.is_none(),"Subcolumn headers are already set.");
+        assert_eq!(head.iter().map(|c| c.colspan.get()).sum::<usize>(),row.len(),"Subcolumn headers must match length of headers (including colspan).");
+
+        *subhead = Some(row)
+
+    }
+
+    /// # Panics
+    /// Function panics if the number of cells in the row does not match the header cells, or if the row header and cell lengths do not match previously added rows.
     pub fn push_body_row(&mut self, row: GridRow) {
+        if let Some((head,_)) = &self.head {
+            assert_eq!(head.iter().map(|c| c.colspan.get()).sum::<usize>(),row.cells.len(),"Row cells must match length of headers (including colspan).");
+        }
         if let Some(first_row) = self.body.first() {
+            // Also, compare the body row headers to the first row added.
             assert_eq!(first_row.headers.len(),row.headers.len(),"Body row headers must have the same length.");
             assert_eq!(first_row.cells.len(),row.cells.len(),"Body row cells must have the same length.");
         }
         self.body.push(row);
+
+
     }
 
 
     #[must_use]
-    pub fn into_html(self,with_span: bool) -> html_builder::Buffer {
+    pub fn into_html(mut self,with_span: bool) -> html_builder::Buffer {
 
         // need to know this for creating "corner" cell in the top-left
         let row_header_offset = self.body.first().map_or(0, |first| {
             first.headers.len()
         });
-        let column_header_offset = self.heads.len();
+        let column_header_offset = self.head.len();
 
         let mut buffer = html_builder::Buffer::new();
         let mut table = buffer.table().attr(&format!("class=\"{}\"",self.class));
         write!(table.caption(),"{}",self.caption).expect("Could not write to html node");
 
         let mut thead = table.thead();
-        for (i,headers) in self.heads.iter().enumerate() {
-            let mut tr = thead.tr().attr(&format!("class=\"{}\"",headers.class));
-            if with_span {
-                if i == 0 {
-                    let th = tr.th();
-                    let th = if column_header_offset > 1 {
-                        th.attr(&format!("colspan={column_header_offset}"))
-                    } else {
-                        th
-                    };
-                    if row_header_offset > 1 {
-                        _ = th.attr(&format!("rowspan={row_header_offset}"));
-                    }
-
-                }
-                for header in &headers.cells {
-                    let th = tr.th().attr(&format!("class=\"{}\"",header.class));
-                    let mut th = if header.colspan > 1 {
-                        th.attr(&format!("colspan={}",header.colspan))
-                    } else {
-                        th
-                    };
-                    write!(th,"{}",header.text).expect("Could not write to html node");
-                }
-            } else {
-                for _ in 0..row_header_offset {
-                    _ = tr.th();
-                }
-                for header in &headers.cells {
-                    write!(tr.th().attr(&format!("class=\"{}\"",header.class)),"{}",header.text).expect("Could not write to html node");
-                    for _ in 1..header.colspan {
-                        _ = tr.td();
-                    }
-                }
+        if let Some((head,subhead)) = self.head.take() {
+            head.into_html(row_header_offset, column_header_offset, with_span, true, &mut thead);
+            if let Some(subhead) = subhead {
+                subhead.into_html(row_header_offset, column_header_offset, with_span, false, &mut thead);
             }
+
         }
 
         let mut tbody = table.tbody();
@@ -469,7 +631,7 @@ impl Grid {
                 match header {
                     RowHeader::RowHeader { text, rowspan, class } => {
                         let th = tr.th().attr(&format!("class=\"{class}\""));
-                        let mut th = if with_span && rowspan > 1 {
+                        let mut th = if with_span && rowspan.get() > 1 {
                             th.attr(&format!("rowspan={rowspan}"))
                         } else {
                             th
@@ -518,32 +680,42 @@ impl Grid {
         let result = json::object!{
             "type": "elbie-grid",
             "class": self.class.to_string(),
-            "headers": [
-                self.heads.iter().map(|head| {
-                    json::object!{
-                        "type": "column-head",
-                        class: head.class.to_string(),
-                        cells: head.cells.iter().map(|header| {
-                            json::object!{
-                                "type": "column-header",
-                                "class": header.class.to_string(),
-                                "colspan": header.colspan,
-                                "text": header.text.as_str()
-                            }
-
-                        }).collect::<Vec<_>>()
+            "head": if let Some((head,subhead)) = self.head {
+                json::object!{
+                    "type": "column-head",
+                    cells: head.iter().map(|header| {
+                        json::object!{
+                            "type": "column-header",
+                            "colspan": header.colspan.get(),
+                            "text": header.text.as_str()
+                        }
+                    }).collect::<Vec<_>>(),
+                    subhead: if let Some(subhead) = subhead {
+                        json::object!{
+                            "type": "subcolumn-head",
+                            cells: subhead.iter().map(|header| {
+                                json::object!{
+                                    "type": "column-header",
+                                    "text": header.text.as_str()
+                                }
+                            }).collect::<Vec<_>>()
+                        }
+                    } else {
+                        json::Null
                     }
-                }).collect::<Vec<_>>()
-            ],
+                }
+
+            } else {
+                json::Null
+            },
             "body": self.body.iter().map(|row| {
                 json::object!{
-
                     "headers": row.headers.iter().map(|header| {
                         match header {
                             RowHeader::RowHeader { text, rowspan, class } => json::object! {
                                 "type": "row-header",
                                 "class": class.to_string(),
-                                "rowspan": *rowspan,
+                                "rowspan": rowspan.get(),
                                 "text": text.as_str()
                             },
                             RowHeader::RowHeaderSpan => json::object! {
@@ -573,8 +745,15 @@ impl Grid {
 
     }
 
-    #[allow(clippy::shadow_unrelated,reason="I'm doing a lot of stuff where using the same name makes sense")]
-    fn blend_multi_columns(self) -> Self {
+    fn blend_column_groups(self) -> Self {
+        // TODO: I think the following will fix the problems:
+        // - Instead of going through and finding multi-cells, we get rid of multi-cells and depend on the colspan of the header columns to find where tables are
+        // [ ] Create a new blend operation that works like that. For now, multi-cells might be treated as multiple cells towards the count of cells required.
+        // [ ] In the PhonemeTable, ColumnHeaders always get a span > 1 if they are meant to have a column group.
+        // [ ] Get rid of the multi-cells.
+
+        // TODO: Remove println
+        println!("blending...");
 
         let mut plain_table_format = *FORMAT_CLEAN;
         plain_table_format.padding(0, 0);
@@ -583,8 +762,117 @@ impl Grid {
         let Self {
             caption,
             class,
-            heads,
-            body,
+            head,
+            body
+        } = self;
+
+        match head {
+            Some((head,Some(subhead))) => {
+                // Don't blend if subheadings exist
+                Self {
+                    caption,
+                    class,
+                    head: Some((head,Some(subhead))),
+                    body
+                }
+            },
+            None => {
+                // Don't blend if there are no headings
+                Self {
+                    caption,
+                    class,
+                    head: None,
+                    body
+                }
+            },
+            Some((head,None)) => {
+                let mut column_groups: HashMap<_,_> = HashMap::from_iter(head.into_iter().map(|ch| {
+                    (ch,Vec::new())
+                }).enumerate());
+
+                let mut new_rows = Vec::new();
+                for row in body {
+                    new_rows.push(GridRow {
+                        class: row.class,
+                        headers: row.headers,
+                        cells: Vec::new()
+                    });
+                    let old_cells = row.cells;
+
+                    let mut cells_enum = old_cells.into_iter().enumerate();
+                    while let Some((col_idx,cell)) = cells_enum.next() {
+                        if let Some((column_header,column_cells)) = column_groups.get_mut(&col_idx) {
+                            let mut column_row = match cell {
+                                Cell::Content { text } => vec![text],
+                                Cell::Group { cells } => cells,
+                            };
+                            for idx in 1..column_header.colspan.get() {
+                                if let Some((_,next_cell)) = cells_enum.next() {
+                                    match next_cell {
+                                        Cell::Content { text } => column_row.push(text),
+                                        Cell::Group { mut cells } => column_row.append(&mut cells),
+                                    }
+                                } else {
+                                    panic!("Missing grid cell for column header {} at index {idx}",column_header.text);
+                                }
+                            }
+                            column_cells.push(column_row);
+
+                        } else {
+                            panic!("Found grid cell at {col_idx} which didn't match up with a column header.")
+
+                        }
+
+                    }
+
+                }
+
+                // blend the cells into single cells...
+                let mut blended_tables: Vec<_> = column_groups.into_iter().map(|(col_idx,(header,cells))| {
+                    let mut table = PrettyTable::from(cells);
+                    table.set_format(plain_table_format);
+                    let table = table.to_string();
+                    let lines = table.lines().map(|line| Cell::content(line.to_owned())).collect::<Vec<_>>();
+                    (col_idx,(header,lines))
+                }).collect();
+
+                blended_tables.sort_by_key(|(col_idx,_)| *col_idx);
+
+                let mut new_headers = Vec::new();
+                for (_,(header,column)) in blended_tables {
+                    new_headers.push(ColumnHeader::new(header.text, 1));
+                    for (row,cell) in new_rows.iter_mut().zip(column) {
+                        row.cells.push(cell);
+                    }
+                }
+
+                Self {
+                    class,
+                    caption,
+                    head: Some((new_headers,None)),
+                    body: new_rows,
+                }
+            }
+        }
+
+
+
+    }
+
+    /* NMS: Archive this, an old way of blending, depended on blended cells being a special Cell that took two strings.
+    #[allow(clippy::shadow_unrelated,reason="I'm doing a lot of stuff where using the same name makes sense")]
+    fn blend_multi_columns(self) -> Self {
+        // TODO: Once we have the new blend system working, get rid of this...
+
+        let mut plain_table_format = *FORMAT_CLEAN;
+        plain_table_format.padding(0, 0);
+        plain_table_format.column_separator(' ');
+
+        let Self {
+            caption,
+            class,
+            head,
+            body
         } = self;
 
         let mut extracted_multi_cells = HashMap::new();
@@ -650,13 +938,13 @@ impl Grid {
 
 
         Self {
-            caption,
             class,
-            heads,
+            caption,
+            head,
             body
         }
 
-    }
+    }*/
 
     #[must_use]
     pub fn into_pretty(self, with_spans: bool, text_style: &TextStyle, format: PrettyTableFormat) -> PrettyTable {
@@ -667,43 +955,13 @@ impl Grid {
 
         let mut table = PrettyTable::new();
 
-        for (row_idx,header_row) in self.heads.iter().enumerate() {
-            let mut row = PrettyRow::empty();
-
-
-            // need a corner square
-            if row_header_offset > 0 {
-                // FUTURE: PrettyTable does not support rowspanning, but maybe I can figure something out?
-                let cell = PrettyCell::new("").with_hspan(row_header_offset);
-                row.add_cell(cell);
+        if let Some((head,subhead)) = self.head {
+            let row = head.into_pretty(with_spans, text_style, row_header_offset);
+            table.set_titles(row);
+            if let Some(subhead) = subhead {
+                let subrow = subhead.into_pretty(with_spans, text_style, row_header_offset);
+                _ = table.add_row(subrow);
             }
-
-            for header in &header_row.cells {
-                let text = text_style.column_header(&header.text);
-                let cell = PrettyCell::new(&text).with_style(prettytable::Attr::Bold);
-                if with_spans && let colspan @ 2.. = header.colspan {
-                    row.add_cell(cell.with_hspan(colspan));
-                } else {
-                    row.add_cell(cell);
-                    for _ in 1..header.colspan {
-                        row.add_cell(PrettyCell::new(""));
-                    }
-                }
-            }
-
-            if row_idx == 0 {
-                // NOTE: This is only done so that markdown can draw the heading line.
-                // Github-flavored Markdown only supports one header row, even though we provide more.
-                // FUTURE: If I were ever to support other formats that support table heading lines, then:
-                // 1) I will need to add both rows as titles
-                // 2) Except for Markdown, where I should only output one.
-                table.set_titles(row);
-
-            } else {
-                _ = table.add_row(row);
-
-            }
-
         }
 
         for body_row in &self.body {
@@ -763,17 +1021,17 @@ impl Grid {
         match style {
             GridStyle::Plain => {
                 // yes span the plain style, it makes it look much cleaner.
-                let me = self.blend_multi_columns();
+                let me = self.blend_column_groups();
                 let table = me.into_pretty(true,&TextStyle::Plain, *FORMAT_CLEAN);
                 TableOutput::Pretty(table)
             },
             GridStyle::Markdown => {
-                let me = self.blend_multi_columns();
+                let me = self.blend_column_groups();
                 let table = me.into_pretty(false,&TextStyle::Markdown, Self::pretty_table_markdown());
                 TableOutput::Pretty(table)
             },
             GridStyle::Terminal { spans } => {
-                let me = self.blend_multi_columns();
+                let me = self.blend_column_groups();
                 let table = me.into_pretty(*spans,&TextStyle::Terminal, *FORMAT_BOX_CHARS);
                 TableOutput::Pretty(table)
             },
