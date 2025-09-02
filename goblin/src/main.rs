@@ -382,7 +382,7 @@ fn create_goblin_language() -> Result<Language<1>,LanguageError> {
       axis(&[("Close",CLOSE),("Near-close",NEARCLOSE),("Open-mid",OPENMID),("Open",OPEN)])?.
       add()?;
 
-  language.new_table("dipthong", DIPHTHONG, "Diphthongs").add()?;
+  language.new_table("diphthong", DIPHTHONG, "Diphthongs").add()?;
 
   Ok(language)
 

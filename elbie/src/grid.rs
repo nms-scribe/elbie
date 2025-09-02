@@ -1,5 +1,4 @@
 use core::fmt::Write as _;
-use std::collections::HashMap;
 use std::fmt;
 use core::fmt::Display;
 use std::io;
@@ -83,6 +82,7 @@ impl Display for TRHeadClass {
     }
 }
 
+#[derive(Debug)]
 pub enum TRBodyClass {
     BodyRow,
     BodyRowGroupStart,
@@ -116,6 +116,7 @@ impl Display for THColumnClass {
     }
 }
 
+#[derive(Debug)]
 pub enum THRowClass {
     RowHeader,
     SubrowHeader
@@ -228,7 +229,7 @@ trait ColumnHeaderCell {
 
 }
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub struct ColumnHeader {
     text: String,
     colspan: NonZeroUsize
@@ -285,6 +286,7 @@ impl ColumnHeaderCell for ColumnHeader {
 }
 
 
+#[derive(Debug)]
 pub enum RowHeader {
     RowHeader{
         text: String,
@@ -322,13 +324,8 @@ impl RowHeader {
 
 
 #[derive(Debug)]
-pub enum Cell {
-    Content{
-        text: String
-    },
-    Group{
-        cells: Vec<String>
-    },
+pub struct Cell {
+    text: String
 }
 
 impl Cell {
@@ -339,21 +336,11 @@ impl Cell {
     #[must_use]
     pub fn content(text: String) -> Self {
         assert!(!text.contains('\n'),"Grid cells must not contain newlines");
-        Self::Content{
+        Self{
             text
         }
     }
 
-    /// # Panics
-    /// Panics if any of the grid cells contain newlines
-    #[must_use]
-    pub fn cell_group(cells: Vec<String>) -> Self {
-        assert!(!cells.iter().any(|c| c.contains('\n')),"Grid cells must not contain newlines.");
-        Self::Group{
-            cells
-        }
-
-    }
 
 
 
@@ -362,6 +349,7 @@ impl Cell {
 
 // TODO: Headers should be an Option<RowHeader,Option<SubrowHeader>>, similar to how columns and subcolumns are added.
 // TODO: And SubrowHeader can't be a span.
+#[derive(Debug)]
 pub struct GridRow {
     class: TRBodyClass,
     headers: Vec<RowHeader>,
@@ -531,17 +519,10 @@ impl<FirstType,SecondType> ZeroOneOrTwo for Option<(FirstType,Option<SecondType>
     }
 }
 
-// TODO: Consider a generic Grid, where we have:
-// GridHeadType, which could either be ColumnHeader or (),
-// SubcolumnHeaderType, similar
-// RowHeaderType,
-// SubRowHeaderType,
-// -- then see how much we can implement separately...
 pub struct Grid {
     class: TableClass,
     caption: String,
-    // TODO: Second should be a GridSubHead, I think.
-    head: Option<(Vec<ColumnHeader>,Option<Vec<SubcolumnHeader>>)>,
+    heads: Option<(Vec<ColumnHeader>,Option<Vec<SubcolumnHeader>>)>,
     body: Vec<GridRow>
 }
 
@@ -552,7 +533,7 @@ impl Grid {
         Self {
             caption,
             class,
-            head: None,
+            heads: None,
             body: Vec::new()
         }
     }
@@ -565,15 +546,15 @@ impl Grid {
     /// # Panics
     /// Function panics if column headers are already set
     pub fn set_headers(&mut self, row: Vec<ColumnHeader>) {
-        assert!(self.head.is_none(),"Column headers are already set");
-        self.head = Some((row,None))
+        assert!(self.heads.is_none(),"Column headers are already set");
+        self.heads = Some((row,None))
 
     }
 
     /// # Panics
     /// Function panics if column headers are not set yet, if subheaders are already set, or the length of the subheaders does not match the length of the column headers (including colspan)
     pub fn set_subheaders(&mut self, row: Vec<SubcolumnHeader>) {
-        let Some((head,subhead)) = &mut self.head else {
+        let Some((head,subhead)) = &mut self.heads else {
             panic!("Column headers must be set before subheaders")
         };
 
@@ -587,7 +568,7 @@ impl Grid {
     /// # Panics
     /// Function panics if the number of cells in the row does not match the header cells, or if the row header and cell lengths do not match previously added rows.
     pub fn push_body_row(&mut self, row: GridRow) {
-        if let Some((head,_)) = &self.head {
+        if let Some((head,_)) = &self.heads {
             assert_eq!(head.iter().map(|c| c.colspan.get()).sum::<usize>(),row.cells.len(),"Row cells must match length of headers (including colspan).");
         }
         if let Some(first_row) = self.body.first() {
@@ -608,14 +589,14 @@ impl Grid {
         let row_header_offset = self.body.first().map_or(0, |first| {
             first.headers.len()
         });
-        let column_header_offset = self.head.len();
+        let column_header_offset = self.heads.len();
 
         let mut buffer = html_builder::Buffer::new();
         let mut table = buffer.table().attr(&format!("class=\"{}\"",self.class));
         write!(table.caption(),"{}",self.caption).expect("Could not write to html node");
 
         let mut thead = table.thead();
-        if let Some((head,subhead)) = self.head.take() {
+        if let Some((head,subhead)) = self.heads.take() {
             head.into_html(row_header_offset, column_header_offset, with_span, true, &mut thead);
             if let Some(subhead) = subhead {
                 subhead.into_html(row_header_offset, column_header_offset, with_span, false, &mut thead);
@@ -647,24 +628,8 @@ impl Grid {
                 }
             }
 
-            for cell in row.cells {
-                match cell {
-                    Cell::Content{ text } => {
-                        write!(tr.td(),"{text}").expect("Could not write to html node.")
-                    },
-                    Cell::Group{ cells } => {
-                        for (idx,text) in cells.iter().enumerate() {
-                            let class = if idx == 0 {
-                                TDClass::ColumnGroupStart
-                            } else if idx == cells.len() - 1 {
-                                TDClass::ColumnGroupEnd
-                            } else {
-                                TDClass::ColumnGroupMiddle
-                            };
-                            write!(tr.td().attr(&format!("class=\"{class}\"")),"{text}").expect("Could not write to html node.")
-                        }
-                    },
-                }
+            for Cell { text } in row.cells {
+                write!(tr.td(),"{text}").expect("Could not write to html node.")
             }
 
         }
@@ -680,7 +645,7 @@ impl Grid {
         let result = json::object!{
             "type": "elbie-grid",
             "class": self.class.to_string(),
-            "head": if let Some((head,subhead)) = self.head {
+            "head": if let Some((head,subhead)) = self.heads {
                 json::object!{
                     "type": "column-head",
                     cells: head.iter().map(|header| {
@@ -724,15 +689,9 @@ impl Grid {
                         }
                     }).collect::<Vec<_>>(),
                     "cells": row.cells.iter().map(|cell| {
-                        match cell {
-                            Cell::Content { text } => json::object!{
-                                "type": "cell",
-                                "text": text.as_str(),
-                            },
-                            Cell::Group { cells } => json::object!{
-                                "type": "multi-cell",
-                                "cells": cells.iter().map(String::as_str).collect::<Vec<_>>()
-                            },
+                        json::object!{
+                            "type": "cell",
+                            "text": cell.text.as_str(),
                         }
                     }).collect::<Vec<_>>()
                 }
@@ -746,14 +705,7 @@ impl Grid {
     }
 
     fn blend_column_groups(self) -> Self {
-        // TODO: I think the following will fix the problems:
-        // - Instead of going through and finding multi-cells, we get rid of multi-cells and depend on the colspan of the header columns to find where tables are
-        // [ ] Create a new blend operation that works like that. For now, multi-cells might be treated as multiple cells towards the count of cells required.
-        // [ ] In the PhonemeTable, ColumnHeaders always get a span > 1 if they are meant to have a column group.
-        // [ ] Get rid of the multi-cells.
 
-        // TODO: Remove println
-        println!("blending...");
 
         let mut plain_table_format = *FORMAT_CLEAN;
         plain_table_format.padding(0, 0);
@@ -762,7 +714,7 @@ impl Grid {
         let Self {
             caption,
             class,
-            head,
+            heads: head,
             body
         } = self;
 
@@ -772,7 +724,7 @@ impl Grid {
                 Self {
                     caption,
                     class,
-                    head: Some((head,Some(subhead))),
+                    heads: Some((head,Some(subhead))),
                     body
                 }
             },
@@ -781,17 +733,17 @@ impl Grid {
                 Self {
                     caption,
                     class,
-                    head: None,
+                    heads: None,
                     body
                 }
             },
             Some((head,None)) => {
-                let mut column_groups: HashMap<_,_> = HashMap::from_iter(head.into_iter().map(|ch| {
+                let mut column_groups = head.into_iter().map(|ch| {
                     (ch,Vec::new())
-                }).enumerate());
+                }).collect::<Vec<_>>();
 
                 let mut new_rows = Vec::new();
-                for row in body {
+                for (row_idx,row) in body.into_iter().enumerate() {
                     new_rows.push(GridRow {
                         class: row.class,
                         headers: row.headers,
@@ -799,57 +751,44 @@ impl Grid {
                     });
                     let old_cells = row.cells;
 
-                    let mut cells_enum = old_cells.into_iter().enumerate();
-                    while let Some((col_idx,cell)) = cells_enum.next() {
-                        if let Some((column_header,column_cells)) = column_groups.get_mut(&col_idx) {
-                            let mut column_row = match cell {
-                                Cell::Content { text } => vec![text],
-                                Cell::Group { cells } => cells,
-                            };
-                            for idx in 1..column_header.colspan.get() {
-                                if let Some((_,next_cell)) = cells_enum.next() {
-                                    match next_cell {
-                                        Cell::Content { text } => column_row.push(text),
-                                        Cell::Group { mut cells } => column_row.append(&mut cells),
-                                    }
-                                } else {
-                                    panic!("Missing grid cell for column header {} at index {idx}",column_header.text);
-                                }
+                    let mut cells_iter = old_cells.into_iter();
+                    for (group_idx,(column_header,column_cells)) in column_groups.iter_mut().enumerate() {
+                        let mut column_row = Vec::new();
+                        for idx in 0..column_header.colspan.get() {
+                            if let Some(Cell{ text }) = cells_iter.next() {
+                                column_row.push(text)
+                            } else {
+                                panic!("Missing grid cell #{idx} in row {row_idx}, for column header {group_idx} '{}'",column_header.text);
                             }
-                            column_cells.push(column_row);
-
-                        } else {
-                            panic!("Found grid cell at {col_idx} which didn't match up with a column header.")
-
                         }
-
+                        column_cells.push(column_row);
                     }
 
                 }
 
-                // blend the cells into single cells...
-                let mut blended_tables: Vec<_> = column_groups.into_iter().map(|(col_idx,(header,cells))| {
+                let mut new_headers = Vec::new();
+                // blend the cells into single cells, and push onto the new rows.
+                for (header,cells) in column_groups {
+                    // create a table and format it into plain text
                     let mut table = PrettyTable::from(cells);
                     table.set_format(plain_table_format);
                     let table = table.to_string();
-                    let lines = table.lines().map(|line| Cell::content(line.to_owned())).collect::<Vec<_>>();
-                    (col_idx,(header,lines))
-                }).collect();
+                    let lines = table.lines().map(|line| Cell::content(line.to_owned()));
 
-                blended_tables.sort_by_key(|(col_idx,_)| *col_idx);
-
-                let mut new_headers = Vec::new();
-                for (_,(header,column)) in blended_tables {
+                    // return the header to the headers, but with a colspan of 1.
                     new_headers.push(ColumnHeader::new(header.text, 1));
-                    for (row,cell) in new_rows.iter_mut().zip(column) {
+
+                    // assign the lines to the rows:
+                    for (row,cell) in new_rows.iter_mut().zip(lines) {
                         row.cells.push(cell);
                     }
+
                 }
 
                 Self {
                     class,
                     caption,
-                    head: Some((new_headers,None)),
+                    heads: Some((new_headers,None)),
                     body: new_rows,
                 }
             }
@@ -862,7 +801,6 @@ impl Grid {
     /* NMS: Archive this, an old way of blending, depended on blended cells being a special Cell that took two strings.
     #[allow(clippy::shadow_unrelated,reason="I'm doing a lot of stuff where using the same name makes sense")]
     fn blend_multi_columns(self) -> Self {
-        // TODO: Once we have the new blend system working, get rid of this...
 
         let mut plain_table_format = *FORMAT_CLEAN;
         plain_table_format.padding(0, 0);
@@ -955,7 +893,7 @@ impl Grid {
 
         let mut table = PrettyTable::new();
 
-        if let Some((head,subhead)) = self.head {
+        if let Some((head,subhead)) = self.heads {
             let row = head.into_pretty(with_spans, text_style, row_header_offset);
             table.set_titles(row);
             if let Some(subhead) = subhead {
@@ -980,14 +918,8 @@ impl Grid {
                 }
             }
 
-            for cell in &body_row.cells {
-                match cell {
-                    Cell::Content { text } => row.add_cell(PrettyCell::new(text)),
-                    Cell::Group { cells } => for text in cells {
-                        // FUTURE: Figure out how to hide the border between these?
-                        row.add_cell(PrettyCell::new(text));
-                    },
-                }
+            for Cell { text } in &body_row.cells {
+                row.add_cell(PrettyCell::new(text))
             }
 
             _ = table.add_row(row);

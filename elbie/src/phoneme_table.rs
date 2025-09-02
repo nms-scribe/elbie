@@ -146,11 +146,6 @@ mod sealed {
             Cell::content(phonemes)
         }
 
-        fn build_cell_group(&self, cells_keys: &[Self::CellsKey]) -> Cell {
-            let content = cells_keys.iter().map(|cells_key| self.get_phoneme_text(cells_key).join(" ")).collect();
-            Cell::cell_group(content)
-        }
-
         fn get_phoneme_text(&self, cells_key: &<Self as InnerTable>::CellsKey) -> Vec<String> {
             match self.get_cell(cells_key) {
                 Some(phonemes) => {
@@ -397,26 +392,18 @@ impl Table4D<'_> {
 
         for column in columns {
 
-            let keys = subcolumns.iter().map(|subcolumn| Cells4DKey {
-                column: column.order,
-                subcolumn: subcolumn.order,
-                row: row_def.order,
-                subrow: subrow_def.order,
-            });
-
-            if self.definition.hide_subcolumn_captions {
-                // combine them into a cell group for easier styling
-                let content = self.build_cell_group(&keys.collect::<Vec<_>>());
-                row.push_cell(content);
-
-            } else {
-                for key in keys {
-
-                    let content = self.build_cell(key);
-                    row.push_cell(content);
+            for subcolumn in subcolumns {
+                let key = Cells4DKey {
+                    column: column.order,
+                    subcolumn: subcolumn.order,
+                    row: row_def.order,
+                    subrow: subrow_def.order,
                 };
 
+                let content = self.build_cell(key);
+                row.push_cell(content);
             }
+
 
         }
         row
@@ -441,13 +428,11 @@ impl sealed::InnerTable for Table4D<'_> {
         let rows: Vec<_> = self.definition.rows_by_set.hashmap_to_captions();
         let (subrows,subrows_count) = self.definition.subrows_by_set.hashmap_to_captions_len();
 
-        let colspan_for_each_header = if self.definition.hide_subcolumn_captions {
-            1
-        } else {
-            subcolumns_count
-        };
+        let colspan_for_each_header = subcolumns_count;
 
-        grid.set_headers(Self::build_header_row(&columns, colspan_for_each_header));
+        let headers = Self::build_header_row(&columns, colspan_for_each_header);
+
+        grid.set_headers(headers);
 
         if !self.definition.hide_subcolumn_captions {
             grid.set_subheaders(Self::build_subheader_row(&subcolumns, columns_count));
@@ -459,6 +444,7 @@ impl sealed::InnerTable for Table4D<'_> {
 
             for subrow in &subrows {
                 let row = self.build_grid_row(&columns, &subcolumns, row, subrows_count, subrow);
+
                 grid.push_body_row(row)
 
             }
@@ -615,26 +601,18 @@ impl Table3D<'_> {
 
         for column in columns {
 
-            let keys = subcolumns.iter().map(|subcolumn| Cells3DKey {
-                column: column.order,
-                subcolumn: subcolumn.order,
-                row: row_def.order,
-            });
-
-            if self.definition.hide_subcolumn_captions {
-                // combine them into a cell group for easier styling
-                let content = self.build_cell_group(&keys.collect::<Vec<_>>());
-                row.push_cell(content);
-
-            } else {
-                for key in keys {
-
-                    let content = self.build_cell(key);
-
-                    row.push_cell(content);
+            for subcolumn in subcolumns {
+                let key = Cells3DKey {
+                    column: column.order,
+                    subcolumn: subcolumn.order,
+                    row: row_def.order,
                 };
 
+                let content = self.build_cell(key);
+
+                row.push_cell(content);
             }
+
         }
         row
     }
@@ -657,11 +635,7 @@ impl sealed::InnerTable for Table3D<'_> {
         let (subcolumns,subcolumns_count) = self.definition.subcolumns_by_set.hashmap_to_captions_len();
         let rows: Vec<_> = self.definition.rows_by_set.hashmap_to_captions();
 
-        let colspan_for_each_header = if self.definition.hide_subcolumn_captions {
-            1
-        } else {
-            subcolumns_count
-        };
+        let colspan_for_each_header = subcolumns_count;
 
         grid.set_headers(Self::build_header_row(&columns, colspan_for_each_header));
 
