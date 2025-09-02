@@ -1,4 +1,4 @@
-use crate::grid::THRowClass;
+use crate::grid::SubrowHeader;
 use crate::grid::TRBodyClass;
 use crate::grid::TableClass;
 use crate::Bag;
@@ -379,15 +379,15 @@ impl Table4D<'_> {
 
         let mut row = GridRow::new(row_class);
         if subrow_def.order == 0 {
-            row.push_header(RowHeader::new(row_def.caption.to_owned(), subrows_count,THRowClass::RowHeader));
+            row.set_header(RowHeader::new(row_def.caption.to_owned(), subrows_count));
         } else {
             // still adding a span fill even if we aren't showing subrow headers.
-            row.push_header(RowHeader::row_header_span());
+            row.set_header(RowHeader::row_header_span());
         }
 
 
         if !self.definition.hide_subrow_captions {
-            row.push_header(RowHeader::new(subrow_def.caption.to_owned(), 1, THRowClass::SubrowHeader));
+            row.set_subheader(SubrowHeader::new(subrow_def.caption.to_owned()));
         }
 
         for column in columns {
@@ -597,7 +597,7 @@ impl Table3D<'_> {
 
     fn build_grid_row(&self, columns: &Vec<&HeaderDef>, subcolumns: &Vec<&HeaderDef>, row_def: &HeaderDef) -> GridRow {
         let mut row = GridRow::new(TRBodyClass::BodyRow);
-        row.push_header(RowHeader::new(row_def.caption.to_owned(), 1, THRowClass::RowHeader));
+        row.set_header(RowHeader::new(row_def.caption.to_owned(), 1));
 
         for column in columns {
 
@@ -776,7 +776,7 @@ impl Table2D<'_> {
 
     fn build_grid_row(&self, columns: &Vec<&HeaderDef>, row_def: &HeaderDef) -> GridRow {
         let mut row = GridRow::new(TRBodyClass::BodyRow);
-        row.push_header(RowHeader::new(row_def.caption.to_owned(), 1,THRowClass::RowHeader));
+        row.set_header(RowHeader::new(row_def.caption.to_owned(), 1));
 
         for column in columns {
 
@@ -919,7 +919,7 @@ impl Table1D<'_> {
 
     fn build_grid_row(&self, row_def: &HeaderDef) -> GridRow {
         let mut row = GridRow::new(TRBodyClass::BodyRow);
-        row.push_header(RowHeader::new(row_def.caption.to_owned(), 1,THRowClass::RowHeader));
+        row.set_header(RowHeader::new(row_def.caption.to_owned(), 1));
 
         let key = row_def.order;
 
