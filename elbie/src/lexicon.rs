@@ -75,7 +75,6 @@ impl<const ORTHOGRAPHIES: usize> Lexicon<ORTHOGRAPHIES> {
                     write!(output,"; {orthography}: *{spelling}*").expect("Could not write orthography");
                 }
                 writeln!(output,"): {definition}").expect("Could not write orthography");
-                writeln!(output).expect("Could not write orthography");
             },
             GridStyle::HTML { .. } => {
                 // TODO: Test this make sure it's working
