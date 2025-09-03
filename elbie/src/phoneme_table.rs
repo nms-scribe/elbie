@@ -1,4 +1,5 @@
 use crate::grid::SubrowHeader;
+use crate::grid::TDClass;
 use crate::grid::TRBodyClass;
 use crate::grid::TableClass;
 use crate::Bag;
@@ -62,6 +63,7 @@ impl Display for PhonemeDisplay {
 mod sealed {
     use crate::grid::ColumnHeader;
     use crate::grid::SubcolumnHeader;
+    use crate::grid::TDClass;
     use crate::phoneme_table::PhonemeDisplay;
     // Basically, I want to keep the functions on InnerTable private, and since trait functions are automatically public, this is the convoluted way I have to do it.
     use crate::phoneme_table::Axis;
@@ -141,9 +143,9 @@ mod sealed {
         ///
         /// * `cells_key`: Specify the key into the cells (see `get_cell`) from which to retrieve phonemes
         /// * `merge_to_right`: If true, then tables which format with borders should hide their right border. (Used with some subcolumn options)
-        fn build_cell(&self, cells_key: Self::CellsKey) -> Cell {
+        fn build_cell(&self, cells_key: Self::CellsKey, class: Option<TDClass>) -> Cell {
             let phonemes = self.get_phoneme_text(&cells_key).join(" ");
-            Cell::content(phonemes)
+            Cell::content(phonemes,class)
         }
 
         fn get_phoneme_text(&self, cells_key: &<Self as InnerTable>::CellsKey) -> Vec<String> {
@@ -365,7 +367,7 @@ impl Table4D<'_> {
         Ok(())
     }
 
-    fn build_grid_row(&self, columns: &Vec<&HeaderDef>, subcolumns: &Vec<&HeaderDef>, row_def: &HeaderDef, subrows_count: usize, subrow_def: &HeaderDef) -> GridRow {
+    fn build_grid_row(&self, columns: &Vec<&HeaderDef>, subcolumns: &Vec<&HeaderDef>, row_def: &HeaderDef, subrows_count: usize, subcolumns_count: usize, subrow_def: &HeaderDef) -> GridRow {
 
         let row_class = if subrows_count == 1 {
             TRBodyClass::BodyRow
@@ -392,7 +394,7 @@ impl Table4D<'_> {
 
         for column in columns {
 
-            for subcolumn in subcolumns {
+            for (idx,subcolumn) in subcolumns.iter().enumerate() {
                 let key = Cells4DKey {
                     column: column.order,
                     subcolumn: subcolumn.order,
@@ -400,7 +402,17 @@ impl Table4D<'_> {
                     subrow: subrow_def.order,
                 };
 
-                let content = self.build_cell(key);
+                let class = if subcolumns_count == 0 {
+                    None
+                } else if idx == 0 {
+                    Some(TDClass::ColumnGroupStart)
+                } else if idx == subcolumns_count - 1 {
+                    Some(TDClass::ColumnGroupEnd)
+                } else {
+                    Some(TDClass::ColumnGroupMiddle)
+                };
+
+                let content = self.build_cell(key,class);
                 row.push_cell(content);
             }
 
@@ -443,7 +455,7 @@ impl sealed::InnerTable for Table4D<'_> {
         for row in &rows {
 
             for subrow in &subrows {
-                let row = self.build_grid_row(&columns, &subcolumns, row, subrows_count, subrow);
+                let row = self.build_grid_row(&columns, &subcolumns, row, subrows_count, subcolumns_count, subrow);
 
                 grid.push_body_row(row)
 
@@ -595,20 +607,31 @@ impl Table3D<'_> {
         Ok(())
     }
 
-    fn build_grid_row(&self, columns: &Vec<&HeaderDef>, subcolumns: &Vec<&HeaderDef>, row_def: &HeaderDef) -> GridRow {
+    fn build_grid_row(&self, columns: &Vec<&HeaderDef>, subcolumns: &Vec<&HeaderDef>, subcolumns_count: usize, row_def: &HeaderDef) -> GridRow {
         let mut row = GridRow::new(TRBodyClass::BodyRow);
         row.set_header(RowHeader::new(row_def.caption.to_owned(), 1));
 
         for column in columns {
 
-            for subcolumn in subcolumns {
+            for (idx,subcolumn) in subcolumns.iter().enumerate() {
                 let key = Cells3DKey {
                     column: column.order,
                     subcolumn: subcolumn.order,
                     row: row_def.order,
                 };
 
-                let content = self.build_cell(key);
+                let class = if subcolumns_count == 0 {
+                    None
+                } else if idx == 0 {
+                    Some(TDClass::ColumnGroupStart)
+                } else if idx == subcolumns_count - 1 {
+                    Some(TDClass::ColumnGroupEnd)
+                } else {
+                    Some(TDClass::ColumnGroupMiddle)
+                };
+
+
+                let content = self.build_cell(key,class);
 
                 row.push_cell(content);
             }
@@ -646,7 +669,7 @@ impl sealed::InnerTable for Table3D<'_> {
         // rows
         for row in &rows {
 
-            let row = self.build_grid_row(&columns, &subcolumns, row);
+            let row = self.build_grid_row(&columns, &subcolumns, subcolumns_count, row);
             grid.push_body_row(row)
 
         }
@@ -785,7 +808,7 @@ impl Table2D<'_> {
                 row: row_def.order
             };
 
-            let content = self.build_cell(key);
+            let content = self.build_cell(key,None);
 
             row.push_cell(content);
 
@@ -923,7 +946,7 @@ impl Table1D<'_> {
 
         let key = row_def.order;
 
-        let content = self.build_cell(key);
+        let content = self.build_cell(key,None);
 
         row.push_cell(content);
 
@@ -1041,7 +1064,7 @@ impl Table0D<'_> {
 
         let key = ();
 
-        let content = self.build_cell(key);
+        let content = self.build_cell(key,None);
 
         row.push_cell(content);
 

@@ -1247,18 +1247,18 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
         for chunk in &mut chunks {
           if let Some(phoneme) = chunk.next() {
-            row.push_cell(Cell::content(phoneme.to_string()));
+            row.push_cell(Cell::content(phoneme.to_string(),None));
             for i in 0..ORTHOGRAPHIES {
               let mut cell = String::new();
               self.spell_phoneme(phoneme, i, &mut cell, None);
-              row.push_cell(Cell::content(cell));
+              row.push_cell(Cell::content(cell,None));
             }
 
           } else {
             // add blank cells to make the table rectangular.
-            row.push_cell(Cell::content(String::new()));
+            row.push_cell(Cell::content(String::new(),None));
             for _ in 0..ORTHOGRAPHIES {
-                row.push_cell(Cell::content(String::new()));
+                row.push_cell(Cell::content(String::new(),None));
             }
           }
         }
@@ -1571,9 +1571,9 @@ fn generate_words<const ORTHOGRAPHIES: usize>(grid_style: Option<&GridStyle>, la
         match language.make_word() {
             Ok(word) => {
                 for orthography in 0..language.orthographies.len() {
-                    row.push_cell(Cell::content(language.spell_word(&word,orthography)));
+                    row.push_cell(Cell::content(language.spell_word(&word,orthography),None));
                 }
-                row.push_cell(Cell::content(format!("{word}")));
+                row.push_cell(Cell::content(format!("{word}"),None));
 
                 // the following is a sanity check. It might catch some logic errors, but really it's just GIGO.
                 if let Err(err) = language.check_word(&word,&|_,_| { /* eat message, no need to report */}) {
