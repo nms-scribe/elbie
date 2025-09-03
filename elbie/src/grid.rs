@@ -427,9 +427,6 @@ impl GridHeadRow for Vec<SubcolumnHeader> {
         TRHeadClass::SubColumnHead
     }
 
-
-
-
 }
 
 
