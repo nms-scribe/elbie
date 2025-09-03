@@ -67,14 +67,14 @@ impl<const ORTHOGRAPHIES: usize> Lexicon<ORTHOGRAPHIES> {
                 for (orthography,spelling) in other_spellings {
                     write!(output,"; {orthography}: {spelling}").expect("Could not write orthography");
                 }
-                write!(output,"): {definition}").expect("Could not write orthography");
+                writeln!(output,"): {definition}").expect("Could not write orthography");
             }
             GridStyle::Markdown => {
                 write!(output,"**{main_spelling}**. ({word}").expect("Could not write orthography");
                 for (orthography,spelling) in other_spellings {
                     write!(output,"; {orthography}: *{spelling}*").expect("Could not write orthography");
                 }
-                write!(output,"): {definition}").expect("Could not write orthography");
+                writeln!(output,"): {definition}").expect("Could not write orthography");
             },
             GridStyle::HTML { .. } => {
                 // TODO: Test this make sure it's working
@@ -100,7 +100,7 @@ impl<const ORTHOGRAPHIES: usize> Lexicon<ORTHOGRAPHIES> {
                     "other_spellings": spellings,
                     "definition": definition
                 };
-                write!(output,"{object:#}").expect("Could not write json")
+                writeln!(output,"{object:#}").expect("Could not write json")
 
             }
         }
