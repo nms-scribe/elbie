@@ -314,7 +314,7 @@ trait GridHeadRow: Sized {
     fn into_html(self, row_header_offset: usize, column_header_offset: usize, with_span: bool, add_corner: bool, thead: &mut html_builder::Node<'_>) {
         let mut tr = thead.tr().attr(&format!("class=\"{}\"",Self::get_class()));
         if with_span {
-            if add_corner && (column_header_offset > 0) {
+            if add_corner && (row_header_offset > 0) {
                 let th = tr.th();
                 let th = if column_header_offset > 1 {
                     th.attr(&format!("colspan={column_header_offset}"))
