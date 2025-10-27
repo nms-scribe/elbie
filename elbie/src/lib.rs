@@ -17,6 +17,7 @@ use core::fmt;
 use core::iter::Enumerate;
 use core::iter::Peekable;
 use core::slice::Iter;
+use std::collections::hash_map::Entry;
 use std::collections::HashSet;
 use crate::grid::Cell;
 use crate::grid::ColumnHeader;
@@ -49,6 +50,48 @@ pub mod lexicon;
 
 /*
 Elbie = LB, Language Builder, and is a bunch of tools for building a constructed language.
+*/
+
+/* TODO: Transformations:
+
+A LanguageTransformer basically looks like this:
+
+struct Transformer
+  phonemes: HashMap<str,Rc<Phoneme>>
+  sets: HashMap<str,Bag<Rc<Phoneme>>>
+  rules: Vec<(Vec<Match>,Vec<Replace>)>
+
+Transformer::from_language(Language) -> Self
+-- copies sets and phonemes from the specified language (TODO: possibly into a namespace?)
+
+Transformer::add_target_language(&mut self, Language)
+-- copies sets and phonemes from the target language, (TODO: possibly into a namespace?)
+-- if phoneme names match, then they will not be copied.
+-- Note that this is optional, as Transformers could be used to implement orthography instead
+
+Transformer::add_rule(Match,Vec<Vec<Rc<Phoneme>>>)
+--- see below for Matches and Replaces
+--- adds a "transformation" rule.
+
+Transformer::transform(Word,trace) -> Word
+-- applies each rule, one at a time and in order, to the word, transforming it as it goes, and returns the specified word
+-- if the pattern matches, any Captures in the rule are replaced with the Replace expression. There must be one Replace expression for each Capture, all phonemes in the replace will be inserted where the capture was found.
+
+struct Match
+  initial: indicates that the match must occur at the beginning of the word. The matcher will not continue on to see other phonems in the word if the first match doesn't work
+  final: indicates that the match must occur at the end of the word. The matcher will not match if the end of the word is not reached when the pattern is matched.
+  patterns: Vec<Pattern>
+
+enum Pattern
+  Match(name,Usize,NonZeroUsize) -- matches from x to y phonemes of the specified set or phoneme name if the set doesn't exist, a match can match 0 phonemes.
+  Capture(name,Usize,NonZeroUsize) -- "captures" from x to y phonemes of the specified set or phoneme name, if a capture has a min of 0, then it will always capture there, and any replace expression is inserted in it's place.
+  -- repeats are built into the enums, so I don't need anything special
+  -- sequences are part of the pattern
+  -- choices can be handled two ways:
+     -- a choice of a single phoneme can be a set
+     -- a choice of two different sequences can be a new rule.
+
+
 */
 
 /*
@@ -99,8 +142,12 @@ pub enum LanguageError {
     UnknownPhoneme(&'static str),
     #[error("Phoneme {0} already exists.")]
     PhonemeAlreadyExists(&'static str),
+    #[error("A set already exists with the phoneme name {0}")]
+    SetExistsWithPhonemeName(&'static str),
     #[error("Set {0} already exists.")]
     SetAlreadyExists(&'static str),
+    #[error("A phoneme already exists with the set name {0}")]
+    PhonemeExistsWithSetName(&'static str),
     #[error( "Environment {0} already exists.")]
     EnvironmentAlreadyExists(&'static str),
     #[error("Unknown environment {0}.")]
@@ -718,22 +765,33 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
-    fn add_phoneme_to_class(&mut self, class: &'static str, phoneme: Rc<Phoneme>) {
-      let class = self.sets.entry(class).or_insert_with(Bag::new);
+    fn add_phoneme_to_set(&mut self, class: &'static str, phoneme: Rc<Phoneme>) -> Result<(),LanguageError> {
+      let class = match self.sets.entry(class) {
+        Entry::Occupied(entry) => entry.into_mut(),
+        Entry::Vacant(entry) => {
+            if self.phonemes.contains_key(class) {
+                return Err(LanguageError::PhonemeExistsWithSetName(class))
+            }
+            entry.insert(Bag::new())
+        },
+      };
       if !class.contains(&phoneme) {
         _ = class.insert(phoneme);
       }
+      Ok(())
     }
 
     fn add_phoneme_object(&mut self, phoneme: Rc<Phoneme>, classes: &[&'static str], behavior: PhonemeBehavior<ORTHOGRAPHIES>) -> Result<Rc<Phoneme>,LanguageError> {
       if self.phonemes.contains_key(phoneme.name) {
         Err(LanguageError::PhonemeAlreadyExists(phoneme.name))
+      } else if self.sets.contains_key(phoneme.name) {
+        Err(LanguageError::SetExistsWithPhonemeName(phoneme.name))
       } else {
         _ = self.phonemes.insert(phoneme.name, phoneme.clone());
         _ = self.phoneme_behavior.insert(phoneme.clone(), behavior);
-        self.add_phoneme_to_class(PHONEME,phoneme.clone());
+        self.add_phoneme_to_set(PHONEME,phoneme.clone())?;
         for class in classes {
-          self.add_phoneme_to_class(class,phoneme.clone())
+          self.add_phoneme_to_set(class,phoneme.clone())?
         }
         Ok(phoneme)
       }
@@ -787,6 +845,8 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
     pub fn build_difference(&mut self, name: &'static str, base_set: &'static str, exclude_sets: &[&'static str]) -> Result<(),LanguageError> {
       if self.sets.contains_key(name) {
         Err(LanguageError::SetAlreadyExists(name))
+      } else if self.phonemes.contains_key(name) {
+        Err(LanguageError::PhonemeExistsWithSetName(name))
       } else {
         let mut set = self.get_set(base_set)?.clone();
         for subset in exclude_sets {
@@ -801,6 +861,8 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
     pub fn build_intersection(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),LanguageError> {
       if self.sets.contains_key(name) {
         Err(LanguageError::SetAlreadyExists(name))
+      } else if self.phonemes.contains_key(name) {
+        Err(LanguageError::PhonemeExistsWithSetName(name))
       } else {
           let mut sets = sets.iter();
           if let Some(set) = sets.next() {
@@ -823,6 +885,8 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
     pub fn build_union(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),LanguageError> {
       if self.sets.contains_key(name) {
         Err(LanguageError::SetAlreadyExists(name))
+      } else if self.phonemes.contains_key(name) {
+        Err(LanguageError::PhonemeExistsWithSetName(name))
       } else {
         let mut set = Bag::new();
         for subset in sets {
@@ -839,6 +903,8 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
       if self.sets.contains_key(name) {
         Err(LanguageError::SetAlreadyExists(name))
+      } else if self.phonemes.contains_key(name) {
+        Err(LanguageError::PhonemeExistsWithSetName(name))
       } else {
         let mut exclude_phonemes = vec![];
         for phoneme in exclude_phoneme_strs {
