@@ -3,14 +3,14 @@ use core::iter;
 use std::rc::Rc;
 use core::slice::Iter;
 
-use elbie::Language;
-use elbie::Phoneme;
-use elbie::LanguageError;
-use elbie::TableOption;
-use elbie::PHONEME;
-use elbie::EnvironmentBranch;
-use elbie::EnvironmentChoice;
-use elbie::run_main;
+use elbie::language::Language;
+use elbie::phoneme::Phoneme;
+use elbie::errors::LanguageError;
+use elbie::phoneme_table::TableOption;
+use elbie::language::PHONEME;
+use elbie::phonotactics::EnvironmentBranch;
+use elbie::phonotactics::EnvironmentChoice;
+use elbie::cli::run_main;
 
 /* FUTURE: Another attempt at making a DSL for this.
 

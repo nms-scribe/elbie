@@ -1,5 +1,5 @@
 use core::fmt::Write;
-use crate::Word;
+use crate::word::Word;
 use crate::grid::GridStyle;
 use html_builder::Html5 as _;
 use json::object::Object as JSONObject;

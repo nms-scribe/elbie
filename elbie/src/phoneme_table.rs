@@ -9,7 +9,7 @@ use crate::grid::Grid;
 use crate::grid::GridRow;
 use crate::grid::RowHeader;
 use crate::phoneme_table::sealed::InnerTable as _;
-use crate::LanguageError;
+use crate::errors::LanguageError;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::hash_map::Entry;

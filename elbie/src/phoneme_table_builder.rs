@@ -5,7 +5,7 @@ use crate::phoneme_table::Table2DDef;
 use crate::phoneme_table::Table3DDef;
 use crate::errors::LanguageError;
 use crate::phoneme_table::TableOption;
-use crate::Table4DDef;
+use crate::phoneme_table::Table4DDef;
 use std::collections::HashSet;
 use crate::phoneme_table::TableDef;
 

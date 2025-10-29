@@ -1,5 +1,5 @@
 use crate::errors::LanguageError;
-use crate::Phoneme;
+use crate::phoneme::Phoneme;
 use core::fmt;
 use core::fmt::Formatter;
 use core::fmt::Display;
