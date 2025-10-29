@@ -57,22 +57,27 @@ pub struct Inventory {
   sets: HashMap<&'static str,Bag<Rc<Phoneme>>>, // It seems like a hashset would be better, but I can't pick randomly from it without converting to vec anyway.
 }
 
+impl Default for Inventory {
+    fn default() -> Self {
+        let mut sets = HashMap::new();
+        _ = sets.insert(PHONEME, Bag::new());
+        _ = sets.insert(EMPTY, Bag::new());
+        let phonemes = HashMap::new();
+        Self {
+          phonemes,
+          sets,
+        }
+    }
+}
+
 impl Inventory {
 
     #[must_use]
     pub fn new() -> Self {
-      let mut sets = HashMap::new();
-      _ = sets.insert(PHONEME, Bag::new());
-      _ = sets.insert(EMPTY, Bag::new());
-      let phonemes = HashMap::new();
-      Self {
-        phonemes,
-        sets,
-      }
-
+        Self::default()
     }
 
-    pub(crate) fn phonemes(&self) -> &HashMap<&'static str, Rc<Phoneme>> {
+    pub(crate) const fn phonemes(&self) -> &HashMap<&'static str, Rc<Phoneme>> {
         &self.phonemes
     }
 

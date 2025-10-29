@@ -163,18 +163,18 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
     }
 
     // will eventually be used over add_difference
-    #[deprecated="Use `<Language as InventoryLoader>::add_difference`"]
+    #[deprecated(since="0.2.2",note="Use `<Language as InventoryLoader>::add_difference`")]
     pub fn build_difference(&mut self, name: &'static str, base_set: &'static str, exclude_sets: &[&'static str]) -> Result<(),LanguageError> {
       self.inventory.add_difference(name, base_set, exclude_sets)
     }
 
-    #[deprecated="Use `<Language as InventoryLoader>::add_intersection`"]
+    #[deprecated(since="0.2.2",note="Use `<Language as InventoryLoader>::add_intersection`")]
     pub fn build_intersection(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),LanguageError> {
       self.inventory.add_intersection(name, sets)
     }
 
     // allows building a union out of multiple sets... FUTURE: The 'add' functions will become obsolete and replace with 'build' functions.
-    #[deprecated="Use `<Language as InventoryLoader>::add_union`"]
+    #[deprecated(since="0.2.2",note="Use `<Language as InventoryLoader>::add_union`")]
     pub fn build_union(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),LanguageError> {
       self.inventory.add_union(name, sets)
 
@@ -588,8 +588,8 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
 impl<const ORTHOGRAPHIES: usize> InventoryLoader for Language<ORTHOGRAPHIES> {
 
-    fn add_phoneme(&mut self, phoneme: &'static str, classes: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
-        self.add_phoneme_to_inventory(phoneme,classes,PhonemeBehavior::default())
+    fn add_phoneme(&mut self, phoneme: &'static str, sets: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
+        self.add_phoneme_to_inventory(phoneme,sets,PhonemeBehavior::default())
     }
 
     fn add_difference(&mut self, name: &'static str, base_set: &'static str, exclude_sets: &[&'static str]) -> Result<(),LanguageError> {

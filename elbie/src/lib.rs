@@ -21,35 +21,35 @@ pub mod language;
 pub mod cli;
 #[cfg(test)] mod test;
 
-// Old paths: remove once I'm sure I've fixed all of my languages...
-#[deprecated="Use `elbie::errors::LanguageError` instead."]
+// Old paths: remove once I'm sure I've fixed all of my languages... Or, maybe just wait until I increase the version number.
+#[deprecated(since="0.2.2",note="Use `elbie::errors::LanguageError` instead.")]
 pub type LanguageError = errors::LanguageError;
-#[deprecated="Use `elbie::phoneme::EMPTY` instead."]
+#[deprecated(since="0.2.2",note="Use `elbie::phoneme::EMPTY` instead.")]
 pub const EMPTY: &str = phoneme::EMPTY;
-#[deprecated="Use `elbie::phoneme::PHONEME` instead."]
+#[deprecated(since="0.2.2",note="Use `elbie::phoneme::PHONEME` instead.")]
 pub const PHONEME: &str = phoneme::PHONEME;
-#[deprecated="Use `elbie::language::Language` instead."]
+#[deprecated(since="0.2.2",note="Use `elbie::language::Language` instead.")]
 pub type Language<const ORTHOGRAPHIES: usize> = language::Language<ORTHOGRAPHIES>;
-#[deprecated="Use `elbie::phoneme::Phoneme` instead."]
+#[deprecated(since="0.2.2",note="Use `elbie::phoneme::Phoneme` instead.")]
 pub type Phoneme = phoneme::Phoneme;
-#[deprecated="Use `elbie::phoneme_table::TableOption` instead."]
+#[deprecated(since="0.2.2",note="Use `elbie::phoneme_table::TableOption` instead.")]
 pub type TableOption = phoneme_table::TableOption;
-#[deprecated="Use `elbie::phoneme_table::Axis` instead."]
+#[deprecated(since="0.2.2",note="Use `elbie::phoneme_table::Axis` instead.")]
 pub type Axis = phoneme_table::Axis;
-#[deprecated="Use `elbie::phoneme_table::HeaderDef` instead."]
+#[deprecated(since="0.2.2",note="Use `elbie::phoneme_table::HeaderDef` instead.")]
 pub type HeaderDef = phoneme_table::HeaderDef;
-#[deprecated="Use `elbie::phoneme_table_builder::TableBuilder` instead."]
+#[deprecated(since="0.2.2",note="Use `elbie::phoneme_table_builder::TableBuilder` instead.")]
 pub type TableBuilder<'language,const ORTHOGRAPHIES: usize> = phoneme_table_builder::TableBuilder<'language,ORTHOGRAPHIES>;
-#[deprecated="Use `elbie::phonotactics::EnvironmentBranch` instead."]
+#[deprecated(since="0.2.2",note="Use `elbie::phonotactics::EnvironmentBranch` instead.")]
 pub type EnvironmentBranch = phonotactics::EnvironmentBranch;
-#[deprecated="Use `elbie::phonotactics::EnvironmentChoice` instead."]
+#[deprecated(since="0.2.2",note="Use `elbie::phonotactics::EnvironmentChoice` instead.")]
 pub type EnvironmentChoice = phonotactics::EnvironmentChoice;
-#[deprecated="Use `elbie::word::Word` instead."]
+#[deprecated(since="0.2.2",note="Use `elbie::word::Word` instead.")]
 pub type Word = word::Word;
 
 
 
-#[deprecated="use `elbie::cli::run_main` instead."]
+#[deprecated(since="0.2.2",note="use `elbie::cli::run_main` instead.")]
 pub fn run_main<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHOGRAPHIES: usize>(args: &mut Args, language: Result<language::Language<ORTHOGRAPHIES>,errors::LanguageError>) {
     cli::run_main(args, language)
 }
