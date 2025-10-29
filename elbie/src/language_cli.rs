@@ -304,7 +304,7 @@ pub(crate) fn generate_words<const ORTHOGRAPHIES: usize>(grid_style: Option<&Gri
     grid.into_output(grid_style.unwrap_or(&GridStyle::Plain)).print_to_stdout();
 }
 
-pub fn run_main<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHOGRAPHIES: usize>(args: &mut Args, language: Result<Language<ORTHOGRAPHIES>,LanguageError>) {
+pub fn run<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHOGRAPHIES: usize>(args: &mut Args, language: Result<Language<ORTHOGRAPHIES>,LanguageError>) {
   let arguments = parse_args(&mut args.skip(1));
 
   if let Some(comment) = arguments.comment {
