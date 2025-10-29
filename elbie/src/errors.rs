@@ -58,5 +58,9 @@ pub enum LanguageError {
     #[error("Phoneme set was not added as an {0:?} to the phoneme table.")]
     InvalidAxisForPhoneme(Axis),
     #[error("Phoneme tables are limited to a maximum of four axes.")]
-    TooManyAxisses
+    TooManyAxisses,
+
+    // transformation errors
+    #[error("Sequence '{0}' was already defined.")]
+    TransformationSequenceAlreadyExists(&'static str)
 }
