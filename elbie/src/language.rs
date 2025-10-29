@@ -4,6 +4,9 @@ use crate::grid::ColumnHeader;
 use crate::grid::Grid;
 use crate::grid::GridRow;
 use crate::lexicon::LexiconEntry;
+use crate::phoneme::Inventory;
+use crate::phoneme::InventoryLoader;
+use crate::phoneme::PHONEME;
 use crate::phoneme_behavior::PhonemeBehavior;
 use crate::phoneme_table::Table as _;
 use crate::phoneme_table::Table0D;
@@ -33,15 +36,11 @@ use core::slice::Iter;
 use core::iter::Peekable;
 use crate::orthography::SpellingCallback;
 use crate::orthography::SpellingBehavior;
-use std::collections::hash_map::Entry;
 use crate::errors::LanguageError;
 use crate::phoneme_table_builder::TableEntry;
 use crate::phonotactics::EnvironmentBranch;
 use crate::phoneme::Phoneme;
 use std::collections::HashMap;
-
-pub const PHONEME: &str = "phoneme";
-pub const EMPTY: &str = "empty";
 
 
 
@@ -64,13 +63,14 @@ pub struct Language<const ORTHOGRAPHIES: usize> {
   name: &'static str,
   initial_environment: &'static str,
   initial_phoneme_set: &'static str,
-  phonemes: HashMap<&'static str,Rc<Phoneme>>,
+  inventory: Inventory,
   // These are kept separate from the phoneme structure to reduce some type dependencies.
   // For example, if this were part of the Phoneme structure, the ORTHOGRAPHIES parameter would be required on almost everything.
+  // But also, keeping this separate allows me to have a separate Inventory object which is useful for phonemes out of a language context
+  // (such as temporary phonemes during transformations)
   phoneme_behavior: HashMap<Rc<Phoneme>,PhonemeBehavior<ORTHOGRAPHIES>>,
   orthographies: [&'static str; ORTHOGRAPHIES],
   environments: HashMap<&'static str,Vec<EnvironmentBranch>>,
-  sets: HashMap<&'static str,Bag<Rc<Phoneme>>>, // It seems like a hashset would be better, but I can't pick randomly from it without converting to vec anyway.
   tables: Vec<TableEntry>
 }
 
@@ -78,10 +78,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     #[must_use]
     pub fn new(name: &'static str, initial_phoneme_set: &'static str, initial_environment: &'static str, orthographies: [&'static str; ORTHOGRAPHIES]) -> Self {
-      let mut sets = HashMap::new();
-      _ = sets.insert(PHONEME, Bag::new());
-      _ = sets.insert(EMPTY, Bag::new());
-      let phonemes = HashMap::new();
+      let inventory = Inventory::new();
       let environments = HashMap::new();
       let phoneme_behavior = HashMap::new();
       let tables = vec![];
@@ -89,14 +86,17 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
         name,
         initial_environment,
         initial_phoneme_set,
-        phonemes,
+        inventory,
         phoneme_behavior,
         orthographies,
         environments,
-        sets,
         tables
       }
 
+    }
+
+    pub(crate) const fn inventory(&self) -> &Inventory {
+        &self.inventory
     }
 
     pub(crate) const fn orthographies(&self) -> &[&'static str; ORTHOGRAPHIES] {
@@ -115,41 +115,16 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
         self.name
     }
 
-    pub(crate) fn add_phoneme_to_set(&mut self, class: &'static str, phoneme: Rc<Phoneme>) -> Result<(),LanguageError> {
-      let class = match self.sets.entry(class) {
-        Entry::Occupied(entry) => entry.into_mut(),
-        Entry::Vacant(entry) => {
-            if self.phonemes.contains_key(class) {
-                return Err(LanguageError::PhonemeExistsWithSetName(class))
-            }
-            entry.insert(Bag::new())
-        },
-      };
-      if !class.contains(&phoneme) {
-        _ = class.insert(phoneme);
-      }
-      Ok(())
-    }
 
-    pub(crate) fn add_phoneme_object(&mut self, phoneme: Rc<Phoneme>, sets: &[&'static str], behavior: PhonemeBehavior<ORTHOGRAPHIES>) -> Result<Rc<Phoneme>,LanguageError> {
-      if self.phonemes.contains_key(phoneme.name) {
-        Err(LanguageError::PhonemeAlreadyExists(phoneme.name))
-      } else if self.sets.contains_key(phoneme.name) {
-        Err(LanguageError::SetExistsWithPhonemeName(phoneme.name))
-      } else {
-        _ = self.phonemes.insert(phoneme.name, phoneme.clone());
-        _ = self.phoneme_behavior.insert(phoneme.clone(), behavior);
-        self.add_phoneme_to_set(PHONEME,phoneme.clone())?;
-        for class in sets {
-          self.add_phoneme_to_set(class,phoneme.clone())?
-        }
-        Ok(phoneme)
-      }
+    fn add_phoneme_to_inventory(&mut self, phoneme: &'static str, sets: &[&'static str], behavior: PhonemeBehavior<ORTHOGRAPHIES>) -> Result<Rc<Phoneme>,LanguageError> {
+      let phoneme = self.inventory.add_phoneme(phoneme, sets)?;
+      _ = self.phoneme_behavior.insert(phoneme.clone(), behavior);
+      Ok(phoneme)
 
     }
 
-    pub fn add_phoneme(&mut self, phoneme: &'static str, classes: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
-      self.add_phoneme_object(Phoneme::new(phoneme),classes,PhonemeBehavior::default())
+    fn add_phoneme_with_spelling_behavior(&mut self, phoneme: &'static str, behaviors: [SpellingBehavior<ORTHOGRAPHIES>; ORTHOGRAPHIES], classes: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
+      self.add_phoneme_to_inventory(phoneme,classes,PhonemeBehavior::new(behaviors))
     }
 
     pub fn add_phoneme_with_spelling(&mut self, phoneme: &'static str, orthography: [&'static str; ORTHOGRAPHIES], classes: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
@@ -160,10 +135,6 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
     pub fn add_phoneme_with_spelling_fn(&mut self, phoneme: &'static str, callbacks: [SpellingCallback<ORTHOGRAPHIES>; ORTHOGRAPHIES], classes: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
       let behaviors = callbacks.map(|f| SpellingBehavior::Callback(f));
       self.add_phoneme_with_spelling_behavior(phoneme, behaviors, classes)
-    }
-
-    pub(crate) fn add_phoneme_with_spelling_behavior(&mut self, phoneme: &'static str, behaviors: [SpellingBehavior<ORTHOGRAPHIES>; ORTHOGRAPHIES], classes: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
-      self.add_phoneme_object(Phoneme::new(phoneme),classes,PhonemeBehavior::new(behaviors))
     }
 
     /// # Panics
@@ -192,95 +163,21 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
     }
 
     // will eventually be used over add_difference
+    #[deprecated="Use `<Language as InventoryLoader>::add_difference`"]
     pub fn build_difference(&mut self, name: &'static str, base_set: &'static str, exclude_sets: &[&'static str]) -> Result<(),LanguageError> {
-      if self.sets.contains_key(name) {
-        Err(LanguageError::SetAlreadyExists(name))
-      } else if self.phonemes.contains_key(name) {
-        Err(LanguageError::PhonemeExistsWithSetName(name))
-      } else {
-        let mut set = self.get_set(base_set)?.clone();
-        for subset in exclude_sets {
-          let subset = self.get_set(subset)?;
-          set = set.difference(subset);
-        }
-        _ = self.sets.insert(name, set);
-        Ok(())
-      }
+      self.inventory.add_difference(name, base_set, exclude_sets)
     }
 
+    #[deprecated="Use `<Language as InventoryLoader>::add_intersection`"]
     pub fn build_intersection(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),LanguageError> {
-      if self.sets.contains_key(name) {
-        Err(LanguageError::SetAlreadyExists(name))
-      } else if self.phonemes.contains_key(name) {
-        Err(LanguageError::PhonemeExistsWithSetName(name))
-      } else {
-          let mut sets = sets.iter();
-          if let Some(set) = sets.next() {
-              let mut set = self.get_set(set)?.clone();
-              for subset in sets {
-                  let subset = self.get_set(subset)?;
-                  set = set.intersection(subset)
-              }
-              _ = self.sets.insert(name, set);
-              Ok(())
-          } else {
-              Err(LanguageError::SetIsEmpty(name))
-          }
-
-      }
-
+      self.inventory.add_intersection(name, sets)
     }
 
     // allows building a union out of multiple sets... FUTURE: The 'add' functions will become obsolete and replace with 'build' functions.
+    #[deprecated="Use `<Language as InventoryLoader>::add_union`"]
     pub fn build_union(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),LanguageError> {
-      if self.sets.contains_key(name) {
-        Err(LanguageError::SetAlreadyExists(name))
-      } else if self.phonemes.contains_key(name) {
-        Err(LanguageError::PhonemeExistsWithSetName(name))
-      } else {
-        let mut set = Bag::new();
-        for subset in sets {
-          let subset = self.get_set(subset)?;
-          set = set.union(subset);
-        }
-        _ = self.sets.insert(name, set);
-        Ok(())
-      }
+      self.inventory.add_union(name, sets)
 
-    }
-
-    pub fn add_exclusion(&mut self, name: &'static str, set: &'static str, exclude_phoneme_strs: &[&'static str]) -> Result<(),LanguageError> {
-
-      if self.sets.contains_key(name) {
-        Err(LanguageError::SetAlreadyExists(name))
-      } else if self.phonemes.contains_key(name) {
-        Err(LanguageError::PhonemeExistsWithSetName(name))
-      } else {
-        let mut exclude_phonemes = vec![];
-        for phoneme in exclude_phoneme_strs {
-          exclude_phonemes.push(self.get_phoneme(phoneme)?);
-        }
-        let set = self.new_set(set, &exclude_phonemes)?;
-        _ = self.sets.insert(name,set);
-        Ok(())
-
-      }
-
-    }
-
-
-    pub(crate) fn get_set(&self, set: &'static str) -> Result<&Bag<Rc<Phoneme>>,LanguageError> {
-      match self.sets.get(set) {
-        Some(set) => Ok(set),
-        None => Err(LanguageError::UnknownSet(set))
-      }
-    }
-
-    pub(crate) fn get_phoneme(&self, phoneme: &'static str) -> Result<&Rc<Phoneme>,LanguageError> {
-      match self.phonemes.get(phoneme) {
-        Some(phoneme) => Ok(phoneme),
-        None => Err(LanguageError::UnknownPhoneme(phoneme))
-      }
     }
 
     pub(crate) fn get_environment(&self, environment: &'static str) -> Result<&Vec<EnvironmentBranch>,LanguageError> {
@@ -305,54 +202,22 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
-    pub(crate) fn new_set(&self, set: &'static str, exclude_phonemes: &[&Rc<Phoneme>]) -> Result<Bag<Rc<Phoneme>>,LanguageError> {
-      let mut set = self.get_set(set)?.clone();
-      for phoneme in exclude_phonemes {
-        _ = set.remove(phoneme);
-      }
-      Ok(set)
-    }
-
-    pub(crate) fn phoneme_is(&self, phoneme: &Rc<Phoneme>, set: &'static str) -> Result<bool,LanguageError> {
-      Ok(self.get_set(set)?.contains(phoneme))
-    }
-
-    pub(crate) fn _phoneme_equals(&self, phoneme: &Rc<Phoneme>, other: &'static str) -> Result<bool,LanguageError> {
-      match self.phonemes.get(other) {
-        Some(other) => Ok(phoneme == other),
-        None => Err(LanguageError::UnknownPhoneme(other))
-      }
-    }
-
-    pub(crate) fn choose(&self, set: &'static str, rng: &mut ThreadRng) -> Result<Rc<Phoneme>,LanguageError> {
-      match self.get_set(set)?.choose(rng) {
-        Some(phoneme) => Ok(phoneme.clone()),
-        None => Err(LanguageError::SetIsEmpty(set))
-      }
-    }
-
-    pub(crate) fn choose_except(&self, set: &'static str, exclude_phonemes: &[&Rc<Phoneme>], rng: &mut ThreadRng) -> Result<Rc<Phoneme>,LanguageError> {
-      match self.new_set(set,exclude_phonemes)?.choose(rng) {
-        Some(phoneme) => Ok(phoneme.clone()),
-        None => Err(LanguageError::SetIsEmptyWithFilter(set))
-      }
-    }
 
     pub(crate) fn build_word(&self, environment_name: &'static str, word: &mut Word, phoneme: &Rc<Phoneme>, rng: &mut ThreadRng) -> Result<(),LanguageError> {
 
         let environment = self.get_environment(environment_name)?;
 
         for branch in environment {
-            if self.phoneme_is(phoneme, branch.set())? {
+            if self.inventory.phoneme_is(phoneme, branch.set())? {
                 word.push(phoneme.clone()); // have to clone because we're referencing it again later. It's an RC, so that's okay.
                 match branch.choices().choose(rng) {
                     None => return Err(LanguageError::NoEnvironmentChoices(environment_name)),
                     Some(EnvironmentChoice::Done) => return Ok(()),
                     Some(EnvironmentChoice::Continuing(generate_set,continuing_environment,can_duplicate)) => {
                         let phoneme = if *can_duplicate {
-                            self.choose(generate_set,rng)?
+                            self.inventory.choose(generate_set,rng)?
                         } else {
-                            self.choose_except(generate_set,&[phoneme],rng)?
+                            self.inventory.choose_except(generate_set,&[phoneme],rng)?
                         };
                         return self.build_word(continuing_environment, word, &phoneme, rng)
                     }
@@ -370,7 +235,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
         let mut word = Word::new(&[]);
         let mut rng = rand::rng();
-        let phoneme = self.choose(self.initial_phoneme_set, &mut rng)?;
+        let phoneme = self.inventory.choose(self.initial_phoneme_set, &mut rng)?;
         self.build_word(self.initial_environment, &mut word, &phoneme, &mut rng)?;
         Ok(word)
     }
@@ -420,7 +285,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
         }
 
         for branch in environment {
-            if self.phoneme_is(phoneme, branch.set())? {
+            if self.inventory.phoneme_is(phoneme, branch.set())? {
 
                 let next_phoneme = word.next();
 
@@ -434,9 +299,9 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
                         },
                         ((EnvironmentChoice::Continuing(generate_set,continuing_environment,can_duplicate),_),Some((next_idx,next_phoneme))) => {
                             let valid_phoneme = if *can_duplicate {
-                                self.phoneme_is(next_phoneme, generate_set)?
+                                self.inventory.phoneme_is(next_phoneme, generate_set)?
                             } else {
-                                (next_phoneme != phoneme) && self.phoneme_is(next_phoneme, generate_set)?
+                                (next_phoneme != phoneme) && self.inventory.phoneme_is(next_phoneme, generate_set)?
                             };
 
                             if valid_phoneme {
@@ -499,7 +364,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
         let mut word = word.phonemes().iter().enumerate();
         if let Some((idx,phoneme)) = word.next() {
-            if self.phoneme_is(phoneme, self.initial_phoneme_set)? {
+            if self.inventory.phoneme_is(phoneme, self.initial_phoneme_set)? {
               let valid = ValidWordElement::Phoneme(idx,phoneme.clone(),self.initial_phoneme_set,self.initial_environment);
               trace(0,ValidationTraceMessage::FoundValid(&valid));
               self.validate_word(self.initial_environment, &mut word, idx, phoneme,1,&[valid],trace)
@@ -515,7 +380,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     pub(crate) fn read_word(&self,input: &str) -> Result<Word,LanguageError> {
         // not an efficient algorithm, but it works...
-        let mut phonemes: Vec<Rc<Phoneme>> = self.phonemes.values().cloned().collect();
+        let mut phonemes: Vec<Rc<Phoneme>> = self.inventory.phonemes().values().cloned().collect();
         phonemes.sort_by(sort_phonemes_by_length_descending);
 
         let mut word: Vec<Rc<Phoneme>> = vec![];
@@ -585,11 +450,11 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
       let mut result = Vec::new();
 
-      let mut unprinted_phonemes: Bag<Rc<Phoneme>> = self.get_set(PHONEME)?.clone();
+      let mut unprinted_phonemes: Bag<Rc<Phoneme>> = self.inventory.get_set(PHONEME)?.clone();
 
       for entry in &self.tables {
 
-        let grid = self.build_phoneme_grid(self.get_set(entry.set())?, entry.definition(), &mut Some(&mut unprinted_phonemes))?;
+        let grid = self.build_phoneme_grid(self.inventory.get_set(entry.set())?, entry.definition(), &mut Some(&mut unprinted_phonemes))?;
 
         result.push((entry.id(),grid));
 
@@ -626,7 +491,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
             });
 
             if let Some(entry) = table {
-                Ok(Some(self.build_phoneme_grid(self.get_set(entry.set())?, entry.definition(), &mut None)?))
+                Ok(Some(self.build_phoneme_grid(self.inventory.get_set(entry.set())?, entry.definition(), &mut None)?))
 
 
             } else {
@@ -638,7 +503,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     pub(crate) fn display_spelling(&self, columns: usize) -> Result<Grid,LanguageError> {
 
-      let phonemes: Bag<Rc<Phoneme>> = self.get_set(PHONEME)?.clone();
+      let phonemes: Bag<Rc<Phoneme>> = self.inventory.get_set(PHONEME)?.clone();
       let phonemes = phonemes.list();
 
       let mut grid = Grid::new(TableClass::ElbieOrthography, format!("Spelling for {}",self.name));
@@ -717,5 +582,31 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
 
     }
+
+}
+
+
+impl<const ORTHOGRAPHIES: usize> InventoryLoader for Language<ORTHOGRAPHIES> {
+
+    fn add_phoneme(&mut self, phoneme: &'static str, classes: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
+        self.add_phoneme_to_inventory(phoneme,classes,PhonemeBehavior::default())
+    }
+
+    fn add_difference(&mut self, name: &'static str, base_set: &'static str, exclude_sets: &[&'static str]) -> Result<(),LanguageError> {
+        self.inventory.add_difference(name, base_set, exclude_sets)
+    }
+
+    fn add_intersection(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),LanguageError> {
+        self.inventory.add_intersection(name, sets)
+    }
+
+    fn add_union(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),LanguageError> {
+        self.inventory.add_union(name, sets)
+    }
+
+    fn add_exclusion(&mut self, name: &'static str, set: &'static str, exclude_phoneme_strs: &[&'static str]) -> Result<(),LanguageError> {
+        self.inventory.add_exclusion(name, set, exclude_phoneme_strs)
+    }
+
 
 }

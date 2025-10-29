@@ -329,19 +329,19 @@ impl Table4D<'_> {
         let rows: Vec<_> = self.definition.rows_by_set.keys().copied().collect();
         let subrows: Vec<_> = self.definition.subrows_by_set.keys().copied().collect();
         for column in &columns {
-            let column_set = language.get_set(column).unwrap();
+            let column_set = language.inventory().get_set(column).unwrap();
             let phoneme_set = phoneme_set.intersection(column_set);
 
             for subcolumn in &subcolumns {
-                let subcolumn_set = language.get_set(subcolumn).unwrap();
+                let subcolumn_set = language.inventory().get_set(subcolumn).unwrap();
                 let phoneme_set = phoneme_set.intersection(subcolumn_set);
 
                 for row in &rows {
-                    let row_set = language.get_set(row).unwrap();
+                    let row_set = language.inventory().get_set(row).unwrap();
                     let phoneme_set = phoneme_set.intersection(row_set);
 
                     for subrow in &subrows {
-                        let subrow_set = language.get_set(subrow).unwrap();
+                        let subrow_set = language.inventory().get_set(subrow).unwrap();
                         let phoneme_set = phoneme_set.intersection(subrow_set);
 
                         let sets = PhonemeSets4D {
@@ -574,15 +574,15 @@ impl Table3D<'_> {
         let subcolumns: Vec<_> = self.definition.subcolumns_by_set.keys().copied().collect();
         let rows: Vec<_> = self.definition.rows_by_set.keys().copied().collect();
         for column in &columns {
-            let column_set = language.get_set(column).unwrap();
+            let column_set = language.inventory().get_set(column).unwrap();
             let phoneme_set = phoneme_set.intersection(column_set);
 
             for subcolumn in &subcolumns {
-                let subcolumn_set = language.get_set(subcolumn).unwrap();
+                let subcolumn_set = language.inventory().get_set(subcolumn).unwrap();
                 let phoneme_set = phoneme_set.intersection(subcolumn_set);
 
                 for row in &rows {
-                    let row_set = language.get_set(row).unwrap();
+                    let row_set = language.inventory().get_set(row).unwrap();
                     let phoneme_set = phoneme_set.intersection(row_set);
 
 
@@ -771,11 +771,11 @@ impl Table2D<'_> {
         let columns: Vec<_> = self.definition.columns_by_set.keys().copied().collect();
         let rows: Vec<_> = self.definition.rows_by_set.keys().copied().collect();
         for column in &columns {
-            let column_set = language.get_set(column).unwrap();
+            let column_set = language.inventory().get_set(column).unwrap();
             let phoneme_set = phoneme_set.intersection(column_set);
 
             for row in &rows {
-                let row_set = language.get_set(row).unwrap();
+                let row_set = language.inventory().get_set(row).unwrap();
                 let phoneme_set = phoneme_set.intersection(row_set);
 
 
@@ -924,7 +924,7 @@ impl Table1D<'_> {
 
 
         for row in &rows {
-            let row_set = language.get_set(row).unwrap();
+            let row_set = language.inventory().get_set(row).unwrap();
             let phoneme_set = phoneme_set.intersection(row_set);
 
             for phoneme in phoneme_set.iter() {

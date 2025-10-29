@@ -4,12 +4,30 @@ Elbie = LB, Language Builder, and is a bunch of tools for building a constructed
 */
 
 
+pub mod phoneme_table;
+mod grid;
+mod lexicon;
+pub mod errors;
+mod bag;
+mod weighted_vec;
+pub mod phoneme;
+mod orthography;
+mod phoneme_behavior;
+pub mod word;
+pub mod phonotactics;
+mod validation;
+pub mod phoneme_table_builder;
+pub mod language;
+pub mod cli;
+#[cfg(test)] mod test;
+
+// Old paths: remove once I'm sure I've fixed all of my languages...
 #[deprecated="Use `elbie::errors::LanguageError` instead."]
 pub type LanguageError = errors::LanguageError;
-#[deprecated="Use `elbie::language::EMPTY` instead."]
-pub const EMPTY: &str = language::EMPTY;
-#[deprecated="Use `elbie::language::PHONEME` instead."]
-pub const PHONEME: &str = language::PHONEME;
+#[deprecated="Use `elbie::phoneme::EMPTY` instead."]
+pub const EMPTY: &str = phoneme::EMPTY;
+#[deprecated="Use `elbie::phoneme::PHONEME` instead."]
+pub const PHONEME: &str = phoneme::PHONEME;
 #[deprecated="Use `elbie::language::Language` instead."]
 pub type Language<const ORTHOGRAPHIES: usize> = language::Language<ORTHOGRAPHIES>;
 #[deprecated="Use `elbie::phoneme::Phoneme` instead."]
@@ -28,24 +46,6 @@ pub type EnvironmentBranch = phonotactics::EnvironmentBranch;
 pub type EnvironmentChoice = phonotactics::EnvironmentChoice;
 #[deprecated="Use `elbie::word::Word` instead."]
 pub type Word = word::Word;
-
-pub mod phoneme_table;
-mod grid;
-mod lexicon;
-pub mod errors;
-mod bag;
-mod weighted_vec;
-pub mod phoneme;
-mod orthography;
-mod phoneme_behavior;
-pub mod word;
-pub mod phonotactics;
-mod validation;
-pub mod phoneme_table_builder;
-pub mod language;
-pub mod cli;
-#[cfg(test)] mod test;
-
 
 
 
