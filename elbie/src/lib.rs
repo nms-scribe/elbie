@@ -1,48 +1,46 @@
-pub use crate::grid::GridStyle;
-use crate::grid::TRBodyClass;
-use crate::grid::TableClass;
+pub use crate::errors::LanguageError;
+pub use crate::language::Language;
+pub use crate::phoneme::Phoneme;
+pub use crate::phoneme_table::TableOption;
 pub use crate::phoneme_table::Axis;
 pub use crate::phoneme_table::HeaderDef;
-pub use crate::phoneme_table::Table0DDef;
-pub use crate::phoneme_table::Table1DDef;
-pub use crate::phoneme_table::Table2DDef;
-pub use crate::phoneme_table::Table3DDef;
-pub use crate::phoneme_table::Table4DDef;
-use core::array;
-use core::cmp::Ordering;
-use core::error::Error;
-use core::fmt::Display;
-use core::fmt::Formatter;
-use core::fmt;
-use core::iter::Enumerate;
-use core::iter::Peekable;
-use core::slice::Iter;
-use std::collections::hash_map::Entry;
-use std::collections::HashSet;
+pub use crate::phoneme_table_builder::TableBuilder;
+pub use crate::phonotactics::EnvironmentBranch;
+pub use crate::phonotactics::EnvironmentChoice;
+pub use crate::language::EMPTY;
+pub use crate::language::PHONEME;
+pub use crate::word::Word;
 use crate::grid::Cell;
-use crate::grid::ColumnHeader;
 use crate::grid::Grid;
 use crate::grid::GridRow;
-use crate::lexicon::Lexicon;
-use crate::lexicon::LexiconEntry;
-use crate::phoneme_table::Table as _;
+use crate::grid::GridStyle;
+use crate::grid::TRBodyClass;
+use crate::grid::TableClass;
 use crate::phoneme_table::Table0D;
+use crate::phoneme_table::Table0DDef;
 use crate::phoneme_table::Table1D;
 use crate::phoneme_table::Table2D;
 use crate::phoneme_table::Table3D;
 use crate::phoneme_table::Table4D;
-use csv::Reader;
-use rand::Rng as _;
-use rand::prelude::ThreadRng;
-use rand::seq::IndexedRandom as _;
-use thiserror::Error;
-use std::collections::HashMap;
+use crate::phoneme_table::Table4DDef;
+use crate::phoneme_table::TableDef;
+use crate::validation::ValidationTraceCallback;
 use std::process;
-use std::rc::Rc;
 
 mod phoneme_table;
-pub mod grid;
-pub mod lexicon;
+mod grid;
+mod lexicon;
+mod errors;
+mod bag;
+mod weighted_vec;
+mod phoneme;
+mod orthography;
+mod phoneme_behavior;
+mod word;
+mod phonotactics;
+mod validation;
+mod phoneme_table_builder;
+mod language;
 #[cfg(test)] mod test;
 
 
@@ -52,7 +50,13 @@ pub mod lexicon;
 Elbie = LB, Language Builder, and is a bunch of tools for building a constructed language.
 */
 
-/* TODO: Transformations:
+/* TODO:
+
+TODO: First, clean up cargo clippy, then publish.
+
+TODO: This will be easier if I can separate the phoneme/set stuff from the language, as I will need a similar non-language structure to do that.
+
+Transformations, possibly:
 
 A LanguageTransformer basically looks like this:
 
@@ -62,14 +66,20 @@ struct Transformer
   rules: Vec<(Vec<Match>,Vec<Replace>)>
 
 Transformer::from_language(Language) -> Self
--- copies sets and phonemes from the specified language (TODO: possibly into a namespace?)
+-- copies sets and phonemes from the specified language and inserts them into Namespaced entities. (str,str) where the first is the language and the second is the value.
 
 Transformer::add_target_language(&mut self, Language)
--- copies sets and phonemes from the target language, (TODO: possibly into a namespace?)
--- if phoneme names match, then they will not be copied.
+-- copies sets and phonemes from the target language, into namespaces
 -- Note that this is optional, as Transformers could be used to implement orthography instead
+-- more than one language can also be used, which allows the user to transform *through* another language.
 
-Transformer::add_rule(Match,Vec<Vec<Rc<Phoneme>>>)
+Transformer::add_phoneme(&mut self, Rc<Phoneme>, namespace: str, sets: [(str)])
+-- adds a specified phoneme to a temporary namespace with the specified sets (the namespace can not be the same as one of the languages)
+
+Transformer::build_*
+-- similar to all of the build_* sets in the languages.
+
+Transformer::add_rule(Match)
 --- see below for Matches and Replaces
 --- adds a "transformation" rule.
 
@@ -78,18 +88,24 @@ Transformer::transform(Word,trace) -> Word
 -- if the pattern matches, any Captures in the rule are replaced with the Replace expression. There must be one Replace expression for each Capture, all phonemes in the replace will be inserted where the capture was found.
 
 struct Match
-  initial: indicates that the match must occur at the beginning of the word. The matcher will not continue on to see other phonems in the word if the first match doesn't work
+  initial: indicates that the match must occur at the beginning of the word. The matcher will not continue on to see other phonems in the word if the first phoneme doesn't match the first pattern
   final: indicates that the match must occur at the end of the word. The matcher will not match if the end of the word is not reached when the pattern is matched.
   patterns: Vec<Pattern>
 
 enum Pattern
   Match(name,Usize,NonZeroUsize) -- matches from x to y phonemes of the specified set or phoneme name if the set doesn't exist, a match can match 0 phonemes.
-  Capture(name,Usize,NonZeroUsize) -- "captures" from x to y phonemes of the specified set or phoneme name, if a capture has a min of 0, then it will always capture there, and any replace expression is inserted in it's place.
+  Replace(name,Usize,NonZeroUsize,Replace) -- "captures" from x to y phonemes of the specified set or phoneme name, if a capture has a min of 0, then it will always capture there, and any replace expression is inserted in it's place.
   -- repeats are built into the enums, so I don't need anything special
   -- sequences are part of the pattern
   -- choices can be handled two ways:
      -- a choice of a single phoneme can be a set
      -- a choice of two different sequences can be a new rule.
+
+enum Replace
+  Sequence(Vec<Rc<Phoneme>>) -- replaces with specified phoneme
+  ConvertSet(Vec<str>,Vec<str>) -- Extracts the sets from the phoneme, removes the specified sets, and then adds the new sets. It then looks for a single phoneme in the new set and replaces the phoneme with that one. Error if not exactly 1 phoneme is returned, or if the original phoneme doesn't have the source sets. Note that sets can be empty in source or target.
+  SwitchSet(str,str) -- switches a "set" from one to the other
+  SetLanguage(str) -- switches the phoneme from it's source to the same phoneme in the target language, error if it doesn't exist in the new language
 
 
 */
@@ -127,1260 +143,7 @@ FUTURE: Is there some way to use types or something else to make languages easie
 */
 
 
-pub const PHONEME: &str = "phoneme";
-pub const EMPTY: &str = "empty";
 
-#[derive(Debug,Clone,Error)]
-pub enum LanguageError {
-    #[error("Set {0} has no phonemes.")]
-    SetIsEmpty(&'static str),
-    #[error("Set {0} as filtered has no phonemes.")]
-    SetIsEmptyWithFilter(&'static str),
-    #[error("Unknown set {0}.")]
-    UnknownSet(&'static str),
-    #[error("Unknown phoneme {0}.")]
-    UnknownPhoneme(&'static str),
-    #[error("Phoneme {0} already exists.")]
-    PhonemeAlreadyExists(&'static str),
-    #[error("A set already exists with the phoneme name {0}")]
-    SetExistsWithPhonemeName(&'static str),
-    #[error("Set {0} already exists.")]
-    SetAlreadyExists(&'static str),
-    #[error("A phoneme already exists with the set name {0}")]
-    PhonemeExistsWithSetName(&'static str),
-    #[error( "Environment {0} already exists.")]
-    EnvironmentAlreadyExists(&'static str),
-    #[error("Unknown environment {0}.")]
-    UnknownEnvironment(&'static str),
-    #[error("Environment {0} is missing some branch environment choices.")]
-    NoEnvironmentChoices(&'static str),
-    #[error("Environment {0} is missing some possible branches.")]
-    IncompleteBranches(&'static str),
-
-  // word validation errors //
-  #[error("Word is empty")]
-  EmptyWord,
-  #[error("[Environment {3} at {0}]: Expected {2}, found phoneme ({1}).")]
-  IncorrectPhoneme(usize, Rc<Phoneme>, &'static str, &'static str),
-  #[error("[Environment {2} at {0}]: Expected end2 word, found phoneme ({1})")]
-  ExpectedEndOfWord(usize, Rc<Phoneme>, &'static str),
-  #[error("[Environment {2} at {0}]: Expected {2}, found end of word")]
-  ExpectedPhonemeFoundEndOfWord(usize, &'static str, &'static str),
-  #[error("[Environment {2} at {0}]: Phoneme ({2}) does not match any branch.")]
-  NoBranchFitsPhoneme(usize, Rc<Phoneme>, &'static str),
-
-  // word reading errors //
-  #[error("In word '{0}': unknown phoneme starting at '{1}'.")]
-  UnknownPhonemeWhileReading(String,String),
-
-  // table def errors //
-  #[error("Invalid option for phoneme table: '{0:?}'.")]
-  InvalidOptionForTable(TableOption),
-  #[error("Duplicate phoneme {0:?} definition: '{1:?}'.")]
-  DuplicateTableHeaderDef(Axis,HeaderDef),
-  #[error("Duplicate table definition for id '{0}'.")]
-  DuplicateTableDef(String),
-  #[error("Phoneme set was not added as an {0:?} to the phoneme table.")]
-  InvalidAxisForPhoneme(Axis),
-  #[error("Phoneme tables are limited to a maximum of four axes.")]
-  TooManyAxisses
-}
-
-
-
-// A set that I can random access. It's more efficient than random access of a HashSet, but probably could be better.
-#[derive(Debug,Clone)]
-struct Bag<ItemType>(Vec<ItemType>);
-
-impl<ItemType: Clone + Ord> Bag<ItemType> {
-
-  const fn new() -> Self {
-    Self(Vec::new())
-  }
-
-  const fn is_empty(&self) -> bool {
-    self.0.is_empty()
-  }
-
-
-  fn set_operation(&self, other: &Self, insert_if_in_self: bool, insert_if_in_other: bool, insert_if_in_both: bool) -> Self {
-    let mut self_iter = self.0.iter();
-    let mut other_iter = other.0.iter();
-    let mut result: Self = Self::new();
-
-    // This algorithm should be more efficient because I know both vectors are sorted, rather than doing the 'contains'
-    // and a binary_search for every check. There could still be some improvements.
-
-    let mut self_next = self_iter.next();
-    let mut other_next = other_iter.next();
-
-    // NOTE: To be very clear, this is not a iter.zip. We're only iterating items conditionally.
-    loop {
-      match (self_next,other_next) {
-        (Some(self_some), Some(other_some)) => {
-          match self_some.cmp(other_some) {
-            Ordering::Less => {
-              // self is less, so it is in self but not other. (if it had been in other, we would have seen it by now)
-              if insert_if_in_self {
-                _ = result.insert(self_some.clone());
-              }
-              // iterate self, but not other.
-              self_next = self_iter.next();
-            },
-            Ordering::Greater => {
-              // other is less, so it is in other, but not self (if it had been in self, we would have seen it by now)
-              if insert_if_in_other {
-                _ = result.insert(other_some.clone());
-              }
-              other_next = other_iter.next();
-            },
-            Ordering::Equal => {
-              // both are equal, so it is in both
-              if insert_if_in_both {
-                _ = result.insert(self_some.clone());
-              }
-              self_next = self_iter.next();
-              other_next = other_iter.next();
-            },
-          }
-        },
-        (Some(self_some),None) => {
-            if insert_if_in_self {
-              _ = result.insert(self_some.clone());
-            }
-            self_next = self_iter.next();
-        },
-        (None,Some(other_some)) => {
-            if insert_if_in_other {
-              _ = result.insert(other_some.clone());
-            }
-            other_next = other_iter.next();
-
-        },
-        (None, None) => break, // we've exhausted both
-      }
-    }
-
-    result
-  }
-
-  // returns a new bag containing objects in either self or other
-  fn union(&self, other: &Self) -> Self {
-    self.set_operation(other, true, true, true)
-  }
-
-  // returns a new bag containing objects in self, but not in other.
-  fn difference(&self, other: &Self) -> Self {
-    self.set_operation(other, true, false, false)
-  }
-
-  // returns a new bag containing objects both in self and other
-  fn intersection(&self, other: &Self) -> Self {
-    self.set_operation(other, false, false, true)
-
-  }
-
-  // returns a new bag containing objects in self or other but not both
-  fn _symmetric_difference(&self, other: &Self) -> Self {
-    self.set_operation(other, true, true, false)
-  }
-
-
-  // returns true if the specified value is contained in the bag.
-  fn contains(&self, value: &ItemType) -> bool {
-    self.0.binary_search(value).is_ok()
-  }
-
-  // inserts the item if it isn't already in the bag. Returns true if it was inserted.
-  fn insert(&mut self, value: ItemType) -> bool {
-    match self.0.binary_search(&value) {
-      Ok(_) => false,
-      Err(pos) => {
-        self.0.insert(pos, value);
-        true
-      }
-    }
-
-  }
-
-  fn remove(&mut self, value: &ItemType) -> Option<ItemType> {
-    match self.0.binary_search(value) {
-      Ok(pos) => {
-        Some(self.0.remove(pos))
-      }
-      Err(_) => None
-    }
-  }
-
-  // randomly chooses an item from the bag and returns it.
-  fn choose(&self, rng: &mut ThreadRng) -> Option<&ItemType> {
-    self.0.choose(rng)
-  }
-
-  fn list(&self) -> Vec<ItemType> {
-    self.0.clone()
-  }
-
-  fn iter(&self) -> impl Iterator<Item = &ItemType> {
-      self.0.iter()
-  }
-
-
-}
-
-#[derive(Debug,Clone)]
-struct WeightedVec<ItemType>{
-  items: Vec<(ItemType,usize)>,
-  total_weight: usize
-}
-
-impl<ItemType> WeightedVec<ItemType> {
-
-  const fn new() -> Self {
-    Self {
-      items: vec![],
-      total_weight: 0
-    }
-  }
-
-  fn choose(&self, rng: &mut ThreadRng) -> Option<&ItemType> {
-    let mut choice_weight = rng.random_range(1..self.total_weight+1);
-    for choice in &self.items {
-      if choice_weight <= choice.1 {
-        return Some(&choice.0)
-      }
-      choice_weight -= choice.1;
-    }
-    None
-
-  }
-
-  // NOTE: Specifying a weight of 0 is not an error, but that item will never get chosen.
-  fn push(&mut self, value: ItemType, weight: usize) {
-    self.items.push((value,weight));
-    self.total_weight += weight;
-  }
-
-}
-
-#[derive(Debug,Ord,PartialOrd,Eq,PartialEq,Hash)]
-pub struct Phoneme {
-  pub name: &'static str
-}
-
-impl Phoneme {
-  fn new(name: &'static str) -> Rc<Self> {
-    Rc::new(Self {
-      name
-    })
-  }
-
-}
-
-impl Display for Phoneme {
-
-  fn fmt(&self, f: &mut Formatter) -> Result<(),fmt::Error> {
-    write!(f,"/{}/",self.name)
-  }
-}
-
-
-type SpellingCallback<const ORTHOGRAPHIES: usize> = fn(&Language<ORTHOGRAPHIES>, &Rc<Phoneme>, &mut String, Option<&mut Peekable<Iter<Rc<Phoneme>>>>);
-
-#[derive(Default)]
-pub enum SpellingBehavior<const ORTHOGRAPHIES: usize> {
-  #[default]
-  Default, // default behavior is to spell the phoneme
-  Text(&'static str),
-  Callback(SpellingCallback<ORTHOGRAPHIES>)
-}
-
-impl<const ORTHOGRAPHIES: usize> fmt::Debug for SpellingBehavior<ORTHOGRAPHIES> {
-
-  fn fmt(&self, f: &mut Formatter) -> Result<(),fmt::Error> {
-    write!(f,"PhonemeBehavior::")?;
-    match self {
-      Self::Default => write!(f,"Default"),
-      Self::Text(text) => write!(f,"Text({text})"),
-      Self::Callback(_) => write!(f,"Callback(<...>)"),
-    }
-
-  }
-}
-
-#[derive(Debug)]
-struct PhonemeBehavior<const ORTHOGRAPHIES: usize> {
-  spelling: [SpellingBehavior<ORTHOGRAPHIES>; ORTHOGRAPHIES]
-}
-
-impl<const ORTHOGRAPHIES: usize> Default for PhonemeBehavior<ORTHOGRAPHIES> {
-
-  fn default() -> Self {
-    Self {
-      spelling: array::from_fn(|_| SpellingBehavior::default())
-    }
-  }
-}
-
-impl<const ORTHOGRAPHIES: usize> PhonemeBehavior<ORTHOGRAPHIES> {
-
-  const fn new(spelling: [SpellingBehavior<ORTHOGRAPHIES>; ORTHOGRAPHIES]) -> Self {
-    Self {
-      spelling
-    }
-  }
-
-}
-
-#[derive(Debug)]
-pub struct Word {
-  phonemes: Vec<Rc<Phoneme>>
-}
-
-impl Word {
-  fn new(phonemes: &[Rc<Phoneme>]) -> Self {
-    let phonemes = phonemes.to_vec();
-    Self{phonemes}
-  }
-
-  fn push(&mut self,phoneme: Rc<Phoneme>) {
-    self.phonemes.push(phoneme)
-  }
-
-  fn _last(&self) -> Option<&Rc<Phoneme>> {
-    self.phonemes.last()
-  }
-
-}
-
-impl Display for Word {
-  fn fmt(&self, f: &mut Formatter) -> Result<(),fmt::Error> {
-    write!(f,"/")?;
-    for phoneme in &self.phonemes {
-      write!(f,"{}",phoneme.name)?
-    }
-    write!(f,"/")?;
-    Ok(())
-  }
-
-}
-
-
-#[derive(Debug,Clone)]
-pub enum EnvironmentChoice {
-  Done,
-  Continuing(&'static str,&'static str,bool),// set to generate next phoneme from, next environment to follow, whether to allow duplicate phoneme to be generated
-}
-
-
-#[derive(Debug,Clone)]
-pub struct EnvironmentBranch(&'static str,WeightedVec<EnvironmentChoice>);
-
-impl EnvironmentBranch {
-
-  #[must_use]
-  pub fn new(set_check: &'static str, choices: &[(EnvironmentChoice,usize)]) -> Self {
-    let mut vec = WeightedVec::new();
-    for choice in choices {
-      vec.push(choice.0.clone(),choice.1)
-    };
-    Self(set_check,vec)
-
-  }
-}
-
-#[derive(Debug)]
-pub struct ColumnDef {
-    caption: &'static str,
-    set: &'static str
-}
-
-impl From<&(&'static str, &'static str)> for ColumnDef {
-    // The first string is the caption, the second string is the set name.
-    fn from(value: &(&'static str, &'static str)) -> Self {
-        Self {
-            caption: value.0,
-            set: value.1
-        }
-    }
-}
-
-impl From<(&'static str, &'static str)> for ColumnDef {
-    // The first string is the caption, the second string is the set name.
-    fn from(value: (&'static str, &'static str)) -> Self {
-        (&value).into()
-    }
-}
-
-/// These are options you can add to some `TableDef`
-#[derive(Debug,Clone,Hash,Eq,PartialEq)]
-pub enum TableOption {
-    /// For 3D and 4D phoneme tables, this will hide the captions for the subcolumns, which can compress the "appearance" of the table.
-    HideSubcolumnCaptions,
-    /// For 4D phoneme tables, this will hide the captions for subrows, which can compress the "appearance" of the table.
-    HideSubrowCaptions,
-}
-
-/*
-NOTE: Four seems like an arbitrary limit. I used to have this all in a vector so the limit was usize. However, this is a user interface thing. The third and fourth axis basically just add more items to a cell in a table. Trying to do more than that is going to be difficult to represent in a way that a human to understand, and it makes processing the table harder to program. I believe such distinctions would not be found in most languages anyway.
-
-The good news is that this doesn't limit the language if the user wants something really alien. They can just separate one of the lower axes into separate tables instead, and then they can still use this.
-*/
-#[derive(Debug)]
-pub enum TableDef {
-  OneCell(Table0DDef),
-  ListTable(Table1DDef),
-  SimpleTable(Table2DDef),
-  TableWithSubcolumns(Table3DDef),
-  TableWithSubcolumnsAndSubrows(Table4DDef)
-}
-
-
-impl TableDef {
-
-  pub fn set_option(&mut self, option: &TableOption) -> Result<(),LanguageError> {
-      match (self,&option) {
-        (Self::TableWithSubcolumnsAndSubrows(definition), TableOption::HideSubcolumnCaptions) => {
-            definition.hide_subcolumn_captions(true);
-        },
-        (Self::TableWithSubcolumnsAndSubrows(definition), TableOption::HideSubrowCaptions) => {
-            definition.hide_subrow_captions(true);
-        },
-        (Self::TableWithSubcolumns(definition), TableOption::HideSubcolumnCaptions) => {
-            definition.hide_subcolumn_captions(true);
-        },
-        (Self::TableWithSubcolumns(_) |
-         Self::OneCell(_) |
-         Self::ListTable(_) |
-         Self::SimpleTable(_), TableOption::HideSubrowCaptions) |
-        (Self::OneCell(_) |
-         Self::ListTable(_) |
-         Self::SimpleTable(_), TableOption::HideSubcolumnCaptions) => return Err(LanguageError::InvalidOptionForTable(option.clone()))
-    }
-    Ok(())
-
-  }
-
-}
-
-#[derive(Clone)]
-pub enum ValidWordElement {
-  Done(usize,&'static str), // environment
-  Phoneme(usize,Rc<Phoneme>,&'static str,&'static str) // found phoneme, expected set, expected environment
-}
-
-impl Display for ValidWordElement {
-
-  fn fmt(&self, f: &mut Formatter) -> Result<(),fmt::Error> {
-    match self {
-      Self::Done(index,environment) => write!(f,"[Environment {environment} at {index}]: end of word"),
-      Self::Phoneme(index,phoneme,set,environment) => write!(f,"[Environment {environment} at {index}]: phoneme ({phoneme}) from {set}."),
-    }
-
-  }
-}
-
-
-pub enum ValidationTraceMessage<'lifetime> {
-  FoundValid(&'lifetime ValidWordElement),
-  FoundError(&'lifetime LanguageError)
-}
-
-impl Display for ValidationTraceMessage<'_> {
-
-  fn fmt(&self, f: &mut Formatter) -> Result<(),fmt::Error> {
-    match self {
-      Self::FoundValid(valid) => write!(f,"Found valid: {valid}"),
-      Self::FoundError(err) => write!(f,"!!!Found error: {err}"),
-    }
-
-  }
-}
-
-
-pub type ValidationTraceCallback = dyn Fn(usize, ValidationTraceMessage);
-
-#[derive(Debug)]
-struct TableEntry {
-    id: &'static str,
-    set: &'static str,
-    definition: TableDef
-}
-
-type Axisses<'language> = Option<(
-           &'language [(&'static str,&'static str)],
-           Option<(
-               &'language [(&'static str,&'static str)],
-               Option<(
-                   &'language [(&'static str,&'static str)],
-                   Option<&'language [(&'static str,&'static str)]>
-               )>
-           )>
-        )>;
-
-pub struct TableBuilder<'language, const ORTHOGRAPHIES: usize> {
-    id: &'static str,
-    language: &'language mut Language<ORTHOGRAPHIES>,
-    caption: &'static str,
-    master_set: &'static str,
-    axisses: Axisses<'language>,
-    options: HashSet<TableOption>
-}
-
-impl<'language, const ORTHOGRAPHIES: usize> TableBuilder<'language, ORTHOGRAPHIES> {
-
-    fn new(language: &'language mut Language<ORTHOGRAPHIES>, id: &'static str, caption: &'static str, master_set: &'static str) -> Self {
-        Self {
-            id,
-            language,
-            master_set,
-            caption,
-            axisses: None,
-            options: HashSet::new()
-        }
-    }
-
-    pub fn axis(mut self,new_axis: &'language [(&'static str,&'static str)]) -> Result<Self,LanguageError> {
-        self.axisses = match self.axisses {
-            Some((_axis_1,Some((_axis_2,Some((_axis_3,Some(_axis_4))))))) => {
-                return Err(LanguageError::TooManyAxisses)
-            },
-            Some((axis_1,Some((axis_2,Some((axis_3,None)))))) => {
-                Some((axis_1,Some((axis_2,Some((axis_3,Some(new_axis)))))))
-            },
-            Some((axis_1,Some((axis_2,None)))) => {
-                Some((axis_1,Some((axis_2,Some((new_axis,None))))))
-            },
-            Some((axis_1,None)) => {
-                Some((axis_1,Some((new_axis,None))))
-            },
-            None => {
-                Some((new_axis,None))
-            }
-        };
-
-
-        Ok(self)
-    }
-
-    #[must_use]
-    pub fn option(mut self,option: TableOption) -> Self {
-        _ = self.options.insert(option);
-        self
-    }
-
-    pub fn add(self) -> Result<(),LanguageError> {
-        let mut table_def = match self.axisses {
-            Some((axis_1,Some((axis_2,Some((axis_3,Some(axis_4))))))) => {
-                let mut def = Table4DDef::new(self.caption.to_owned());
-                _ = def.add_columns(&axis_1.iter().map(Into::into).collect::<Vec<_>>());
-                _ = def.add_rows(&axis_2.iter().map(Into::into).collect::<Vec<_>>());
-                _ = def.add_subcolumns(&axis_3.iter().map(Into::into).collect::<Vec<_>>());
-                _ = def.add_subrows(&axis_4.iter().map(Into::into).collect::<Vec<_>>());
-                TableDef::TableWithSubcolumnsAndSubrows(def)
-            },
-            Some((axis_1,Some((axis_2,Some((axis_3,None)))))) => {
-                let mut def = Table3DDef::new(self.caption.to_owned());
-                _ = def.add_columns(&axis_1.iter().map(Into::into).collect::<Vec<_>>());
-                _ = def.add_rows(&axis_2.iter().map(Into::into).collect::<Vec<_>>());
-                _ = def.add_subcolumns(&axis_3.iter().map(Into::into).collect::<Vec<_>>());
-                TableDef::TableWithSubcolumns(def)
-            },
-            Some((axis_1,Some((axis_2,None)))) => {
-                let mut def = Table2DDef::new(self.caption.to_owned());
-                _ = def.add_columns(&axis_1.iter().map(Into::into).collect::<Vec<_>>());
-                _ = def.add_rows(&axis_2.iter().map(Into::into).collect::<Vec<_>>());
-                TableDef::SimpleTable(def)
-            },
-            Some((axis_1,None)) => {
-                let mut def = Table1DDef::new(self.caption);
-                _ = def.add_rows(&axis_1.iter().map(Into::into).collect::<Vec<_>>());
-                TableDef::ListTable(def)
-            },
-            None => {
-                let def = Table0DDef::new(self.caption);
-                TableDef::OneCell(def)
-
-            }
-        };
-
-        #[allow(clippy::iter_over_hash_type,reason="The order that options are set doesn't matter.")]
-        for option in self.options {
-            table_def.set_option(&option)?;
-        }
-
-        if self.language.tables.iter().any(|t| t.id == self.id) {
-            return Err(LanguageError::DuplicateTableDef(self.id.to_owned()));
-        }
-
-        self.language.tables.push(TableEntry {
-          id: self.id,
-          set: self.master_set,
-          definition: table_def
-        });
-
-        Ok(())
-
-    }
-
-}
-
-#[derive(Debug)]
-pub struct Language<const ORTHOGRAPHIES: usize> {
-  name: &'static str,
-  initial_environment: &'static str,
-  initial_phoneme_set: &'static str,
-  phonemes: HashMap<&'static str,Rc<Phoneme>>,
-  // These are kept separate from the phoneme structure to reduce some type dependencies.
-  // For example, if this were part of the Phoneme structure, the ORTHOGRAPHIES parameter would be required on almost everything.
-  phoneme_behavior: HashMap<Rc<Phoneme>,PhonemeBehavior<ORTHOGRAPHIES>>,
-  orthographies: [&'static str; ORTHOGRAPHIES],
-  environments: HashMap<&'static str,Vec<EnvironmentBranch>>,
-  sets: HashMap<&'static str,Bag<Rc<Phoneme>>>, // It seems like a hashset would be better, but I can't pick randomly from it without converting to vec anyway.
-  tables: Vec<TableEntry>
-}
-
-impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
-
-    #[must_use]
-    pub fn new(name: &'static str, initial_phoneme_set: &'static str, initial_environment: &'static str, orthographies: [&'static str; ORTHOGRAPHIES]) -> Self {
-      let mut sets = HashMap::new();
-      _ = sets.insert(PHONEME, Bag::new());
-      _ = sets.insert(EMPTY, Bag::new());
-      let phonemes = HashMap::new();
-      let environments = HashMap::new();
-      let phoneme_behavior = HashMap::new();
-      let tables = vec![];
-      Self {
-        name,
-        initial_environment,
-        initial_phoneme_set,
-        phonemes,
-        phoneme_behavior,
-        orthographies,
-        environments,
-        sets,
-        tables
-      }
-
-    }
-
-    fn add_phoneme_to_set(&mut self, class: &'static str, phoneme: Rc<Phoneme>) -> Result<(),LanguageError> {
-      let class = match self.sets.entry(class) {
-        Entry::Occupied(entry) => entry.into_mut(),
-        Entry::Vacant(entry) => {
-            if self.phonemes.contains_key(class) {
-                return Err(LanguageError::PhonemeExistsWithSetName(class))
-            }
-            entry.insert(Bag::new())
-        },
-      };
-      if !class.contains(&phoneme) {
-        _ = class.insert(phoneme);
-      }
-      Ok(())
-    }
-
-    fn add_phoneme_object(&mut self, phoneme: Rc<Phoneme>, classes: &[&'static str], behavior: PhonemeBehavior<ORTHOGRAPHIES>) -> Result<Rc<Phoneme>,LanguageError> {
-      if self.phonemes.contains_key(phoneme.name) {
-        Err(LanguageError::PhonemeAlreadyExists(phoneme.name))
-      } else if self.sets.contains_key(phoneme.name) {
-        Err(LanguageError::SetExistsWithPhonemeName(phoneme.name))
-      } else {
-        _ = self.phonemes.insert(phoneme.name, phoneme.clone());
-        _ = self.phoneme_behavior.insert(phoneme.clone(), behavior);
-        self.add_phoneme_to_set(PHONEME,phoneme.clone())?;
-        for class in classes {
-          self.add_phoneme_to_set(class,phoneme.clone())?
-        }
-        Ok(phoneme)
-      }
-
-    }
-
-    pub fn add_phoneme(&mut self, phoneme: &'static str, classes: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
-      self.add_phoneme_object(Phoneme::new(phoneme),classes,PhonemeBehavior::default())
-    }
-
-    pub fn add_phoneme_with_spelling(&mut self, phoneme: &'static str, orthography: [&'static str; ORTHOGRAPHIES], classes: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
-      let behaviors = orthography.map(SpellingBehavior::Text);
-      self.add_phoneme_with_spelling_behavior(phoneme, behaviors, classes)
-    }
-
-    pub fn add_phoneme_with_spelling_fn(&mut self, phoneme: &'static str, callbacks: [SpellingCallback<ORTHOGRAPHIES>; ORTHOGRAPHIES], classes: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
-      let behaviors = callbacks.map(|f| SpellingBehavior::Callback(f));
-      self.add_phoneme_with_spelling_behavior(phoneme, behaviors, classes)
-    }
-
-    pub fn add_phoneme_with_spelling_behavior(&mut self, phoneme: &'static str, behaviors: [SpellingBehavior<ORTHOGRAPHIES>; ORTHOGRAPHIES], classes: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
-      self.add_phoneme_object(Phoneme::new(phoneme),classes,PhonemeBehavior::new(behaviors))
-    }
-
-    /// # Panics
-    /// Panics if requested orthography index is out of range
-    pub fn spell_phoneme(&self, phoneme: &Rc<Phoneme>, orthography: usize, result: &mut String, next: Option<&mut Peekable<Iter<Rc<Phoneme>>>>) {
-      if orthography >= ORTHOGRAPHIES {
-        panic!("Language only has {ORTHOGRAPHIES} orthographies.")
-      }
-
-      match self.phoneme_behavior.get(phoneme).and_then(|b| b.spelling.get(orthography)) {
-        None | Some(SpellingBehavior::Default) => result.push_str(phoneme.name),
-        Some(SpellingBehavior::Text(text)) => result.push_str(text),
-        Some(SpellingBehavior::Callback(callback)) => callback(self,phoneme,result,next)
-      }
-
-    }
-
-    #[must_use]
-    pub fn spell_word(&self, word: &Word, orthography: usize) -> String {
-      let mut result = String::new();
-      let mut iter = word.phonemes.iter().peekable();
-      while let Some(phoneme) = iter.next() {
-        self.spell_phoneme(phoneme,orthography,&mut result,Some(&mut iter))
-      }
-      result
-    }
-
-    // will eventually be used over add_difference
-    pub fn build_difference(&mut self, name: &'static str, base_set: &'static str, exclude_sets: &[&'static str]) -> Result<(),LanguageError> {
-      if self.sets.contains_key(name) {
-        Err(LanguageError::SetAlreadyExists(name))
-      } else if self.phonemes.contains_key(name) {
-        Err(LanguageError::PhonemeExistsWithSetName(name))
-      } else {
-        let mut set = self.get_set(base_set)?.clone();
-        for subset in exclude_sets {
-          let subset = self.get_set(subset)?;
-          set = set.difference(subset);
-        }
-        _ = self.sets.insert(name, set);
-        Ok(())
-      }
-    }
-
-    pub fn build_intersection(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),LanguageError> {
-      if self.sets.contains_key(name) {
-        Err(LanguageError::SetAlreadyExists(name))
-      } else if self.phonemes.contains_key(name) {
-        Err(LanguageError::PhonemeExistsWithSetName(name))
-      } else {
-          let mut sets = sets.iter();
-          if let Some(set) = sets.next() {
-              let mut set = self.get_set(set)?.clone();
-              for subset in sets {
-                  let subset = self.get_set(subset)?;
-                  set = set.intersection(subset)
-              }
-              _ = self.sets.insert(name, set);
-              Ok(())
-          } else {
-              Err(LanguageError::SetIsEmpty(name))
-          }
-
-      }
-
-    }
-
-    // allows building a union out of multiple sets... FUTURE: The 'add' functions will become obsolete and replace with 'build' functions.
-    pub fn build_union(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),LanguageError> {
-      if self.sets.contains_key(name) {
-        Err(LanguageError::SetAlreadyExists(name))
-      } else if self.phonemes.contains_key(name) {
-        Err(LanguageError::PhonemeExistsWithSetName(name))
-      } else {
-        let mut set = Bag::new();
-        for subset in sets {
-          let subset = self.get_set(subset)?;
-          set = set.union(subset);
-        }
-        _ = self.sets.insert(name, set);
-        Ok(())
-      }
-
-    }
-
-    pub fn add_exclusion(&mut self, name: &'static str, set: &'static str, exclude_phoneme_strs: &[&'static str]) -> Result<(),LanguageError> {
-
-      if self.sets.contains_key(name) {
-        Err(LanguageError::SetAlreadyExists(name))
-      } else if self.phonemes.contains_key(name) {
-        Err(LanguageError::PhonemeExistsWithSetName(name))
-      } else {
-        let mut exclude_phonemes = vec![];
-        for phoneme in exclude_phoneme_strs {
-          exclude_phonemes.push(self.get_phoneme(phoneme)?);
-        }
-        let set = self.new_set(set, &exclude_phonemes)?;
-        _ = self.sets.insert(name,set);
-        Ok(())
-
-      }
-
-    }
-
-
-    fn get_set(&self, set: &'static str) -> Result<&Bag<Rc<Phoneme>>,LanguageError> {
-      match self.sets.get(set) {
-        Some(set) => Ok(set),
-        None => Err(LanguageError::UnknownSet(set))
-      }
-    }
-
-    fn get_phoneme(&self, phoneme: &'static str) -> Result<&Rc<Phoneme>,LanguageError> {
-      match self.phonemes.get(phoneme) {
-        Some(phoneme) => Ok(phoneme),
-        None => Err(LanguageError::UnknownPhoneme(phoneme))
-      }
-    }
-
-    fn get_environment(&self, environment: &'static str) -> Result<&Vec<EnvironmentBranch>,LanguageError> {
-      match self.environments.get(environment) {
-        Some(environment) => Ok(environment),
-        None => Err(LanguageError::UnknownEnvironment(environment))
-      }
-    }
-
-    pub fn add_environment(&mut self, name: &'static str, environment: &[EnvironmentBranch]) -> Result<(),LanguageError> {
-      if self.environments.contains_key(name) {
-        Err(LanguageError::EnvironmentAlreadyExists(name))
-      } else {
-        _ = self.environments.insert(name,environment.to_vec());
-        Ok(())
-      }
-
-    }
-
-    pub fn new_table(&mut self, id: &'static str, set: &'static str, caption: &'static str) -> TableBuilder<ORTHOGRAPHIES> {
-        TableBuilder::new(self, id, caption, set)
-
-    }
-
-    fn new_set(&self, set: &'static str, exclude_phonemes: &[&Rc<Phoneme>]) -> Result<Bag<Rc<Phoneme>>,LanguageError> {
-      let mut set = self.get_set(set)?.clone();
-      for phoneme in exclude_phonemes {
-        _ = set.remove(phoneme);
-      }
-      Ok(set)
-    }
-
-    fn phoneme_is(&self, phoneme: &Rc<Phoneme>, set: &'static str) -> Result<bool,LanguageError> {
-      Ok(self.get_set(set)?.contains(phoneme))
-    }
-
-    fn _phoneme_equals(&self, phoneme: &Rc<Phoneme>, other: &'static str) -> Result<bool,LanguageError> {
-      match self.phonemes.get(other) {
-        Some(other) => Ok(phoneme == other),
-        None => Err(LanguageError::UnknownPhoneme(other))
-      }
-    }
-
-    fn choose(&self, set: &'static str, rng: &mut ThreadRng) -> Result<Rc<Phoneme>,LanguageError> {
-      match self.get_set(set)?.choose(rng) {
-        Some(phoneme) => Ok(phoneme.clone()),
-        None => Err(LanguageError::SetIsEmpty(set))
-      }
-    }
-
-    fn choose_except(&self, set: &'static str, exclude_phonemes: &[&Rc<Phoneme>], rng: &mut ThreadRng) -> Result<Rc<Phoneme>,LanguageError> {
-      match self.new_set(set,exclude_phonemes)?.choose(rng) {
-        Some(phoneme) => Ok(phoneme.clone()),
-        None => Err(LanguageError::SetIsEmptyWithFilter(set))
-      }
-    }
-
-    fn build_word(&self, environment_name: &'static str, word: &mut Word, phoneme: &Rc<Phoneme>, rng: &mut ThreadRng) -> Result<(),LanguageError> {
-
-        let environment = self.get_environment(environment_name)?;
-
-        for branch in environment {
-            if self.phoneme_is(phoneme, branch.0)? {
-                word.push(phoneme.clone()); // have to clone because we're referencing it again later. It's an RC, so that's okay.
-                match branch.1.choose(rng) {
-                    None => return Err(LanguageError::NoEnvironmentChoices(environment_name)),
-                    Some(EnvironmentChoice::Done) => return Ok(()),
-                    Some(EnvironmentChoice::Continuing(generate_set,continuing_environment,can_duplicate)) => {
-                        let phoneme = if *can_duplicate {
-                            self.choose(generate_set,rng)?
-                        } else {
-                            self.choose_except(generate_set,&[phoneme],rng)?
-                        };
-                        return self.build_word(continuing_environment, word, &phoneme, rng)
-                    }
-                }
-
-            }
-        }
-
-        Err(LanguageError::IncompleteBranches(environment_name))
-
-    }
-
-
-    pub fn make_word(&self) -> Result<Word,LanguageError> {
-
-        let mut word = Word::new(&[]);
-        let mut rng = rand::rng();
-        let phoneme = self.choose(self.initial_phoneme_set, &mut rng)?;
-        self.build_word(self.initial_environment, &mut word, &phoneme, &mut rng)?;
-        Ok(word)
-    }
-
-
-
-    fn validate_word(&self, environment_name: &'static str,
-                            word: &mut Enumerate<Iter<Rc<Phoneme>>>, idx: usize, phoneme: &Rc<Phoneme>,
-                            level: usize, validated: &[ValidWordElement], trace: &ValidationTraceCallback) -> Result<Vec<ValidWordElement>,LanguageError> {
-        let environment = self.get_environment(environment_name)?;
-        let mut validated = validated.to_vec();
-
-        let mut found_valid_path = false;
-        let mut error = None;
-
-        macro_rules! trace_error {
-          ($error: expr) => {{
-            trace(level,ValidationTraceMessage::FoundError(&$error));
-            $error
-          }};
-        }
-
-        // I want to return only the deepest error, so only set the error if one hasn't been found.
-        macro_rules! check_error {
-          ($error: expr) => {_ = {
-            let this_error = $error;
-            if error.is_none() {
-              error = Some(this_error.clone());
-            }
-            trace_error!(this_error)
-          }};
-        }
-
-        macro_rules! trace_valid {
-          ($valid: expr) => {{
-            let this_valid = $valid;
-            trace(level,ValidationTraceMessage::FoundValid(&this_valid));
-            validated.push(this_valid);
-          }};
-        }
-
-        macro_rules! check_valid {
-          ($valid: expr) => {{
-            found_valid_path = true;
-            trace_valid!($valid)
-          }};
-        }
-
-        for branch in environment {
-            if self.phoneme_is(phoneme, branch.0)? {
-
-                let next_phoneme = word.next();
-
-                for choice in &branch.1.items {
-                    match (choice, next_phoneme) {
-                        ((EnvironmentChoice::Done,_),Some((next_idx,next_phoneme))) => {
-                          check_error!(LanguageError::ExpectedEndOfWord(next_idx,next_phoneme.clone(),environment_name));
-                        },
-                        ((EnvironmentChoice::Continuing(generate_set,_,_),_),None) => {
-                          check_error!(LanguageError::ExpectedPhonemeFoundEndOfWord(idx + 1,generate_set,environment_name));
-                        },
-                        ((EnvironmentChoice::Continuing(generate_set,continuing_environment,can_duplicate),_),Some((next_idx,next_phoneme))) => {
-                            let valid_phoneme = if *can_duplicate {
-                                self.phoneme_is(next_phoneme, generate_set)?
-                            } else {
-                                (next_phoneme != phoneme) && self.phoneme_is(next_phoneme, generate_set)?
-                            };
-
-                            if valid_phoneme {
-                              trace_valid!(ValidWordElement::Phoneme(next_idx,next_phoneme.clone(),generate_set,environment_name));
-                              // NOTE: I'm cloning the iterator here so that the next branch choice looks at the same next phoneme.
-                              match self.validate_word(continuing_environment, &mut word.clone(), next_idx, next_phoneme, level + 1, &validated, trace) {
-                                Err(err) => error = Some(err),
-                                Ok(sub_validated) => {
-                                  validated = sub_validated;
-                                  found_valid_path = true;
-                                  // break out of the loop, we found a successful branch.
-                                  break;
-                                }
-                              }
-                            } else {
-                              check_error!(LanguageError::IncorrectPhoneme(next_idx,next_phoneme.clone(),generate_set,environment_name));
-                            }
-                        },
-                        ((EnvironmentChoice::Done,_),None) => {
-                          check_valid!(ValidWordElement::Done(idx + 1,environment_name));
-                          // break out of the loop, we found a successful branch.
-                          break;
-                        }
-                    }
-
-                    // otherwise keep iterating branches until an Ok is found or the branches are exhausted.
-
-                };
-
-                if !found_valid_path && error.is_none() {
-
-                  // no successful choices were found. Check if error was set, and if not, then we didn't find
-                  // any choices at all, which is an error.
-                  check_error!(LanguageError::IncompleteBranches(environment_name));
-
-                }
-
-                // no further processing, if the phoneme was valid for this branch, then that's the one that would have
-                // been used for generating, so there's no way any other branches should match.
-                break;
-
-            }
-        }
-
-        if found_valid_path {
-            Ok(validated)
-        } else {
-          match error {
-            None =>
-              // if we got here, then there were no branches that fit the current phoneme.
-              Err(trace_error!(LanguageError::NoBranchFitsPhoneme(idx,phoneme.clone(),environment_name))),
-            Some(err) => Err(err)
-          }
-        }
-
-
-    }
-
-    pub fn check_word(&self,word: &Word, trace: &ValidationTraceCallback) -> Result<Vec<ValidWordElement>,LanguageError> {
-
-        let mut word = word.phonemes.iter().enumerate();
-        if let Some((idx,phoneme)) = word.next() {
-            if self.phoneme_is(phoneme, self.initial_phoneme_set)? {
-              let valid = ValidWordElement::Phoneme(idx,phoneme.clone(),self.initial_phoneme_set,self.initial_environment);
-              trace(0,ValidationTraceMessage::FoundValid(&valid));
-              self.validate_word(self.initial_environment, &mut word, idx, phoneme,1,&[valid],trace)
-            } else {
-              let err = LanguageError::IncorrectPhoneme(idx,phoneme.clone(),self.initial_phoneme_set,self.initial_environment);
-              trace(0,ValidationTraceMessage::FoundError(&err));
-              Err(err)
-            }
-        } else {
-            Err(LanguageError::EmptyWord)
-        }
-    }
-
-    pub fn read_word(&self,input: &str) -> Result<Word,LanguageError> {
-        // not an efficient algorithm, but it works...
-        let mut phonemes: Vec<Rc<Phoneme>> = self.phonemes.values().cloned().collect();
-        phonemes.sort_by(sort_phonemes_by_length_descending);
-
-        let mut word: Vec<Rc<Phoneme>> = vec![];
-
-        let mut source = input;
-
-        'outer: while !source.is_empty() {
-            for phoneme in &phonemes {
-                let name = phoneme.name;
-                if let Some(after) = source.strip_prefix(name) {
-                    word.push((*phoneme).clone()); // clone twice because apparently phoneme is a double reference
-                    source = after;
-                    continue 'outer;
-                }
-            }
-            return Err(LanguageError::UnknownPhonemeWhileReading(input.to_owned(),source.to_owned()));
-        }
-
-        Ok(Word::new(&word))
-    }
-
-    fn build_phoneme_grid(&self, master_set: &Bag<Rc<Phoneme>>, table_def: &TableDef, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<Grid,LanguageError> {
-
-        match table_def {
-            TableDef::OneCell(definition) => {
-                let mut table = Table0D::new(definition);
-
-                table.add_phonemes(self, master_set, unprinted_phonemes).map_err(LanguageError::InvalidAxisForPhoneme)?;
-
-                Ok(table.build_grid())
-            },
-            TableDef::ListTable(definition) => {
-                let mut table = Table1D::new(definition);
-
-                table.add_phonemes(self, master_set, unprinted_phonemes).map_err(LanguageError::InvalidAxisForPhoneme)?;
-
-                Ok(table.build_grid())
-            },
-            TableDef::SimpleTable(definition) => {
-                let mut table = Table2D::new(definition);
-
-                table.add_phonemes(self, master_set, unprinted_phonemes).map_err(LanguageError::InvalidAxisForPhoneme)?;
-
-                Ok(table.build_grid())
-            },
-            TableDef::TableWithSubcolumns(definition) => {
-                let mut table = Table3D::new(definition);
-
-
-                table.add_phonemes(self, master_set, unprinted_phonemes).map_err(LanguageError::InvalidAxisForPhoneme)?;
-
-                Ok(table.build_grid())
-            },
-            TableDef::TableWithSubcolumnsAndSubrows(definition) => {
-
-                let mut table = Table4D::new(definition);
-
-
-                table.add_phonemes(self, master_set, unprinted_phonemes).map_err(LanguageError::InvalidAxisForPhoneme)?;
-
-                Ok(table.build_grid())
-            },
-        }
-    }
-
-    pub fn build_all_phoneme_tables(&self) -> Result<Vec<(&'static str,Grid)>,LanguageError> {
-
-      let mut result = Vec::new();
-
-      let mut unprinted_phonemes: Bag<Rc<Phoneme>> = self.get_set(PHONEME)?.clone();
-
-      for entry in &self.tables {
-
-        let grid = self.build_phoneme_grid(self.get_set(entry.set)?, &entry.definition, &mut Some(&mut unprinted_phonemes))?;
-
-        result.push((entry.id,grid));
-
-
-      }
-
-      if !unprinted_phonemes.is_empty() {
-
-        let grid = self.build_phoneme_grid(&unprinted_phonemes.clone(), &TableDef::OneCell(Table0DDef::new("Uncategorized Phonemes")), &mut Some(&mut unprinted_phonemes))?;
-        result.push(("uncategorized",grid));
-
-      }
-
-      Ok(result)
-
-    }
-
-    pub fn build_phoneme_table(&self, table_name: &String) -> Result<Option<Grid>,LanguageError> {
-
-        if table_name == "uncategorized" { // FUTURE: Make that a constant
-            // we need to build all of the tables to find the uncategorized phonemes
-            let all_tables = self.build_all_phoneme_tables()?;
-            Ok(all_tables.into_iter().find_map(|(id,grid)| {
-                if id == "uncategorized" {
-                    Some(grid)
-                } else {
-                    None
-                }
-            }))
-
-        } else {
-            let table = self.tables.iter().find(|entry| {
-               entry.id == table_name
-            });
-
-            if let Some(entry) = table {
-                Ok(Some(self.build_phoneme_grid(self.get_set(entry.set)?, &entry.definition, &mut None)?))
-
-
-            } else {
-                Ok(None)
-            }
-        }
-
-    }
-
-    pub fn display_spelling(&self, columns: usize) -> Result<Grid,LanguageError> {
-
-      let phonemes: Bag<Rc<Phoneme>> = self.get_set(PHONEME)?.clone();
-      let phonemes = phonemes.list();
-
-      let mut grid = Grid::new(TableClass::ElbieOrthography, format!("Spelling for {}",self.name));
-
-      let mut header = Vec::new();
-      for _ in 0..columns {
-        header.push(ColumnHeader::new("Phoneme".to_owned(),1));
-        for orthography in self.orthographies {
-          header.push(ColumnHeader::new(orthography.to_owned(),1));
-        }
-      }
-      grid.set_headers(header);
-
-
-      // once div_ceil is stable in the library, the existence of this will cause an error.
-      // But, we can get rid of our shim, then.
-      #[allow(unstable_name_collisions)] let length = phonemes.len().div_ceil(columns);
-      let mut chunks: Vec<Iter<Rc<Phoneme>>> = phonemes.chunks(length).map(|a| a.iter()).collect();
-
-      for _ in 0..length {
-        let mut row = GridRow::new(TRBodyClass::BodyRow);
-
-        for chunk in &mut chunks {
-          if let Some(phoneme) = chunk.next() {
-            row.push_cell(Cell::content(phoneme.to_string(),None));
-            for i in 0..ORTHOGRAPHIES {
-              let mut cell = String::new();
-              self.spell_phoneme(phoneme, i, &mut cell, None);
-              row.push_cell(Cell::content(cell,None));
-            }
-
-          } else {
-            // add blank cells to make the table rectangular.
-            row.push_cell(Cell::content(String::new(),None));
-            for _ in 0..ORTHOGRAPHIES {
-                row.push_cell(Cell::content(String::new(),None));
-            }
-          }
-        }
-
-        grid.push_body_row(row);
-
-
-      }
-
-      Ok(grid)
-
-    }
-
-    pub fn load_lexicon(&self, path: String, primary_orthography: usize) -> Result<Lexicon<ORTHOGRAPHIES>,Box<dyn Error>> {
-
-
-      let mut reader = Reader::from_path(path)?;
-      let headers = reader.headers()?;
-      let word_field = headers.iter().position(|a| a.to_lowercase() == "word").ok_or_else(|| "No 'word' field found.".to_owned())?;
-      let definition_field = headers.iter().position(|a| a.to_lowercase() == "definition").ok_or_else(|| "No 'definition' field found.".to_owned())?;
-
-      let mut result = Lexicon::new(self.orthographies, primary_orthography);
-
-      for (row,record) in reader.into_records().enumerate() {
-        let record = record.map_err(|e| format!("Error reading record {row}: {e}"))?;
-        let word = record.get(word_field).ok_or_else(|| format!("No word found at entry {row}"))?;
-        let word = self.read_word(word).map_err(|e| format!("Error parsing word {row}: {e}"))?;
-        let spelling = array::from_fn(|i| self.spell_word(&word, i));
-        let entry: LexiconEntry<ORTHOGRAPHIES> = LexiconEntry::new(
-            word,
-            spelling,
-            record.get(definition_field).ok_or_else(|| format!("No category found at row {row}"))?.to_owned(),
-        );
-
-        result.push(entry);
-
-      }
-
-      Ok(result)
-
-
-    }
-
-}
-
-fn sort_phonemes_by_length_descending(a: &Rc<Phoneme>, b: &Rc<Phoneme>)  -> Ordering {
-    let name_a = a.name;
-    let len_a = name_a.len();
-    let name_b = b.name;
-    let len_b = name_b.len();
-    if len_a == len_b {
-        name_a.partial_cmp(name_b).expect("Can't order phoneme names for some reason.")
-    } else {
-        len_b.partial_cmp(&len_a).expect("Can't order phoneme lengths for some reason.")
-    }
-}
 
 enum ValidateOption {
   Simple,
@@ -1499,7 +262,7 @@ fn parse_args<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Ar
 
 
 fn show_usage<const ORTHOGRAPHIES: usize>(language: &Language<ORTHOGRAPHIES>) {
-    println!("usage: {} [options] <command>",language.name);
+    println!("usage: {} [options] <command>",language.name());
     println!("default command: --generate 1");
     println!("options:");
     println!("   --format=<plain | terminal | markdown | html | json | csv>");
@@ -1532,8 +295,8 @@ fn show_usage<const ORTHOGRAPHIES: usize>(language: &Language<ORTHOGRAPHIES>) {
 }
 
 fn format_lexicon<const ORTHOGRAPHIES: usize>(grid_style: Option<GridStyle>, language: &Language<ORTHOGRAPHIES>, path: String, ortho_index: usize) {
-  if ortho_index >= language.orthographies.len() {
-        panic!("Language only has {} orthographies.",language.orthographies.len())
+  if ortho_index >= language.orthographies().len() {
+        panic!("Language only has {} orthographies.",language.orthographies().len())
   }
 
   let grid_style = grid_style.unwrap_or(GridStyle::Plain);
@@ -1554,7 +317,7 @@ fn format_lexicon<const ORTHOGRAPHIES: usize>(grid_style: Option<GridStyle>, lan
 fn show_spelling<const ORTHOGRAPHIES: usize>(grid_style: Option<GridStyle>, language: &Language<ORTHOGRAPHIES>, columns: usize) {
     match language.display_spelling(columns) {
         Ok(grid) => {
-            grid.into_output(&grid_style.unwrap_or(GridStyle::Terminal { spans: false })).print_to_stdout().expect("Could not display grid.");
+            grid.into_output(&grid_style.unwrap_or(GridStyle::Terminal { spans: false })).print_to_stdout();
         },
         Err(err) => {
             eprintln!("!!! Couldn't display spelling: {err}");
@@ -1568,7 +331,7 @@ fn show_phonemes<const ORTHOGRAPHIES: usize>(grid_style: Option<&GridStyle>, lan
     let result = match table {
         Some(table) => match language.build_phoneme_table(table) {
             Ok(Some(grid)) => {
-                grid.into_output(style).print_to_stdout().expect("Could not display grid.");
+                grid.into_output(style).print_to_stdout();
                 Ok(())
             },
             Ok(None) => {
@@ -1581,7 +344,7 @@ fn show_phonemes<const ORTHOGRAPHIES: usize>(grid_style: Option<&GridStyle>, lan
             Ok(grids) => {
                 for grid in grids {
                     println!("{}",grid.1.caption());
-                    grid.1.into_output(style).print_to_stdout().expect("Could not display grid.");
+                    grid.1.into_output(style).print_to_stdout();
                     println!();
 
                 }
@@ -1628,7 +391,7 @@ fn validate_words<const ORTHOGRAPHIES: usize>(language: &Language<ORTHOGRAPHIES>
                         }
                       }
 
-                      for orthography in 0..language.orthographies.len() {
+                      for orthography in 0..language.orthographies().len() {
                         print!("{} ",language.spell_word(&word,orthography));
                       }
                       println!("{word}");
@@ -1647,7 +410,7 @@ fn validate_words<const ORTHOGRAPHIES: usize>(language: &Language<ORTHOGRAPHIES>
 }
 
 fn generate_words<const ORTHOGRAPHIES: usize>(grid_style: Option<&GridStyle>, language: &Language<ORTHOGRAPHIES>, count: usize) {
-    let mut grid = Grid::new(TableClass::ElbieWords, format!("Generated {count} words for {}",language.name));
+    let mut grid = Grid::new(TableClass::ElbieWords, format!("Generated {count} words for {}",language.name()));
 
     // FUTURE: Should I have a header?
 
@@ -1656,7 +419,7 @@ fn generate_words<const ORTHOGRAPHIES: usize>(grid_style: Option<&GridStyle>, la
 
         match language.make_word() {
             Ok(word) => {
-                for orthography in 0..language.orthographies.len() {
+                for orthography in 0..language.orthographies().len() {
                     row.push_cell(Cell::content(language.spell_word(&word,orthography),None));
                 }
                 row.push_cell(Cell::content(format!("{word}"),None));
@@ -1675,7 +438,7 @@ fn generate_words<const ORTHOGRAPHIES: usize>(grid_style: Option<&GridStyle>, la
 
         grid.push_body_row(row);
     }
-    grid.into_output(grid_style.unwrap_or(&GridStyle::Plain)).print_to_stdout().expect("Could not display grid.");
+    grid.into_output(grid_style.unwrap_or(&GridStyle::Plain)).print_to_stdout();
 }
 
 

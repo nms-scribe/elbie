@@ -5,7 +5,7 @@ use html_builder::Html5 as _;
 use json::object::Object as JSONObject;
 
 
-pub struct LexiconEntry<const ORTHOGRAPHIES: usize> {
+pub(crate) struct LexiconEntry<const ORTHOGRAPHIES: usize> {
   word: Word,
   spelling: [String; ORTHOGRAPHIES],
   definition: String
@@ -22,24 +22,10 @@ impl<const ORTHOGRAPHIES: usize> LexiconEntry<ORTHOGRAPHIES> {
 
     }
 
-    #[must_use]
-    pub const fn word(&self) -> &Word {
-        &self.word
-    }
-
-    #[must_use]
-    pub const fn spelling(&self) -> &[String; ORTHOGRAPHIES] {
-        &self.spelling
-    }
-
-    #[must_use]
-    pub fn definition(&self) -> &str {
-        &self.definition
-    }
 
 }
 
-pub struct Lexicon<const ORTHOGRAPHIES: usize>{
+pub(crate) struct Lexicon<const ORTHOGRAPHIES: usize>{
     primary_orthography: usize,
     orthographies: [&'static str; ORTHOGRAPHIES],
     entries: Vec<LexiconEntry<ORTHOGRAPHIES>>
@@ -59,7 +45,7 @@ impl<const ORTHOGRAPHIES: usize> Lexicon<ORTHOGRAPHIES> {
         self.entries.push(entry);
     }
 
-    pub fn format_entry<Output: Write>(style: &GridStyle, main_spelling: &str, other_spellings: Vec<(&str,&str)>, word: &Word, definition: &str, output: &mut Output) {
+    pub(crate) fn format_entry<Output: Write>(style: &GridStyle, main_spelling: &str, other_spellings: Vec<(&str,&str)>, word: &Word, definition: &str, output: &mut Output) {
         match style {
             GridStyle::Plain |
             GridStyle::Terminal { .. } => {
@@ -110,7 +96,7 @@ impl<const ORTHOGRAPHIES: usize> Lexicon<ORTHOGRAPHIES> {
     /// # Panics
     /// panics if the `self.primary_orthography' is not a valid index in the supplied orthographies.
     #[must_use]
-    pub fn into_string(self, style: &GridStyle) -> String {
+    pub(crate) fn into_string(self, style: &GridStyle) -> String {
 
         let mut result = String::new();
 

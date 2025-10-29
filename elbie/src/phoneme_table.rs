@@ -2,14 +2,14 @@ use crate::grid::SubrowHeader;
 use crate::grid::TDClass;
 use crate::grid::TRBodyClass;
 use crate::grid::TableClass;
-use crate::Bag;
-use crate::ColumnDef;
-use crate::Language;
-use crate::Phoneme;
+use crate::bag::Bag;
+use crate::language::Language;
+use crate::phoneme::Phoneme;
 use crate::grid::Grid;
 use crate::grid::GridRow;
 use crate::grid::RowHeader;
 use crate::phoneme_table::sealed::InnerTable as _;
+use crate::LanguageError;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::hash_map::Entry;
@@ -256,14 +256,14 @@ pub(crate) struct Cells4DKey {
 }
 
 pub(crate) struct PhonemeSets4D {
-    pub column: &'static str,
-    pub subcolumn: &'static str,
-    pub row: &'static str,
-    pub subrow: &'static str
+    column: &'static str,
+    subcolumn: &'static str,
+    row: &'static str,
+    subrow: &'static str
 }
 
 #[derive(Debug)]
-pub struct Table4DDef {
+pub(crate) struct Table4DDef {
     caption: String,
     columns_by_set: HashMap<&'static str,HeaderDef>,
     subcolumns_by_set: HashMap<&'static str,HeaderDef>,
@@ -506,13 +506,13 @@ pub(crate) struct Cells3DKey {
 }
 
 pub(crate) struct PhonemeSets3D {
-    pub column: &'static str,
-    pub subcolumn: &'static str,
-    pub row: &'static str
+    column: &'static str,
+    subcolumn: &'static str,
+    row: &'static str
 }
 
 #[derive(Debug)]
-pub struct Table3DDef {
+pub(crate) struct Table3DDef {
     caption: String,
     columns_by_set: HashMap<&'static str,HeaderDef>,
     subcolumns_by_set: HashMap<&'static str,HeaderDef>,
@@ -717,13 +717,13 @@ pub(crate) struct Cells2DKey {
 }
 
 pub(crate) struct PhonemeSets2D {
-    pub column: &'static str,
-    pub row: &'static str
+    column: &'static str,
+    row: &'static str
 }
 
 
 #[derive(Debug)]
-pub struct Table2DDef {
+pub(crate) struct Table2DDef {
     caption: String,
     columns_by_set: HashMap<&'static str,HeaderDef>,
     rows_by_set: HashMap<&'static str,HeaderDef>
@@ -880,7 +880,7 @@ impl sealed::InnerTable for Table2D<'_> {
 
 
 #[derive(Debug)]
-pub struct Table1DDef {
+pub(crate) struct Table1DDef {
     header: HeaderDef,
     rows_by_set: HashMap<&'static str,HeaderDef>
 }
@@ -1011,7 +1011,7 @@ impl sealed::InnerTable for Table1D<'_> {
 
 
 #[derive(Debug)]
-pub struct Table0DDef {
+pub(crate) struct Table0DDef {
     header: HeaderDef,
 }
 
@@ -1110,5 +1110,81 @@ impl sealed::InnerTable for Table0D<'_> {
     fn get_cell(&self, (): &()) -> Option<&HashSet<PhonemeDisplay>> {
         Some(&self.phonemes)
     }
+
+}
+
+
+
+#[derive(Debug)]
+pub(crate) struct ColumnDef {
+    caption: &'static str,
+    set: &'static str
+}
+
+impl From<&(&'static str, &'static str)> for ColumnDef {
+    // The first string is the caption, the second string is the set name.
+    fn from(value: &(&'static str, &'static str)) -> Self {
+        Self {
+            caption: value.0,
+            set: value.1
+        }
+    }
+}
+
+impl From<(&'static str, &'static str)> for ColumnDef {
+    // The first string is the caption, the second string is the set name.
+    fn from(value: (&'static str, &'static str)) -> Self {
+        (&value).into()
+    }
+}
+
+/// These are options you can add to some `TableDef`
+#[derive(Debug,Clone,Hash,Eq,PartialEq)]
+pub enum TableOption {
+    /// For 3D and 4D phoneme tables, this will hide the captions for the subcolumns, which can compress the "appearance" of the table.
+    HideSubcolumnCaptions,
+    /// For 4D phoneme tables, this will hide the captions for subrows, which can compress the "appearance" of the table.
+    HideSubrowCaptions,
+}
+
+/*
+NOTE: Four seems like an arbitrary limit. I used to have this all in a vector so the limit was usize. However, this is a user interface thing. The third and fourth axis basically just add more items to a cell in a table. Trying to do more than that is going to be difficult to represent in a way that a human to understand, and it makes processing the table harder to program. I believe such distinctions would not be found in most languages anyway.
+
+The good news is that this doesn't limit the language if the user wants something really alien. They can just separate one of the lower axes into separate tables instead, and then they can still use this.
+*/
+#[derive(Debug)]
+pub(crate) enum TableDef {
+  OneCell(Table0DDef),
+  ListTable(Table1DDef),
+  SimpleTable(Table2DDef),
+  TableWithSubcolumns(Table3DDef),
+  TableWithSubcolumnsAndSubrows(Table4DDef)
+}
+
+
+impl TableDef {
+
+  pub(crate) fn set_option(&mut self, option: &TableOption) -> Result<(),LanguageError> {
+      match (self,&option) {
+        (Self::TableWithSubcolumnsAndSubrows(definition), TableOption::HideSubcolumnCaptions) => {
+            definition.hide_subcolumn_captions(true);
+        },
+        (Self::TableWithSubcolumnsAndSubrows(definition), TableOption::HideSubrowCaptions) => {
+            definition.hide_subrow_captions(true);
+        },
+        (Self::TableWithSubcolumns(definition), TableOption::HideSubcolumnCaptions) => {
+            definition.hide_subcolumn_captions(true);
+        },
+        (Self::TableWithSubcolumns(_) |
+         Self::OneCell(_) |
+         Self::ListTable(_) |
+         Self::SimpleTable(_), TableOption::HideSubrowCaptions) |
+        (Self::OneCell(_) |
+         Self::ListTable(_) |
+         Self::SimpleTable(_), TableOption::HideSubcolumnCaptions) => return Err(LanguageError::InvalidOptionForTable(option.clone()))
+    }
+    Ok(())
+
+  }
 
 }

@@ -1,7 +1,7 @@
 
 #[test]
 fn test_bags() {
-    use super::Bag;
+    use crate::bag::Bag;
 
     let mut bag_a = Bag::new();
     _ = bag_a.insert(1);

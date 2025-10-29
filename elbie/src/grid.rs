@@ -1,7 +1,6 @@
 use core::fmt::Write as _;
 use std::fmt;
 use core::fmt::Display;
-use std::io;
 use core::num::NonZeroUsize;
 use html_builder::Html5 as _;
 use prettytable::format::consts::FORMAT_BOX_CHARS;
@@ -51,7 +50,8 @@ Decision: I ended up going with pretty table, as it required the least customiza
 FUTURE: I could potentially pre-process the rows in the same way that I do for multi-columns, assuming that prettytable handles multi-line cells.
 */
 
-pub enum TableClass {
+#[expect(clippy::enum_variant_names,reason="They all start with the same text. But, I'm trying to represent the HTML class names, which won't be in a namespace.")]
+pub(crate) enum TableClass {
     ElbiePhonemes,
     ElbieWords,
     ElbieOrthography
@@ -68,7 +68,7 @@ impl Display for TableClass {
 }
 
 #[derive(Clone)]
-pub enum TRHeadClass {
+pub(crate) enum TRHeadClass {
     ColumnHead,
     SubColumnHead
 }
@@ -83,7 +83,8 @@ impl Display for TRHeadClass {
 }
 
 #[derive(Debug)]
-pub enum TRBodyClass {
+#[expect(clippy::enum_variant_names,reason="They all start with the same text. But, I'm trying to represent the HTML class names, which won't be in a namespace.")]
+pub(crate) enum TRBodyClass {
     BodyRow,
     BodyRowGroupStart,
     BodyRowGroupMiddle,
@@ -102,7 +103,7 @@ impl Display for TRBodyClass {
 }
 
 #[derive(Clone)]
-pub enum THColumnClass {
+pub(crate) enum THColumnClass {
     ColumnHeader,
     SubColumnHeader
 }
@@ -117,7 +118,7 @@ impl Display for THColumnClass {
 }
 
 #[derive(Debug)]
-pub enum THRowClass {
+pub(crate) enum THRowClass {
     RowHeader,
     SubrowHeader
 }
@@ -132,7 +133,8 @@ impl Display for THRowClass {
 }
 
 #[derive(Debug)]
-pub enum TDClass {
+#[expect(clippy::enum_variant_names,reason="They all start with the same text. But, I'm trying to represent the HTML class names, which won't be in a namespace.")]
+pub(crate) enum TDClass {
     ColumnGroupStart,
     ColumnGroupMiddle,
     ColumnGroupEnd
@@ -165,7 +167,7 @@ impl<FirstType,SecondType> ZeroOneOrTwo for Option<(FirstType,Option<SecondType>
 
 
 
-pub enum TextStyle {
+pub(crate) enum TextStyle {
     Plain,
     Terminal,
     Markdown
@@ -194,7 +196,7 @@ impl TextStyle {
 }
 
 // FUTURE: How about a CSV style? I've already got a CSV reader. NOTE: The prettytable plugin has CSV output available, but it doesn't quote the strings, so don't use that.
-pub enum GridStyle {
+pub(crate) enum GridStyle {
     Plain,
     Terminal{ spans: bool },
     Markdown,
@@ -203,35 +205,33 @@ pub enum GridStyle {
 }
 
 
-pub enum TableOutput {
+pub(crate) enum TableOutput {
     Pretty(PrettyTable),
     // NOTE: PrettyTable has a 'write_html' function, but it uses style attributes and I can't control the class attributes
     HTML(html_builder::Buffer),
     JSON(json::JsonValue),
-    Text(String)
+    //Text(String)
 }
 
 impl TableOutput {
 
-    #[must_use]
-    pub fn into_string(self) -> String {
-        match self {
-            Self::Pretty(table) => table.to_string(),
-            Self::HTML(buffer) => buffer.finish(),
-            Self::JSON(json_value) => json_value.pretty(2),
-            Self::Text(text) => text
-        }
-    }
+    //#[must_use]
+    //pub(crate) fn into_string(self) -> String {
+    //    match self {
+    //        Self::Pretty(table) => table.to_string(),
+    //        Self::HTML(buffer) => buffer.finish(),
+    //        Self::JSON(json_value) => json_value.pretty(2),
+    //        Self::Text(text) => text
+    //    }
+    //}
 
-    pub fn print_to_stdout(self) -> Result<(),io::Error> {
+    pub(crate) fn print_to_stdout(self) {
         match self {
             Self::Pretty(table) => table.printstd(),
             Self::HTML(buffer) => println!("{}",buffer.finish()),
             Self::JSON(json_value) => println!("{}",json_value.pretty(2)),
-            Self::Text(text) => println!("{text}")
+            //Self::Text(text) => println!("{text}")
         }
-
-        Ok(())
     }
 }
 
@@ -360,7 +360,7 @@ trait GridHeadRow: Sized {
 
 
 #[derive(Clone,Debug)]
-pub struct ColumnHeader {
+pub(crate) struct ColumnHeader {
     text: String,
     colspan: NonZeroUsize
 }
@@ -371,7 +371,7 @@ impl ColumnHeader {
     /// # Panics
     /// Panics if 1 is somehow equal to zero or less
     #[must_use]
-    pub fn new(text: String, colspan: usize) -> Self {
+    pub(crate) fn new(text: String, colspan: usize) -> Self {
         Self {
             text,
             colspan: NonZeroUsize::new(colspan).unwrap_or(NonZeroUsize::new(1).unwrap())
@@ -400,14 +400,14 @@ impl GridHeadRow for Vec<ColumnHeader> {
 
 
 #[derive(Clone)]
-pub struct SubcolumnHeader {
+pub(crate) struct SubcolumnHeader {
     text: String
 }
 
 impl SubcolumnHeader {
 
     #[must_use]
-    pub const fn new(text: String) -> Self {
+    pub(crate) const fn new(text: String) -> Self {
         Self {
             text
         }
@@ -433,7 +433,7 @@ impl GridHeadRow for Vec<SubcolumnHeader> {
 
 
 #[derive(Debug)]
-pub enum RowHeader {
+pub(crate) enum RowHeader {
     RowHeader{
         text: String,
         rowspan: NonZeroUsize
@@ -447,7 +447,7 @@ impl RowHeader {
     /// # Panics
     /// Panics if 1 is somehow equal to 0 or less.
     #[must_use]
-    pub fn new(text: String, rowspan: usize) -> Self {
+    pub(crate) fn new(text: String, rowspan: usize) -> Self {
         Self::RowHeader{
             text,
             rowspan: NonZeroUsize::new(rowspan).unwrap_or(NonZeroUsize::new(1).unwrap())
@@ -459,7 +459,7 @@ impl RowHeader {
     /// This is simpler than trying to maintain row state and track the missing cells for the rowspan when building the final grid.
     ///
     #[must_use]
-    pub const fn row_header_span() -> Self {
+    pub(crate) const fn row_header_span() -> Self {
         Self::RowHeaderSpan
     }
 
@@ -467,14 +467,14 @@ impl RowHeader {
 }
 
 #[derive(Debug)]
-pub struct SubrowHeader {
+pub(crate) struct SubrowHeader {
     text: String
 }
 
 impl SubrowHeader {
 
     #[must_use]
-    pub const fn new(text: String) -> Self {
+    pub(crate) const fn new(text: String) -> Self {
         Self {
             text
         }
@@ -482,7 +482,7 @@ impl SubrowHeader {
 }
 
 #[derive(Debug)]
-pub struct Cell {
+pub(crate) struct Cell {
     text: String,
     class: Option<TDClass>
 }
@@ -493,7 +493,7 @@ impl Cell {
     /// # Panics
     /// Panics if any of the grid cells contain newlines
     #[must_use]
-    pub fn content(text: String, class: Option<TDClass>) -> Self {
+    pub(crate) fn content(text: String, class: Option<TDClass>) -> Self {
         assert!(!text.contains('\n'),"Grid cells must not contain newlines");
         Self{
             text,
@@ -508,7 +508,7 @@ impl Cell {
 
 
 #[derive(Debug)]
-pub struct GridRow {
+pub(crate) struct GridRow {
     class: TRBodyClass,
     headers: Option<(RowHeader,Option<SubrowHeader>)>,
     cells: Vec<Cell>
@@ -517,7 +517,7 @@ pub struct GridRow {
 impl GridRow {
 
     #[must_use]
-    pub const fn new(class: TRBodyClass) -> Self {
+    pub(crate) const fn new(class: TRBodyClass) -> Self {
         Self {
             class,
             headers: None,
@@ -527,14 +527,14 @@ impl GridRow {
 
     /// # Panics
     /// Panics if the row header is already set.
-    pub fn set_header(&mut self, header: RowHeader) {
+    pub(crate) fn set_header(&mut self, header: RowHeader) {
         assert!(self.headers.is_none(),"Row header already set.");
         self.headers = Some((header,None))
     }
 
     /// # Panics
     /// Panics if there is no row header yet, or if the subrow header is already set.
-    pub fn set_subheader(&mut self, new_subheader: SubrowHeader) {
+    pub(crate) fn set_subheader(&mut self, new_subheader: SubrowHeader) {
         let Some((_,subheader)) = &mut self.headers else {
             panic!("Row headers must be set before subheaders")
         };
@@ -545,13 +545,13 @@ impl GridRow {
 
     }
 
-    pub fn push_cell(&mut self, cell: Cell) {
+    pub(crate) fn push_cell(&mut self, cell: Cell) {
         self.cells.push(cell);
     }
 }
 
 
-pub struct Grid {
+pub(crate) struct Grid {
     class: TableClass,
     caption: String,
     heads: Option<(Vec<ColumnHeader>,Option<Vec<SubcolumnHeader>>)>,
@@ -561,7 +561,7 @@ pub struct Grid {
 impl Grid {
 
     #[must_use]
-    pub const fn new(class: TableClass, caption: String) -> Self {
+    pub(crate) const fn new(class: TableClass, caption: String) -> Self {
         Self {
             caption,
             class,
@@ -571,13 +571,13 @@ impl Grid {
     }
 
     #[must_use]
-    pub fn caption(&self) -> &str {
+    pub(crate) fn caption(&self) -> &str {
         &self.caption
     }
 
     /// # Panics
     /// Function panics if column headers are already set
-    pub fn set_headers(&mut self, row: Vec<ColumnHeader>) {
+    pub(crate) fn set_headers(&mut self, row: Vec<ColumnHeader>) {
         assert!(self.heads.is_none(),"Column headers are already set");
         self.heads = Some((row,None))
 
@@ -585,7 +585,7 @@ impl Grid {
 
     /// # Panics
     /// Function panics if column headers are not set yet, if subheaders are already set, or the length of the subheaders does not match the length of the column headers (including colspan)
-    pub fn set_subheaders(&mut self, row: Vec<SubcolumnHeader>) {
+    pub(crate) fn set_subheaders(&mut self, row: Vec<SubcolumnHeader>) {
         let Some((head,subhead)) = &mut self.heads else {
             panic!("Column headers must be set before subheaders")
         };
@@ -599,7 +599,7 @@ impl Grid {
 
     /// # Panics
     /// Function panics if the number of cells in the row does not match the header cells, or if the row header and cell lengths do not match previously added rows.
-    pub fn push_body_row(&mut self, row: GridRow) {
+    pub(crate) fn push_body_row(&mut self, row: GridRow) {
         if let Some((head,_)) = &self.heads {
             assert_eq!(head.iter().map(|c| c.colspan.get()).sum::<usize>(),row.cells.len(),"Row cells must match length of headers (including colspan).");
         }
@@ -615,7 +615,7 @@ impl Grid {
 
 
     #[must_use]
-    pub fn into_html(mut self,with_span: bool) -> html_builder::Buffer {
+    pub(crate) fn into_html(mut self,with_span: bool) -> html_builder::Buffer {
 
         // need to know this for creating "corner" cell in the top-left
         let row_header_offset = self.body.first().map_or(0, |first| {
@@ -682,7 +682,7 @@ impl Grid {
     }
 
     #[must_use]
-    pub fn into_json(self) -> json::JsonValue {
+    pub(crate) fn into_json(self) -> json::JsonValue {
 
 
         let result = json::object!{
@@ -999,7 +999,7 @@ impl Grid {
     }*/
 
     #[must_use]
-    pub fn into_pretty(self, with_spans: bool, text_style: &TextStyle, format: PrettyTableFormat) -> PrettyTable {
+    pub(crate) fn into_pretty(self, with_spans: bool, text_style: &TextStyle, format: PrettyTableFormat) -> PrettyTable {
 
         let row_header_offset = self.body.first().map_or(0, |first| {
             first.headers.len()
@@ -1067,7 +1067,7 @@ impl Grid {
     }
 
     #[must_use]
-    pub fn into_output(self, style: &GridStyle) -> TableOutput {
+    pub(crate) fn into_output(self, style: &GridStyle) -> TableOutput {
 
         match style {
             GridStyle::Plain => {
