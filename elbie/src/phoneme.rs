@@ -138,17 +138,19 @@ impl Inventory {
       }
     }
 
-    pub(crate) fn extend(&mut self, other: &Inventory, containing_set: &'static str) -> Result<(),LanguageError> {
+    pub(crate) fn extend(&mut self, other: &Self, containing_set: &'static str) -> Result<(),LanguageError> {
+        #[expect(clippy::iter_over_hash_type,reason="Order for this doesn't matter")]
         for (name,bag) in &other.sets {
             for phoneme in bag.iter() {
-                let phoneme = self.phonemes.entry(phoneme.name).or_insert(phoneme.clone()).clone();
+                let phoneme = self.phonemes.entry(phoneme.name).or_insert_with(|| phoneme.clone()).clone();
                 self.add_phoneme_to_set(name, phoneme)?;
             }
         }
 
         // make sure any phonemes that weren't in sets are added, and also add the phoneme to the containing set.
+        #[expect(clippy::iter_over_hash_type,reason="Order for this doesn't matter")]
         for (name,phoneme) in other.phonemes() {
-            let phoneme = self.phonemes.entry(name).or_insert(phoneme.clone()).clone();
+            let phoneme = self.phonemes.entry(name).or_insert_with(|| phoneme.clone()).clone();
             self.add_phoneme_to_set(containing_set, phoneme)?;
         }
 

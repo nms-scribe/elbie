@@ -1,6 +1,6 @@
-use std::iter::Peekable;
+use core::iter::Peekable;
 use std::rc::Rc;
-use std::slice::Iter;
+use core::slice::Iter;
 
 use crate::errors::LanguageError;
 use crate::language::Language;
@@ -72,6 +72,7 @@ impl Pattern {
     }
 
 
+    #[must_use]
     pub const fn set(entity: &'static str) -> Self {
         Self {
             optional: false,

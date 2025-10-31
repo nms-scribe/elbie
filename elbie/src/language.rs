@@ -56,9 +56,8 @@ fn sort_phonemes_by_length_descending(a: &Rc<Phoneme>, b: &Rc<Phoneme>)  -> Orde
         len_b.partial_cmp(&len_a).expect("Can't order phoneme lengths for some reason.")
     }
 }
-
-
 #[derive(Debug)]
+/// ORTHOGRAPHIES is a const parameter so that when phonemes are added we always know how many orthographies are required.
 pub struct Language<const ORTHOGRAPHIES: usize> {
   name: &'static str,
   initial_environment: &'static str,
