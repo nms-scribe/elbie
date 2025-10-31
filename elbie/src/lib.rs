@@ -51,7 +51,7 @@ pub mod phonotactics;
 mod validation;
 pub mod phoneme_table_builder;
 pub mod language;
-pub mod transformer;
+pub mod transformation;
 pub mod language_cli;
 #[cfg(test)] mod test;
 

@@ -28,7 +28,7 @@ enum PatternEntity {
 
 impl PatternEntity {
 
-    fn match_(&self, transformer: &Transformer, phonemes: &mut Peekable<Iter<'_, Rc<Phoneme>>>, trace: bool) -> Result<Option<usize>,LanguageError> {
+    fn match_(&self, transformer: &Transformation, phonemes: &mut Peekable<Iter<'_, Rc<Phoneme>>>, trace: bool) -> Result<Option<usize>,LanguageError> {
         match self {
             Self::Phoneme(name) => if phonemes.next_if(|phoneme| phoneme.name == *name).is_some() {
                 Ok(Some(1))
@@ -118,7 +118,7 @@ impl Pattern {
         }
     }
 
-    fn match_(patterns: &[Self], transformer: &Transformer, phonemes: &mut Peekable<Iter<'_, Rc<Phoneme>>>, trace: bool) -> Result<Option<usize>,LanguageError> {
+    fn match_(patterns: &[Self], transformer: &Transformation, phonemes: &mut Peekable<Iter<'_, Rc<Phoneme>>>, trace: bool) -> Result<Option<usize>,LanguageError> {
         let mut length = 0;
         for pattern in patterns {
             length += if let Some(mut match_length) = pattern.entity.match_(transformer, phonemes, trace)? {
@@ -225,7 +225,7 @@ impl Rule {
     }
 
 
-    fn match_instructions(&self, transformer: &Transformer, mut start_index: usize, phonemes: &mut Peekable<Iter<'_, Rc<Phoneme>>>, trace: bool) -> Result<Vec<WordSplice>,LanguageError> {
+    fn match_instructions(&self, transformer: &Transformation, mut start_index: usize, phonemes: &mut Peekable<Iter<'_, Rc<Phoneme>>>, trace: bool) -> Result<Vec<WordSplice>,LanguageError> {
         let mut splices = Vec::new();
         for instruction in &self.instructions {
             match instruction {
@@ -265,7 +265,7 @@ impl Rule {
 
     There is a possibility of this resulting in overlapping replacements, which will be reported as an error. In theory, I could require matches to start after the replacement, but this can get complicated if there's more than one replacement section in a rule.
     */
-    fn transform(&self, transformer: &Transformer, word: Word, trace: bool) -> Result<Word,LanguageError> {
+    fn transform(&self, transformer: &Transformation, word: Word, trace: bool) -> Result<Word,LanguageError> {
 
         let mut phonemes = word.phonemes().iter();
         let mut current_index = 0;
@@ -368,12 +368,12 @@ replacement!(ident) -- convert_namespace
 */
 
 
-pub struct Transformer {
+pub struct Transformation {
     inventory: Inventory,
     rules: Vec<Rule>
 }
 
-impl Transformer {
+impl Transformation {
 
     #[must_use]
     pub fn from<const ORTHOGRAPHIES: usize>(source: &Language<ORTHOGRAPHIES>) -> Self {
