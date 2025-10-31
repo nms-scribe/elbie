@@ -62,5 +62,7 @@ pub enum LanguageError {
 
     // transformation errors
     #[error("Sequence '{0}' was already defined.")]
-    TransformationSequenceAlreadyExists(&'static str)
+    TransformationSequenceAlreadyExists(&'static str),
+    #[error("Transformation rule '{0}' created an overlapping splice.")]
+    TransformationCreatedOverlappingReplacements(&'static str)
 }

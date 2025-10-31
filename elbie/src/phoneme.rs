@@ -138,6 +138,23 @@ impl Inventory {
       }
     }
 
+    pub(crate) fn extend(&mut self, other: &Inventory, containing_set: &'static str) -> Result<(),LanguageError> {
+        for (name,bag) in &other.sets {
+            for phoneme in bag.iter() {
+                let phoneme = self.phonemes.entry(phoneme.name).or_insert(phoneme.clone()).clone();
+                self.add_phoneme_to_set(name, phoneme)?;
+            }
+        }
+
+        // make sure any phonemes that weren't in sets are added, and also add the phoneme to the containing set.
+        for (name,phoneme) in other.phonemes() {
+            let phoneme = self.phonemes.entry(name).or_insert(phoneme.clone()).clone();
+            self.add_phoneme_to_set(containing_set, phoneme)?;
+        }
+
+        Ok(())
+    }
+
 
 }
 
