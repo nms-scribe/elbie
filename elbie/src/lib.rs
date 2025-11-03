@@ -48,11 +48,12 @@ mod orthography;
 mod phoneme_behavior;
 pub mod word;
 pub mod phonotactics;
-mod validation;
+pub mod validation;
 pub mod phoneme_table_builder;
 pub mod language;
 pub mod transformation;
 pub mod language_cli;
+pub mod transformation_cli;
 #[cfg(test)] mod test;
 
 // Old paths: remove once I'm sure I've fixed all of my languages... Or, maybe just wait until I increase the version number.

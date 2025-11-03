@@ -4,9 +4,10 @@ use core::fmt;
 use core::fmt::Formatter;
 use core::fmt::Display;
 use std::rc::Rc;
+use crate::word::Word;
 
 #[derive(Clone)]
-pub(crate) enum ValidWordElement {
+pub enum ValidWordElement {
   Done(usize,&'static str), // environment
   Phoneme(usize,Rc<Phoneme>,&'static str,&'static str) // found phoneme, expected set, expected environment
 }
@@ -22,7 +23,7 @@ impl Display for ValidWordElement {
   }
 }
 
-pub(crate) enum ValidationTraceMessage<'lifetime> {
+pub enum ValidationTraceMessage<'lifetime> {
   FoundValid(&'lifetime ValidWordElement),
   FoundError(&'lifetime LanguageError)
 }
@@ -39,3 +40,15 @@ impl Display for ValidationTraceMessage<'_> {
 }
 
 pub(crate) type ValidationTraceCallback = dyn Fn(usize, ValidationTraceMessage);
+
+pub trait WordValidator {
+
+    fn check_word(&self,word: &Word, trace: &ValidationTraceCallback) -> Result<Vec<ValidWordElement>,LanguageError>;
+
+}
+
+impl WordValidator for Box<dyn WordValidator> {
+    fn check_word(&self,word: &Word, trace: &ValidationTraceCallback) -> Result<Vec<ValidWordElement>,LanguageError> {
+        self.as_ref().check_word(word, trace)
+    }
+}

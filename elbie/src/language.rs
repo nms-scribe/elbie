@@ -41,6 +41,8 @@ use crate::phoneme_table_builder::TableEntry;
 use crate::phonotactics::EnvironmentBranch;
 use crate::phoneme::Phoneme;
 use std::collections::HashMap;
+use crate::word::WordLoader;
+use crate::validation::WordValidator;
 
 
 
@@ -359,48 +361,6 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
-    pub(crate) fn check_word(&self,word: &Word, trace: &ValidationTraceCallback) -> Result<Vec<ValidWordElement>,LanguageError> {
-
-        let mut word = word.phonemes().iter().enumerate();
-        if let Some((idx,phoneme)) = word.next() {
-            if self.inventory.phoneme_is(phoneme, self.initial_phoneme_set)? {
-              let valid = ValidWordElement::Phoneme(idx,phoneme.clone(),self.initial_phoneme_set,self.initial_environment);
-              trace(0,ValidationTraceMessage::FoundValid(&valid));
-              self.validate_word(self.initial_environment, &mut word, idx, phoneme,1,&[valid],trace)
-            } else {
-              let err = LanguageError::IncorrectPhoneme(idx,phoneme.clone(),self.initial_phoneme_set,self.initial_environment);
-              trace(0,ValidationTraceMessage::FoundError(&err));
-              Err(err)
-            }
-        } else {
-            Err(LanguageError::EmptyWord)
-        }
-    }
-
-    pub(crate) fn read_word(&self,input: &str) -> Result<Word,LanguageError> {
-        // not an efficient algorithm, but it works...
-        let mut phonemes: Vec<Rc<Phoneme>> = self.inventory.phonemes().values().cloned().collect();
-        phonemes.sort_by(sort_phonemes_by_length_descending);
-
-        let mut word: Vec<Rc<Phoneme>> = vec![];
-
-        let mut source = input;
-
-        'outer: while !source.is_empty() {
-            for phoneme in &phonemes {
-                let name = phoneme.name;
-                if let Some(after) = source.strip_prefix(name) {
-                    word.push((*phoneme).clone()); // clone twice because apparently phoneme is a double reference
-                    source = after;
-                    continue 'outer;
-                }
-            }
-            return Err(LanguageError::UnknownPhonemeWhileReading(input.to_owned(),source.to_owned()));
-        }
-
-        Ok(Word::new(&word))
-    }
-
     pub(crate) fn build_phoneme_grid(&self, master_set: &Bag<Rc<Phoneme>>, table_def: &TableDef, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<Grid,LanguageError> {
 
         match table_def {
@@ -605,6 +565,58 @@ impl<const ORTHOGRAPHIES: usize> InventoryLoader for Language<ORTHOGRAPHIES> {
 
     fn add_exclusion(&mut self, name: &'static str, set: &'static str, exclude_phoneme_strs: &[&'static str]) -> Result<(),LanguageError> {
         self.inventory.add_exclusion(name, set, exclude_phoneme_strs)
+    }
+
+
+}
+
+impl<const ORTHOGRAPHIES: usize> WordLoader for Language<ORTHOGRAPHIES> {
+
+
+    fn read_word(&self,input: &str) -> Result<Word,LanguageError> {
+        // not an efficient algorithm, but it works...
+        let mut phonemes: Vec<Rc<Phoneme>> = self.inventory.phonemes().values().cloned().collect();
+        phonemes.sort_by(sort_phonemes_by_length_descending);
+
+        let mut word: Vec<Rc<Phoneme>> = vec![];
+
+        let mut source = input;
+
+        'outer: while !source.is_empty() {
+            for phoneme in &phonemes {
+                let name = phoneme.name;
+                if let Some(after) = source.strip_prefix(name) {
+                    word.push((*phoneme).clone()); // clone twice because apparently phoneme is a double reference
+                    source = after;
+                    continue 'outer;
+                }
+            }
+            return Err(LanguageError::UnknownPhonemeWhileReading(input.to_owned(),source.to_owned()));
+        }
+
+        Ok(Word::new(&word))
+    }
+
+}
+
+impl<const ORTHOGRAPHIES: usize> WordValidator for Language<ORTHOGRAPHIES> {
+
+    fn check_word(&self,word: &Word, trace: &ValidationTraceCallback) -> Result<Vec<ValidWordElement>,LanguageError> {
+
+        let mut word = word.phonemes().iter().enumerate();
+        if let Some((idx,phoneme)) = word.next() {
+            if self.inventory.phoneme_is(phoneme, self.initial_phoneme_set)? {
+              let valid = ValidWordElement::Phoneme(idx,phoneme.clone(),self.initial_phoneme_set,self.initial_environment);
+              trace(0,ValidationTraceMessage::FoundValid(&valid));
+              self.validate_word(self.initial_environment, &mut word, idx, phoneme,1,&[valid],trace)
+            } else {
+              let err = LanguageError::IncorrectPhoneme(idx,phoneme.clone(),self.initial_phoneme_set,self.initial_environment);
+              trace(0,ValidationTraceMessage::FoundError(&err));
+              Err(err)
+            }
+        } else {
+            Err(LanguageError::EmptyWord)
+        }
     }
 
 

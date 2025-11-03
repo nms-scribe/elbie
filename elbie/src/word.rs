@@ -3,6 +3,7 @@ use core::fmt::Formatter;
 use core::fmt::Display;
 use crate::phoneme::Phoneme;
 use std::rc::Rc;
+use crate::errors::LanguageError;
 
 #[derive(Debug,Clone)]
 pub struct Word {
@@ -50,5 +51,17 @@ impl From<Vec<Rc<Phoneme>>> for Word {
         Self {
             phonemes
         }
+    }
+}
+
+pub trait WordLoader {
+
+    fn read_word(&self,input: &str) -> Result<Word,LanguageError>;
+
+}
+
+impl WordLoader for Box<dyn WordLoader> {
+    fn read_word(&self,input: &str) -> Result<Word,LanguageError> {
+        self.as_ref().read_word(input)
     }
 }

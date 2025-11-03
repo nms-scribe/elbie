@@ -1,4 +1,7 @@
+use core::fmt;
 use core::iter::Peekable;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::rc::Rc;
 use core::slice::Iter;
 
@@ -8,7 +11,24 @@ use crate::phoneme::Inventory;
 use crate::phoneme::Phoneme;
 use crate::word::Word;
 
+pub(crate) enum TransformationTraceMessage {
+  MatchedRule(&'static str,Word),
+  UnmatchedRule(&'static str)
+}
 
+impl Display for TransformationTraceMessage {
+
+  fn fmt(&self, f: &mut Formatter) -> Result<(),fmt::Error> {
+    match self {
+      Self::MatchedRule(name,word) => write!(f,"Matched '{name}': {word}"),
+      Self::UnmatchedRule(name) => write!(f,"Did not match '{name}'"),
+    }
+
+  }
+}
+
+
+pub(crate) type TransformationTraceCallback = dyn Fn(TransformationTraceMessage);
 
 struct WordSplice {
     start_index: usize,
@@ -28,7 +48,7 @@ enum PatternEntity {
 
 impl PatternEntity {
 
-    fn match_(&self, transformer: &Transformation, phonemes: &mut Peekable<Iter<'_, Rc<Phoneme>>>, trace: bool) -> Result<Option<usize>,LanguageError> {
+    fn match_(&self, transformer: &Transformation, phonemes: &mut Peekable<Iter<'_, Rc<Phoneme>>>) -> Result<Option<usize>,LanguageError> {
         match self {
             Self::Phoneme(name) => if phonemes.next_if(|phoneme| phoneme.name == *name).is_some() {
                 Ok(Some(1))
@@ -42,7 +62,7 @@ impl PatternEntity {
             } else {
                 Ok(None)
             },
-            Self::Sequence(patterns) => Pattern::match_(patterns, transformer, phonemes, trace)
+            Self::Sequence(patterns) => Pattern::match_(patterns, transformer, phonemes)
         }
 
     }
@@ -118,12 +138,12 @@ impl Pattern {
         }
     }
 
-    fn match_(patterns: &[Self], transformer: &Transformation, phonemes: &mut Peekable<Iter<'_, Rc<Phoneme>>>, trace: bool) -> Result<Option<usize>,LanguageError> {
+    fn match_(patterns: &[Self], transformer: &Transformation, phonemes: &mut Peekable<Iter<'_, Rc<Phoneme>>>) -> Result<Option<usize>,LanguageError> {
         let mut length = 0;
         for pattern in patterns {
-            length += if let Some(mut match_length) = pattern.entity.match_(transformer, phonemes, trace)? {
+            length += if let Some(mut match_length) = pattern.entity.match_(transformer, phonemes)? {
                 if pattern.repeatable {
-                    while let Some(next_length) = pattern.entity.match_(transformer, phonemes, trace)? {
+                    while let Some(next_length) = pattern.entity.match_(transformer, phonemes)? {
                         match_length += next_length;
                     }
                 }
@@ -225,17 +245,17 @@ impl Rule {
     }
 
 
-    fn match_instructions(&self, transformer: &Transformation, mut start_index: usize, phonemes: &mut Peekable<Iter<'_, Rc<Phoneme>>>, trace: bool) -> Result<Vec<WordSplice>,LanguageError> {
+    fn match_instructions(&self, transformer: &Transformation, mut start_index: usize, phonemes: &mut Peekable<Iter<'_, Rc<Phoneme>>>) -> Result<Vec<WordSplice>,LanguageError> {
         let mut splices = Vec::new();
         for instruction in &self.instructions {
             match instruction {
-                Instruction::Match(pattern) => if let Some(length) = Pattern::match_(pattern,transformer,phonemes,trace)? {
+                Instruction::Match(pattern) => if let Some(length) = Pattern::match_(pattern,transformer,phonemes)? {
                     start_index += length;
                 } else {
                     // the instructions did not match, so the whole thing doesn't match. return an empty list of splices.
                     return Ok(Vec::new())
                 },
-                Instruction::Replace(pattern, replacement) => if let Some(length) = Pattern::match_(pattern,transformer,phonemes,trace)? {
+                Instruction::Replace(pattern, replacement) => if let Some(length) = Pattern::match_(pattern,transformer,phonemes)? {
                     start_index += length;
                     let replace = replacement.iter().map(|name| {
                         transformer.inventory.get_phoneme(name).cloned()
@@ -265,7 +285,7 @@ impl Rule {
 
     There is a possibility of this resulting in overlapping replacements, which will be reported as an error. In theory, I could require matches to start after the replacement, but this can get complicated if there's more than one replacement section in a rule.
     */
-    fn transform(&self, transformer: &Transformation, word: Word, trace: bool) -> Result<Word,LanguageError> {
+    fn transform(&self, transformer: &Transformation, word: Word, trace: &TransformationTraceCallback) -> Result<Word,LanguageError> {
 
         let mut phonemes = word.phonemes().iter();
         let mut current_index = 0;
@@ -274,7 +294,7 @@ impl Rule {
         loop {
             // copy the enumerator to store it's current position
             let mut match_phonemes = phonemes.clone().peekable();
-            let match_splices = self.match_instructions(transformer,current_index,&mut match_phonemes,trace)?;
+            let match_splices = self.match_instructions(transformer,current_index,&mut match_phonemes)?;
             if self.final_ {
                 // if the match enumerator has more, then it wasn't at the final, so this isn't a match if we're expecting a final.
                 if match_phonemes.next().is_some() {
@@ -317,6 +337,7 @@ impl Rule {
         // the splices are now sorted, and unique, so I should be able to iterate through the word again and copy things in somehow...
         let mut new_phonemes = Vec::new();
         let mut old_phonemes = word.into_phonemes().into_iter().enumerate().peekable();
+        let mut transformed = false;
         for next_splice in splices {
             // push through all the phonemes before the next splice and just push them through.
             while let Some((_,phoneme)) = old_phonemes.next_if(|(i,_)| i < &next_splice.start_index) {
@@ -328,11 +349,20 @@ impl Rule {
             }
             // and insert the phonemes to be replaced
             new_phonemes.extend(next_splice.replace);
+            transformed = true;
         }
         // push the remaining phonemes, after the last splice, onto the new phonemes.
         new_phonemes.extend(old_phonemes.map(|(_,p)| p));
 
-        Ok(Word::from(new_phonemes))
+        let word = Word::from(new_phonemes);
+
+        trace(if transformed {
+            TransformationTraceMessage::MatchedRule(self.name, word.clone())
+        } else {
+            TransformationTraceMessage::UnmatchedRule(self.name)
+        });
+
+        Ok(word)
 
     }
 
@@ -370,7 +400,7 @@ replacement!(ident) -- convert_namespace
 
 pub struct Transformation {
     inventory: Inventory,
-    rules: Vec<Rule>
+    rules: Vec<Rule>,
 }
 
 impl Transformation {
@@ -401,8 +431,7 @@ impl Transformation {
 
     /// Applies transformation rules in order, and returns the final word if successful.
     /// The word has not been validated for any specific language, so this should still be done before reporting the result to the user.
-    // TODO: The 'trace' bool should indicate if messages should be reported, similar to validation tracing.
-    pub fn transform(&self, word: Word, trace: bool) -> Result<Word,LanguageError> {
+    pub(crate) fn transform(&self, word: Word, trace: &TransformationTraceCallback) -> Result<Word,LanguageError> {
         let mut transformed = word;
         for rule in &self.rules {
             transformed = rule.transform(self, transformed, trace)?
