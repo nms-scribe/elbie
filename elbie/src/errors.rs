@@ -32,6 +32,8 @@ pub enum ElbieError {
     NoEnvironmentChoices(&'static str),
     #[error("Environment {0} is missing some possible branches.")]
     IncompleteBranches(&'static str),
+    #[error("Phoneme '{0}' was added with {2} spellings, but {1} were expected.")]
+    MismatchedSpellingsForPhoneme(&'static str, usize,usize),
 
     // word validation errors //
     #[error("Word is empty")]

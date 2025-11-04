@@ -64,7 +64,7 @@ pub const EMPTY: &str = phoneme::EMPTY;
 #[deprecated(since="0.2.2",note="Use `elbie::phoneme::PHONEME` instead.")]
 pub const PHONEME: &str = phoneme::PHONEME;
 #[deprecated(since="0.2.2",note="Use `elbie::language::Language` instead.")]
-pub type Language<const ORTHOGRAPHIES: usize> = language::Language<ORTHOGRAPHIES>;
+pub type Language<const ORTHOGRAPHIES: usize> = language::Language;
 #[deprecated(since="0.2.2",note="Use `elbie::phoneme::Phoneme` instead.")]
 pub type Phoneme = phoneme::Phoneme;
 #[deprecated(since="0.2.2",note="Use `elbie::phoneme_table::TableOption` instead.")]
@@ -74,7 +74,7 @@ pub type Axis = phoneme_table::Axis;
 #[deprecated(since="0.2.2",note="Use `elbie::phoneme_table::HeaderDef` instead.")]
 pub type HeaderDef = phoneme_table::HeaderDef;
 #[deprecated(since="0.2.2",note="Use `elbie::phoneme_table_builder::TableBuilder` instead.")]
-pub type TableBuilder<'language,const ORTHOGRAPHIES: usize> = phoneme_table_builder::TableBuilder<'language,ORTHOGRAPHIES>;
+pub type TableBuilder<'language,const ORTHOGRAPHIES: usize> = phoneme_table_builder::TableBuilder<'language>;
 #[deprecated(since="0.2.2",note="Use `elbie::phonotactics::EnvironmentBranch` instead.")]
 pub type EnvironmentBranch = phonotactics::EnvironmentBranch;
 #[deprecated(since="0.2.2",note="Use `elbie::phonotactics::EnvironmentChoice` instead.")]
@@ -85,6 +85,6 @@ pub type Word = word::Word;
 
 
 #[deprecated(since="0.2.2",note="use `elbie::language_cli::run` instead.")]
-pub fn run_main<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHOGRAPHIES: usize>(args: &mut Args, language: Result<language::Language<ORTHOGRAPHIES>,errors::ElbieError>) {
+pub fn run_main<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Args, language: Result<language::Language,errors::ElbieError>) {
     language_cli::run(args, language)
 }

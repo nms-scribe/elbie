@@ -1,30 +1,24 @@
-use core::array;
 use crate::orthography::SpellingBehavior;
 
 #[derive(Debug)]
-pub(crate) struct PhonemeBehavior<const ORTHOGRAPHIES: usize> {
-  spelling: [SpellingBehavior<ORTHOGRAPHIES>; ORTHOGRAPHIES]
+pub(crate) struct PhonemeBehavior {
+  spelling: Vec<SpellingBehavior>
 }
 
-impl<const ORTHOGRAPHIES: usize> Default for PhonemeBehavior<ORTHOGRAPHIES> {
+impl PhonemeBehavior {
 
-  fn default() -> Self {
-    Self {
-      spelling: array::from_fn(|_| SpellingBehavior::default())
-    }
-  }
-}
-
-impl<const ORTHOGRAPHIES: usize> PhonemeBehavior<ORTHOGRAPHIES> {
-
-  pub(crate) const fn new(spelling: [SpellingBehavior<ORTHOGRAPHIES>; ORTHOGRAPHIES]) -> Self {
+  pub(crate) const fn new(spelling: Vec<SpellingBehavior>) -> Self {
     Self {
       spelling
     }
   }
 
-  pub(crate) const fn spelling(&self) -> &[SpellingBehavior<ORTHOGRAPHIES>; ORTHOGRAPHIES] {
+  pub(crate) fn spelling(&self) -> &[SpellingBehavior] {
       &self.spelling
+  }
+
+  pub(crate) fn spelling_len(&self) -> usize {
+      self.spelling.len()
   }
 
 }

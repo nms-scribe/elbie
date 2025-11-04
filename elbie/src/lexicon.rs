@@ -5,15 +5,15 @@ use html_builder::Html5 as _;
 use json::object::Object as JSONObject;
 
 
-pub(crate) struct LexiconEntry<const ORTHOGRAPHIES: usize> {
+pub(crate) struct LexiconEntry {
   word: Word,
-  spelling: [String; ORTHOGRAPHIES],
+  spelling: Vec<String>,
   definition: String
 }
 
-impl<const ORTHOGRAPHIES: usize> LexiconEntry<ORTHOGRAPHIES> {
+impl LexiconEntry {
 
-    pub(crate) const fn new(word: Word, spelling: [String; ORTHOGRAPHIES], definition: String) -> Self {
+    pub(crate) const fn new(word: Word, spelling: Vec<String>, definition: String) -> Self {
         Self {
             word,
             spelling,
@@ -25,15 +25,15 @@ impl<const ORTHOGRAPHIES: usize> LexiconEntry<ORTHOGRAPHIES> {
 
 }
 
-pub(crate) struct Lexicon<const ORTHOGRAPHIES: usize>{
+pub(crate) struct Lexicon {
     primary_orthography: usize,
-    orthographies: [&'static str; ORTHOGRAPHIES],
-    entries: Vec<LexiconEntry<ORTHOGRAPHIES>>
+    orthographies: Vec<&'static str>,
+    entries: Vec<LexiconEntry>
 }
 
-impl<const ORTHOGRAPHIES: usize> Lexicon<ORTHOGRAPHIES> {
+impl Lexicon {
 
-    pub(crate) const fn new(orthographies: [&'static str; ORTHOGRAPHIES], primary_orthography: usize) -> Self {
+    pub(crate) const fn new(orthographies: Vec<&'static str>, primary_orthography: usize) -> Self {
         Self {
             primary_orthography,
             orthographies,
@@ -41,7 +41,10 @@ impl<const ORTHOGRAPHIES: usize> Lexicon<ORTHOGRAPHIES> {
         }
     }
 
-    pub(crate) fn push(&mut self, entry: LexiconEntry<ORTHOGRAPHIES>) {
+    pub(crate) fn push(&mut self, entry: LexiconEntry) {
+        if entry.spelling.len() != self.orthographies.len() {
+            panic!("LexiconEntry does not have the same number of spellings as the lexicon")
+        }
         self.entries.push(entry);
     }
 
@@ -113,11 +116,11 @@ impl<const ORTHOGRAPHIES: usize> Lexicon<ORTHOGRAPHIES> {
 
             let mut main_spelling = "";
             let mut other_spellings = Vec::new();
-            for (i,(spelling,orthography)) in entry.spelling.iter().zip(self.orthographies).enumerate() {
+            for (i,(spelling,orthography)) in entry.spelling.iter().zip(&self.orthographies).enumerate() {
               if i == self.primary_orthography {
                 main_spelling = spelling;
               } else {
-                other_spellings.push((orthography,spelling.as_str()))
+                other_spellings.push((*orthography,spelling.as_str()))
               }
             }
             assert_ne!(main_spelling.len(),0,"Missing spelling for orthography {} in {}",self.primary_orthography,entry.word);

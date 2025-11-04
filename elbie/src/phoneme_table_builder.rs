@@ -44,18 +44,18 @@ pub(crate) type Axisses<'language> = Option<(
            )>
         )>;
 
-pub struct TableBuilder<'language, const ORTHOGRAPHIES: usize> {
+pub struct TableBuilder<'language> {
     id: &'static str,
-    language: &'language mut Language<ORTHOGRAPHIES>,
+    language: &'language mut Language,
     caption: &'static str,
     master_set: &'static str,
     axisses: Axisses<'language>,
     options: HashSet<TableOption>
 }
 
-impl<'language, const ORTHOGRAPHIES: usize> TableBuilder<'language, ORTHOGRAPHIES> {
+impl<'language> TableBuilder<'language> {
 
-    pub(crate) fn new(language: &'language mut Language<ORTHOGRAPHIES>, id: &'static str, caption: &'static str, master_set: &'static str) -> Self {
+    pub(crate) fn new(language: &'language mut Language, id: &'static str, caption: &'static str, master_set: &'static str) -> Self {
         Self {
             id,
             language,

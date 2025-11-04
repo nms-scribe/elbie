@@ -243,7 +243,7 @@ const OU: &str = "au̯";
 const OI: &str = "ɒi̯";
 const UI: &str = "ɔi̯";
 
-fn spell_eng(_: &Language<1>, _: &Rc<Phoneme>, result: &mut String, next: Option<&mut iter::Peekable<Iter<Rc<Phoneme>>>>) {
+fn spell_eng(_: &Language, _: &Rc<Phoneme>, result: &mut String, next: Option<&mut iter::Peekable<Iter<Rc<Phoneme>>>>) {
   result.push('n');
   if let Some(phoneme) = next.and_then(|next| next.peek()) {
     match phoneme.name {
@@ -257,13 +257,13 @@ fn spell_eng(_: &Language<1>, _: &Rc<Phoneme>, result: &mut String, next: Option
   }
 }
 
-fn create_goblin_language() -> Result<Language<1>,ElbieError> {
-  let mut language = Language::new(GOBLIN,INITIAL_ONSET_PHONEME,ONSET,["Transcription"]);
+fn create_goblin_language() -> Result<Language,ElbieError> {
+  let mut language = Language::new(GOBLIN,INITIAL_ONSET_PHONEME,ONSET,vec!["Transcription"]);
 
   _ = language.add_phoneme(M,&[CONSONANT,LABIAL,BILABIAL,NASAL,UNASPIRATED,VOICED])?;
   _ = language.add_phoneme(N,&[CONSONANT,CORONAL,ALVEOLAR,NASAL,UNASPIRATED,VOICED])?;
-  _ = language.add_phoneme_with_spelling(NYE,["ny"],&[CONSONANT,DORSAL,PALATAL,NASAL,UNASPIRATED,VOICED])?;
-  _ = language.add_phoneme_with_spelling_fn(ENG,[spell_eng],&[CONSONANT,DORSAL,VELAR,NASAL,UNASPIRATED,VOICED])?;
+  _ = language.add_phoneme_with_spelling(NYE,&["ny"],&[CONSONANT,DORSAL,PALATAL,NASAL,UNASPIRATED,VOICED])?;
+  _ = language.add_phoneme_with_spelling_fn(ENG,&[spell_eng],&[CONSONANT,DORSAL,VELAR,NASAL,UNASPIRATED,VOICED])?;
   _ = language.add_phoneme(P,&[CONSONANT,LABIAL,BILABIAL,PLOSIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
   _ = language.add_phoneme(B,&[CONSONANT,LABIAL,BILABIAL,PLOSIVE,UNASPIRATED,VOICED,OBSTRUENT])?;
   _ = language.add_phoneme(T,&[CONSONANT,CORONAL,ALVEOLAR,PLOSIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
@@ -271,37 +271,37 @@ fn create_goblin_language() -> Result<Language<1>,ElbieError> {
   _ = language.add_phoneme(K,&[CONSONANT,DORSAL,VELAR,PLOSIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
   _ = language.add_phoneme(G,&[CONSONANT,DORSAL,VELAR,PLOSIVE,UNASPIRATED,VOICED,OBSTRUENT])?;
   _ = language.add_phoneme(F,&[CONSONANT,LABIAL,LABIODENTAL,FRICATIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
-  _ = language.add_phoneme_with_spelling(VHEE,["vh"],&[CONSONANT,LABIAL,LABIODENTAL,FRICATIVE,ASPIRATED,VOICED,OBSTRUENT])?;
+  _ = language.add_phoneme_with_spelling(VHEE,&["vh"],&[CONSONANT,LABIAL,LABIODENTAL,FRICATIVE,ASPIRATED,VOICED,OBSTRUENT])?;
   _ = language.add_phoneme(V,&[CONSONANT,LABIAL,LABIODENTAL,FRICATIVE,UNASPIRATED,VOICED,OBSTRUENT])?;
-  _ = language.add_phoneme_with_spelling(THETA,["th"],&[CONSONANT,CORONAL,DENTAL,FRICATIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
+  _ = language.add_phoneme_with_spelling(THETA,&["th"],&[CONSONANT,CORONAL,DENTAL,FRICATIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
   _ = language.add_phoneme(S,&[CONSONANT,CORONAL,ALVEOLAR,FRICATIVE,UNVOICED,UNASPIRATED,SIBILANT,OBSTRUENT])?;
-  _ = language.add_phoneme_with_spelling(ZHEE,["zh"],&[CONSONANT,CORONAL,ALVEOLAR,FRICATIVE,VOICED,ASPIRATED,SIBILANT,OBSTRUENT])?;
+  _ = language.add_phoneme_with_spelling(ZHEE,&["zh"],&[CONSONANT,CORONAL,ALVEOLAR,FRICATIVE,VOICED,ASPIRATED,SIBILANT,OBSTRUENT])?;
   _ = language.add_phoneme(Z,&[CONSONANT,CORONAL,ALVEOLAR,FRICATIVE,UNASPIRATED,VOICED,SIBILANT,OBSTRUENT])?;
-  _ = language.add_phoneme_with_spelling(ESH,["sh"],&[CONSONANT,CORONAL,POSTALVEOLAR,FRICATIVE,UNVOICED,UNASPIRATED,SIBILANT,OBSTRUENT])?;
-  _ = language.add_phoneme_with_spelling(X,["ch"],&[CONSONANT,DORSAL,VELAR,FRICATIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
-  _ = language.add_phoneme_with_spelling(AGH, ["gh"], &[CONSONANT,DORSAL,VELAR,FRICATIVE,VOICED,UNASPIRATED,OBSTRUENT])?; //
-  _ = language.add_phoneme_with_spelling(GHHEE, ["ghh"], &[CONSONANT,DORSAL,VELAR,FRICATIVE,VOICED,ASPIRATED,OBSTRUENT])?; //
+  _ = language.add_phoneme_with_spelling(ESH,&["sh"],&[CONSONANT,CORONAL,POSTALVEOLAR,FRICATIVE,UNVOICED,UNASPIRATED,SIBILANT,OBSTRUENT])?;
+  _ = language.add_phoneme_with_spelling(X,&["ch"],&[CONSONANT,DORSAL,VELAR,FRICATIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
+  _ = language.add_phoneme_with_spelling(AGH,&["gh"], &[CONSONANT,DORSAL,VELAR,FRICATIVE,VOICED,UNASPIRATED,OBSTRUENT])?; //
+  _ = language.add_phoneme_with_spelling(GHHEE,&["ghh"], &[CONSONANT,DORSAL,VELAR,FRICATIVE,VOICED,ASPIRATED,OBSTRUENT])?; //
   _ = language.add_phoneme(H,&[CONSONANT,LARYNGEAL,GLOTTAL,FRICATIVE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
-  _ = language.add_phoneme_with_spelling(ESHT,["sht"],&[CONSONANT,CORONAL,POSTALVEOLAR,REV_AFFRICATE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
-  _ = language.add_phoneme_with_spelling(EHK,["hk"],&[CONSONANT,DORSAL,VELAR,REV_AFFRICATE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
-  _ = language.add_phoneme_with_spelling(EHG,["hg"],&[CONSONANT,DORSAL,VELAR,REV_AFFRICATE,UNASPIRATED,VOICED,OBSTRUENT])?;
-  _ = language.add_phoneme_with_spelling(AHR,["hr"],&[CONSONANT,CORONAL,ALVEOLAR,APPROXIMANT,NONLATERALAPPROXIMANT,UNASPIRATED,UNVOICED])?;
-  _ = language.add_phoneme_with_spelling(R,["r"],&[CONSONANT,CORONAL,ALVEOLAR,APPROXIMANT,NONLATERALAPPROXIMANT,UNASPIRATED,VOICED])?;
-  _ = language.add_phoneme_with_spelling(J,["y"],&[CONSONANT,DORSAL,PALATAL,APPROXIMANT,NONLATERALAPPROXIMANT,UNASPIRATED,VOICED])?;
-  _ = language.add_phoneme_with_spelling(AGGA,["gg"],&[CONSONANT,DORSAL,UVULAR,TAP,UNASPIRATED,VOICED])?;
+  _ = language.add_phoneme_with_spelling(ESHT,&["sht"],&[CONSONANT,CORONAL,POSTALVEOLAR,REV_AFFRICATE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
+  _ = language.add_phoneme_with_spelling(EHK,&["hk"],&[CONSONANT,DORSAL,VELAR,REV_AFFRICATE,UNVOICED,UNASPIRATED,OBSTRUENT])?;
+  _ = language.add_phoneme_with_spelling(EHG,&["hg"],&[CONSONANT,DORSAL,VELAR,REV_AFFRICATE,UNASPIRATED,VOICED,OBSTRUENT])?;
+  _ = language.add_phoneme_with_spelling(AHR,&["hr"],&[CONSONANT,CORONAL,ALVEOLAR,APPROXIMANT,NONLATERALAPPROXIMANT,UNASPIRATED,UNVOICED])?;
+  _ = language.add_phoneme_with_spelling(R,&["r"],&[CONSONANT,CORONAL,ALVEOLAR,APPROXIMANT,NONLATERALAPPROXIMANT,UNASPIRATED,VOICED])?;
+  _ = language.add_phoneme_with_spelling(J,&["y"],&[CONSONANT,DORSAL,PALATAL,APPROXIMANT,NONLATERALAPPROXIMANT,UNASPIRATED,VOICED])?;
+  _ = language.add_phoneme_with_spelling(AGGA,&["gg"],&[CONSONANT,DORSAL,UVULAR,TAP,UNASPIRATED,VOICED])?;
   _ = language.add_phoneme(L,&[CONSONANT,CORONAL,ALVEOLAR,LATERAL,APPROXIMANT,UNASPIRATED,VOICED])?;
 
-  _ = language.add_phoneme_with_spelling(EE,["ee"],&[VOWEL,FRONT,CLOSE,UNROUNDED])?;
-  _ = language.add_phoneme_with_spelling(OO,["oo"],&[VOWEL,BACK,CLOSE,ROUNDED])?;
-  _ = language.add_phoneme_with_spelling(I,["i"],&[VOWEL,FRONT,NEARCLOSE,UNROUNDED])?;
-  _ = language.add_phoneme_with_spelling(E,["e"],&[VOWEL,FRONT,OPENMID,UNROUNDED])?;
-  _ = language.add_phoneme_with_spelling(U,["u"],&[VOWEL,BACK,OPENMID,ROUNDED])?;
+  _ = language.add_phoneme_with_spelling(EE,&["ee"],&[VOWEL,FRONT,CLOSE,UNROUNDED])?;
+  _ = language.add_phoneme_with_spelling(OO,&["oo"],&[VOWEL,BACK,CLOSE,ROUNDED])?;
+  _ = language.add_phoneme_with_spelling(I,&["i"],&[VOWEL,FRONT,NEARCLOSE,UNROUNDED])?;
+  _ = language.add_phoneme_with_spelling(E,&["e"],&[VOWEL,FRONT,OPENMID,UNROUNDED])?;
+  _ = language.add_phoneme_with_spelling(U,&["u"],&[VOWEL,BACK,OPENMID,ROUNDED])?;
   _ = language.add_phoneme(A,&[VOWEL,FRONT,OPEN,UNROUNDED])?;
-  _ = language.add_phoneme_with_spelling(O,["o"],&[VOWEL,BACK,OPEN,ROUNDED])?;
-  _ = language.add_phoneme_with_spelling(AEU,["eu"],&[VOWEL,DIPHTHONG])?;
-  _ = language.add_phoneme_with_spelling(OU,["ou"],&[VOWEL,DIPHTHONG])?;
-  _ = language.add_phoneme_with_spelling(OI,["oi"],&[VOWEL,DIPHTHONG])?;
-  _ = language.add_phoneme_with_spelling(UI,["ui"],&[VOWEL,DIPHTHONG])?;
+  _ = language.add_phoneme_with_spelling(O,&["o"],&[VOWEL,BACK,OPEN,ROUNDED])?;
+  _ = language.add_phoneme_with_spelling(AEU,&["eu"],&[VOWEL,DIPHTHONG])?;
+  _ = language.add_phoneme_with_spelling(OU,&["ou"],&[VOWEL,DIPHTHONG])?;
+  _ = language.add_phoneme_with_spelling(OI,&["oi"],&[VOWEL,DIPHTHONG])?;
+  _ = language.add_phoneme_with_spelling(UI,&["ui"],&[VOWEL,DIPHTHONG])?;
 
   language.add_exclusion(INITIAL_ONSET_PHONEME, PHONEME, &[ENG, EHK, EHG, ESHT, X, AGGA])?;
   language.add_exclusion(ONSET_PHONEME, PHONEME, &[ENG, EHK, EHG, ESHT, X, AGGA, H])?;

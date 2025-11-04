@@ -323,7 +323,7 @@ impl<'definition> Table4D<'definition> {
 
 impl Table4D<'_> {
 
-    pub(crate) fn add_phonemes<const ORTHOGRAPHIES: usize>(&mut self, language: &Language<ORTHOGRAPHIES>, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<(), Axis> {
+    pub(crate) fn add_phonemes(&mut self, language: &Language, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<(), Axis> {
         let columns: Vec<_> = self.definition.columns_by_set.keys().copied().collect();
         let subcolumns: Vec<_> = self.definition.subcolumns_by_set.keys().copied().collect();
         let rows: Vec<_> = self.definition.rows_by_set.keys().copied().collect();
@@ -569,7 +569,7 @@ impl<'definition> Table3D<'definition> {
 
 impl Table3D<'_> {
 
-    pub(crate) fn add_phonemes<const ORTHOGRAPHIES: usize>(&mut self, language: &Language<ORTHOGRAPHIES>, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<(), Axis> {
+    pub(crate) fn add_phonemes(&mut self, language: &Language, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<(), Axis> {
         let columns: Vec<_> = self.definition.columns_by_set.keys().copied().collect();
         let subcolumns: Vec<_> = self.definition.subcolumns_by_set.keys().copied().collect();
         let rows: Vec<_> = self.definition.rows_by_set.keys().copied().collect();
@@ -767,7 +767,7 @@ impl<'definition> Table2D<'definition> {
 impl Table2D<'_> {
 
 
-    pub(crate) fn add_phonemes<const ORTHOGRAPHIES: usize>(&mut self, language: &Language<ORTHOGRAPHIES>, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<(), Axis>{
+    pub(crate) fn add_phonemes(&mut self, language: &Language, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<(), Axis>{
         let columns: Vec<_> = self.definition.columns_by_set.keys().copied().collect();
         let rows: Vec<_> = self.definition.rows_by_set.keys().copied().collect();
         for column in &columns {
@@ -919,7 +919,7 @@ impl<'definition> Table1D<'definition> {
 
 impl Table1D<'_> {
 
-    pub(crate) fn add_phonemes<const ORTHOGRAPHIES: usize>(&mut self, language: &Language<ORTHOGRAPHIES>, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<(), Axis> {
+    pub(crate) fn add_phonemes(&mut self, language: &Language, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<(), Axis> {
         let rows: Vec<_> = self.definition.rows_by_set.keys().copied().collect();
 
 
@@ -1047,7 +1047,7 @@ impl<'definition> Table0D<'definition> {
 impl Table0D<'_> {
 
 
-    pub(crate) fn add_phonemes<const ORTHOGRAPHIES: usize>(&mut self, _: &Language<ORTHOGRAPHIES>, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<(), Axis> {
+    pub(crate) fn add_phonemes(&mut self, _: &Language, phoneme_set: &Bag<Rc<Phoneme>>, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<(), Axis> {
 
 
         for phoneme in phoneme_set.iter() {

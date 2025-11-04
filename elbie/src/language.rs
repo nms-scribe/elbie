@@ -17,7 +17,6 @@ use crate::phoneme_table::Table3D;
 use crate::phoneme_table::Table4D;
 use crate::phoneme_table::TableDef;
 use core::error::Error;
-use core::array;
 use core::cmp::Ordering;
 use std::rc::Rc;
 use crate::lexicon::Lexicon;
@@ -58,9 +57,9 @@ fn sort_phonemes_by_length_descending(a: &Rc<Phoneme>, b: &Rc<Phoneme>)  -> Orde
         len_b.partial_cmp(&len_a).expect("Can't order phoneme lengths for some reason.")
     }
 }
+
 #[derive(Debug)]
-/// ORTHOGRAPHIES is a const parameter so that when phonemes are added we always know how many orthographies are required.
-pub struct Language<const ORTHOGRAPHIES: usize> {
+pub struct Language {
   name: &'static str,
   initial_environment: &'static str,
   initial_phoneme_set: &'static str,
@@ -69,16 +68,16 @@ pub struct Language<const ORTHOGRAPHIES: usize> {
   // For example, if this were part of the Phoneme structure, the ORTHOGRAPHIES parameter would be required on almost everything.
   // But also, keeping this separate allows me to have a separate Inventory object which is useful for phonemes out of a language context
   // (such as temporary phonemes during transformations)
-  phoneme_behavior: HashMap<Rc<Phoneme>,PhonemeBehavior<ORTHOGRAPHIES>>,
-  orthographies: [&'static str; ORTHOGRAPHIES],
+  phoneme_behavior: HashMap<Rc<Phoneme>,PhonemeBehavior>,
+  orthographies: Vec<&'static str>,
   environments: HashMap<&'static str,Vec<EnvironmentBranch>>,
   tables: Vec<TableEntry>
 }
 
-impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
+impl Language {
 
     #[must_use]
-    pub fn new(name: &'static str, initial_phoneme_set: &'static str, initial_environment: &'static str, orthographies: [&'static str; ORTHOGRAPHIES]) -> Self {
+    pub fn new(name: &'static str, initial_phoneme_set: &'static str, initial_environment: &'static str, orthographies: Vec<&'static str>) -> Self {
       let inventory = Inventory::new();
       let environments = HashMap::new();
       let phoneme_behavior = HashMap::new();
@@ -100,7 +99,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
         &self.inventory
     }
 
-    pub(crate) const fn orthographies(&self) -> &[&'static str; ORTHOGRAPHIES] {
+    pub(crate) fn orthographies(&self) -> &[&'static str] {
         &self.orthographies
     }
 
@@ -117,32 +116,36 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
     }
 
 
-    fn add_phoneme_to_inventory(&mut self, phoneme: &'static str, sets: &[&'static str], behavior: PhonemeBehavior<ORTHOGRAPHIES>) -> Result<Rc<Phoneme>,ElbieError> {
+    fn add_phoneme_to_inventory(&mut self, phoneme: &'static str, sets: &[&'static str], behavior: PhonemeBehavior) -> Result<Rc<Phoneme>,ElbieError> {
+      if behavior.spelling_len() != self.orthographies().len() {
+        return Err(ElbieError::MismatchedSpellingsForPhoneme(phoneme,self.orthographies.len(),behavior.spelling_len()))
+      }
+
       let phoneme = self.inventory.add_phoneme(phoneme, sets)?;
       _ = self.phoneme_behavior.insert(phoneme.clone(), behavior);
       Ok(phoneme)
 
     }
 
-    fn add_phoneme_with_spelling_behavior(&mut self, phoneme: &'static str, behaviors: [SpellingBehavior<ORTHOGRAPHIES>; ORTHOGRAPHIES], classes: &[&'static str]) -> Result<Rc<Phoneme>,ElbieError> {
+    fn add_phoneme_with_spelling_behavior(&mut self, phoneme: &'static str, behaviors: Vec<SpellingBehavior>, classes: &[&'static str]) -> Result<Rc<Phoneme>,ElbieError> {
       self.add_phoneme_to_inventory(phoneme,classes,PhonemeBehavior::new(behaviors))
     }
 
-    pub fn add_phoneme_with_spelling(&mut self, phoneme: &'static str, orthography: [&'static str; ORTHOGRAPHIES], classes: &[&'static str]) -> Result<Rc<Phoneme>,ElbieError> {
-      let behaviors = orthography.map(SpellingBehavior::Text);
+    pub fn add_phoneme_with_spelling(&mut self, phoneme: &'static str, orthography: &[&'static str], classes: &[&'static str]) -> Result<Rc<Phoneme>,ElbieError> {
+      let behaviors = orthography.into_iter().copied().map(SpellingBehavior::Text).collect();
       self.add_phoneme_with_spelling_behavior(phoneme, behaviors, classes)
     }
 
-    pub fn add_phoneme_with_spelling_fn(&mut self, phoneme: &'static str, callbacks: [SpellingCallback<ORTHOGRAPHIES>; ORTHOGRAPHIES], classes: &[&'static str]) -> Result<Rc<Phoneme>,ElbieError> {
-      let behaviors = callbacks.map(|f| SpellingBehavior::Callback(f));
+    pub fn add_phoneme_with_spelling_fn(&mut self, phoneme: &'static str, callbacks: &[SpellingCallback], classes: &[&'static str]) -> Result<Rc<Phoneme>,ElbieError> {
+      let behaviors = callbacks.into_iter().copied().map(|f| SpellingBehavior::Callback(f)).collect();
       self.add_phoneme_with_spelling_behavior(phoneme, behaviors, classes)
     }
 
     /// # Panics
     /// Panics if requested orthography index is out of range
     pub(crate) fn spell_phoneme(&self, phoneme: &Rc<Phoneme>, orthography: usize, result: &mut String, next: Option<&mut Peekable<Iter<Rc<Phoneme>>>>) {
-      if orthography >= ORTHOGRAPHIES {
-        panic!("Language only has {ORTHOGRAPHIES} orthographies.")
+      if orthography >= self.orthographies.len() {
+        panic!("Language only has {} orthographies.",self.orthographies.len())
       }
 
       match self.phoneme_behavior.get(phoneme).and_then(|b| b.spelling().get(orthography)) {
@@ -198,7 +201,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
-    pub fn new_table(&mut self, id: &'static str, set: &'static str, caption: &'static str) -> TableBuilder<ORTHOGRAPHIES> {
+    pub fn new_table(&mut self, id: &'static str, set: &'static str, caption: &'static str) -> TableBuilder {
         TableBuilder::new(self, id, caption, set)
 
     }
@@ -470,8 +473,8 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
       let mut header = Vec::new();
       for _ in 0..columns {
         header.push(ColumnHeader::new("Phoneme".to_owned(),1));
-        for orthography in self.orthographies {
-          header.push(ColumnHeader::new(orthography.to_owned(),1));
+        for orthography in &self.orthographies {
+          header.push(ColumnHeader::new(orthography.to_owned().to_owned(),1));
         }
       }
       grid.set_headers(header);
@@ -488,7 +491,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
         for chunk in &mut chunks {
           if let Some(phoneme) = chunk.next() {
             row.push_cell(Cell::content(phoneme.to_string(),None));
-            for i in 0..ORTHOGRAPHIES {
+            for i in 0..self.orthographies.len() {
               let mut cell = String::new();
               self.spell_phoneme(phoneme, i, &mut cell, None);
               row.push_cell(Cell::content(cell,None));
@@ -497,7 +500,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
           } else {
             // add blank cells to make the table rectangular.
             row.push_cell(Cell::content(String::new(),None));
-            for _ in 0..ORTHOGRAPHIES {
+            for _ in 0..self.orthographies.len() {
                 row.push_cell(Cell::content(String::new(),None));
             }
           }
@@ -512,7 +515,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
-    pub(crate) fn load_lexicon(&self, path: String, primary_orthography: usize) -> Result<Lexicon<ORTHOGRAPHIES>,Box<dyn Error>> {
+    pub(crate) fn load_lexicon(&self, path: String, primary_orthography: usize) -> Result<Lexicon,Box<dyn Error>> {
 
 
       let mut reader = Reader::from_path(path)?;
@@ -520,14 +523,14 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
       let word_field = headers.iter().position(|a| a.to_lowercase() == "word").ok_or_else(|| "No 'word' field found.".to_owned())?;
       let definition_field = headers.iter().position(|a| a.to_lowercase() == "definition").ok_or_else(|| "No 'definition' field found.".to_owned())?;
 
-      let mut result = Lexicon::new(self.orthographies, primary_orthography);
+      let mut result = Lexicon::new(self.orthographies.clone(), primary_orthography);
 
       for (row,record) in reader.into_records().enumerate() {
         let record = record.map_err(|e| format!("Error reading record {row}: {e}"))?;
         let word = record.get(word_field).ok_or_else(|| format!("No word found at entry {row}"))?;
         let word = self.read_word(word).map_err(|e| format!("Error parsing word {row}: {e}"))?;
-        let spelling = array::from_fn(|i| self.spell_word(&word, i));
-        let entry: LexiconEntry<ORTHOGRAPHIES> = LexiconEntry::new(
+        let spelling = (0..self.orthographies.len()).map(|i| self.spell_word(&word, i)).collect();
+        let entry: LexiconEntry = LexiconEntry::new(
             word,
             spelling,
             record.get(definition_field).ok_or_else(|| format!("No category found at row {row}"))?.to_owned(),
@@ -545,10 +548,10 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 }
 
 
-impl<const ORTHOGRAPHIES: usize> InventoryLoader for Language<ORTHOGRAPHIES> {
+impl InventoryLoader for Language {
 
     fn add_phoneme(&mut self, phoneme: &'static str, sets: &[&'static str]) -> Result<Rc<Phoneme>,ElbieError> {
-        self.add_phoneme_to_inventory(phoneme,sets,PhonemeBehavior::default())
+        self.add_phoneme_to_inventory(phoneme,sets,PhonemeBehavior::new((0..self.orthographies.len()).map(|_| SpellingBehavior::default()).collect()))
     }
 
     fn add_difference(&mut self, name: &'static str, base_set: &'static str, exclude_sets: &[&'static str]) -> Result<(),ElbieError> {
@@ -570,7 +573,7 @@ impl<const ORTHOGRAPHIES: usize> InventoryLoader for Language<ORTHOGRAPHIES> {
 
 }
 
-impl<const ORTHOGRAPHIES: usize> WordLoader for Language<ORTHOGRAPHIES> {
+impl WordLoader for Language {
 
 
     fn read_word(&self,input: &str) -> Result<Word,ElbieError> {
@@ -599,7 +602,7 @@ impl<const ORTHOGRAPHIES: usize> WordLoader for Language<ORTHOGRAPHIES> {
 
 }
 
-impl<const ORTHOGRAPHIES: usize> WordValidator for Language<ORTHOGRAPHIES> {
+impl WordValidator for Language {
 
     fn check_word(&self,word: &Word, trace: &ValidationTraceCallback) -> Result<Vec<ValidWordElement>,ElbieError> {
 

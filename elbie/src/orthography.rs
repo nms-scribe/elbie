@@ -6,17 +6,17 @@ use crate::language::Language;
 use crate::phoneme::Phoneme;
 use std::rc::Rc;
 
-pub(crate) type SpellingCallback<const ORTHOGRAPHIES: usize> = fn(&Language<ORTHOGRAPHIES>, &Rc<Phoneme>, &mut String, Option<&mut Peekable<Iter<Rc<Phoneme>>>>);
+pub(crate) type SpellingCallback = fn(&Language, &Rc<Phoneme>, &mut String, Option<&mut Peekable<Iter<Rc<Phoneme>>>>);
 
 #[derive(Default)]
-pub(crate) enum SpellingBehavior<const ORTHOGRAPHIES: usize> {
+pub(crate) enum SpellingBehavior {
   #[default]
   Default, // default behavior is to spell the phoneme
   Text(&'static str),
-  Callback(SpellingCallback<ORTHOGRAPHIES>)
+  Callback(SpellingCallback)
 }
 
-impl<const ORTHOGRAPHIES: usize> fmt::Debug for SpellingBehavior<ORTHOGRAPHIES> {
+impl fmt::Debug for SpellingBehavior {
 
   fn fmt(&self, f: &mut Formatter) -> Result<(),fmt::Error> {
     write!(f,"PhonemeBehavior::")?;

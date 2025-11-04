@@ -391,7 +391,7 @@ pub struct Transformation {
 impl Transformation {
 
     #[must_use]
-    pub fn from<const ORTHOGRAPHIES: usize>(source: &Language<ORTHOGRAPHIES>) -> Self {
+    pub fn from(source: &Language) -> Self {
         let inventory = Inventory::default();
         let rules = Vec::new();
         let mut result = Self {
@@ -402,7 +402,7 @@ impl Transformation {
         result
     }
 
-    pub fn add_language<const ORTHOGRAPHIES: usize>(&mut self, source: &Language<ORTHOGRAPHIES>) {
+    pub fn add_language(&mut self, source: &Language) {
         _ = self.add_inventory(source.name(), source.inventory());
     }
 

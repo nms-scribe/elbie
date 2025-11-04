@@ -126,7 +126,7 @@ pub(crate) fn parse_args<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(ar
 
 }
 
-pub(crate) fn show_usage<const ORTHOGRAPHIES: usize>(language: &Language<ORTHOGRAPHIES>) {
+pub(crate) fn show_usage(language: &Language) {
     println!("usage: {} [options] <command>",language.name());
     println!("default command: --generate 1");
     println!("options:");
@@ -159,7 +159,7 @@ pub(crate) fn show_usage<const ORTHOGRAPHIES: usize>(language: &Language<ORTHOGR
     println!("      display this information.");
 }
 
-pub(crate) fn format_lexicon<const ORTHOGRAPHIES: usize>(grid_style: Option<GridStyle>, language: &Language<ORTHOGRAPHIES>, path: String, ortho_index: usize) {
+pub(crate) fn format_lexicon(grid_style: Option<GridStyle>, language: &Language, path: String, ortho_index: usize) {
   if ortho_index >= language.orthographies().len() {
         panic!("Language only has {} orthographies.",language.orthographies().len())
   }
@@ -179,7 +179,7 @@ pub(crate) fn format_lexicon<const ORTHOGRAPHIES: usize>(grid_style: Option<Grid
   }
 }
 
-pub(crate) fn show_spelling<const ORTHOGRAPHIES: usize>(grid_style: Option<GridStyle>, language: &Language<ORTHOGRAPHIES>, columns: usize) {
+pub(crate) fn show_spelling(grid_style: Option<GridStyle>, language: &Language, columns: usize) {
     match language.display_spelling(columns) {
         Ok(grid) => {
             grid.into_output(&grid_style.unwrap_or(GridStyle::Terminal { spans: false })).print_to_stdout();
@@ -191,7 +191,7 @@ pub(crate) fn show_spelling<const ORTHOGRAPHIES: usize>(grid_style: Option<GridS
     }
 }
 
-pub(crate) fn show_phonemes<const ORTHOGRAPHIES: usize>(grid_style: Option<&GridStyle>, language: &Language<ORTHOGRAPHIES>, table: Option<&String>) {
+pub(crate) fn show_phonemes(grid_style: Option<&GridStyle>, language: &Language, table: Option<&String>) {
     let style = grid_style.unwrap_or(&GridStyle::Terminal{ spans: true });
     let result = match table {
         Some(table) => match language.build_phoneme_table(table) {
@@ -227,7 +227,7 @@ pub(crate) fn show_phonemes<const ORTHOGRAPHIES: usize>(grid_style: Option<&Grid
     }
 }
 
-pub(crate) fn validate_words<const ORTHOGRAPHIES: usize>(language: &Language<ORTHOGRAPHIES>, words: Vec<String>, option: &ValidateOption) {
+pub(crate) fn validate_words(language: &Language, words: Vec<String>, option: &ValidateOption) {
     let mut invalid_found = false;
     for word in words {
         match language.read_word(&word) {
@@ -274,7 +274,7 @@ pub(crate) fn validate_words<const ORTHOGRAPHIES: usize>(language: &Language<ORT
     }
 }
 
-pub(crate) fn generate_words<const ORTHOGRAPHIES: usize>(grid_style: Option<&GridStyle>, language: &Language<ORTHOGRAPHIES>, count: usize) {
+pub(crate) fn generate_words(grid_style: Option<&GridStyle>, language: &Language, count: usize) {
     let mut grid = Grid::new(TableClass::ElbieWords, format!("Generated {count} words for {}",language.name()));
 
     // FUTURE: Should I have a header?
@@ -306,7 +306,7 @@ pub(crate) fn generate_words<const ORTHOGRAPHIES: usize>(grid_style: Option<&Gri
     grid.into_output(grid_style.unwrap_or(&GridStyle::Plain)).print_to_stdout();
 }
 
-pub fn run<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHOGRAPHIES: usize>(args: &mut Args, language: Result<Language<ORTHOGRAPHIES>,ElbieError>) {
+pub fn run<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Args, language: Result<Language,ElbieError>) {
   let arguments = parse_args(&mut args.skip(1));
 
   if let Some(comment) = arguments.comment {
