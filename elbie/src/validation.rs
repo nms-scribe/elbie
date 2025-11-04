@@ -1,4 +1,4 @@
-use crate::errors::LanguageError;
+use crate::errors::ElbieError;
 use crate::phoneme::Phoneme;
 use core::fmt;
 use core::fmt::Formatter;
@@ -25,7 +25,7 @@ impl Display for ValidWordElement {
 
 pub enum ValidationTraceMessage<'lifetime> {
   FoundValid(&'lifetime ValidWordElement),
-  FoundError(&'lifetime LanguageError)
+  FoundError(&'lifetime ElbieError)
 }
 
 impl Display for ValidationTraceMessage<'_> {
@@ -43,12 +43,12 @@ pub(crate) type ValidationTraceCallback = dyn Fn(usize, ValidationTraceMessage);
 
 pub trait WordValidator {
 
-    fn check_word(&self,word: &Word, trace: &ValidationTraceCallback) -> Result<Vec<ValidWordElement>,LanguageError>;
+    fn check_word(&self,word: &Word, trace: &ValidationTraceCallback) -> Result<Vec<ValidWordElement>,ElbieError>;
 
 }
 
 impl WordValidator for Box<dyn WordValidator> {
-    fn check_word(&self,word: &Word, trace: &ValidationTraceCallback) -> Result<Vec<ValidWordElement>,LanguageError> {
+    fn check_word(&self,word: &Word, trace: &ValidationTraceCallback) -> Result<Vec<ValidWordElement>,ElbieError> {
         self.as_ref().check_word(word, trace)
     }
 }

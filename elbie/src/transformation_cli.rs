@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::process;
-use crate::errors::LanguageError;
+use crate::errors::ElbieError;
 use crate::transformation::Transformation;
 use crate::validation::ValidationTraceCallback;
 use crate::word::WordLoader;
@@ -168,26 +168,26 @@ fn transform_words(transformation: &Transformation, loader: &impl WordLoader, va
 
 #[derive(Default)]
 pub struct TransformationEnvironment {
-    transformers: HashMap<(&'static str, &'static str),Box<dyn Fn() -> Result<Transformation,LanguageError>>>,
-    word_loaders: HashMap<&'static str,Box<dyn Fn() -> Result<Box<dyn WordLoader>,LanguageError>>>,
-    word_validators: HashMap<&'static str,Box<dyn Fn() -> Result<Box<dyn WordValidator>,LanguageError>>>,
+    transformers: HashMap<(&'static str, &'static str),Box<dyn Fn() -> Result<Transformation,ElbieError>>>,
+    word_loaders: HashMap<&'static str,Box<dyn Fn() -> Result<Box<dyn WordLoader>,ElbieError>>>,
+    word_validators: HashMap<&'static str,Box<dyn Fn() -> Result<Box<dyn WordValidator>,ElbieError>>>,
 }
 
 impl TransformationEnvironment {
 
-    pub fn transformer(&mut self, from: &'static str, to: &'static str, transformer: impl Fn() -> Result<Transformation,LanguageError> + 'static) -> Option<Box<dyn Fn() -> Result<Transformation, LanguageError> + 'static>> {
+    pub fn transformer(&mut self, from: &'static str, to: &'static str, transformer: impl Fn() -> Result<Transformation,ElbieError> + 'static) -> Option<Box<dyn Fn() -> Result<Transformation, ElbieError> + 'static>> {
         self.transformers.insert((from,to), Box::new(transformer))
     }
 
-    pub fn word_loader(&mut self, language: &'static str, loader: impl Fn() -> Result<Box<dyn WordLoader>,LanguageError> + 'static) -> Option<Box<dyn Fn() -> Result<Box<dyn WordLoader>, LanguageError> + 'static>> {
+    pub fn word_loader(&mut self, language: &'static str, loader: impl Fn() -> Result<Box<dyn WordLoader>,ElbieError> + 'static) -> Option<Box<dyn Fn() -> Result<Box<dyn WordLoader>, ElbieError> + 'static>> {
         self.word_loaders.insert(language, Box::new(loader))
     }
 
-    pub fn word_validator(&mut self, language: &'static str, loader: impl Fn() -> Result<Box<dyn WordValidator>,LanguageError> + 'static) -> Option<Box<dyn Fn() -> Result<Box<dyn WordValidator>, LanguageError> + 'static>> {
+    pub fn word_validator(&mut self, language: &'static str, loader: impl Fn() -> Result<Box<dyn WordValidator>,ElbieError> + 'static) -> Option<Box<dyn Fn() -> Result<Box<dyn WordValidator>, ElbieError> + 'static>> {
         self.word_validators.insert(language, Box::new(loader))
     }
 
-    fn expect_transformer(&self, from: &str, to: &str) -> Result<(Transformation, Box<dyn WordLoader>, Option<Box<dyn WordValidator>>),LanguageError> {
+    fn expect_transformer(&self, from: &str, to: &str) -> Result<(Transformation, Box<dyn WordLoader>, Option<Box<dyn WordValidator>>),ElbieError> {
         let transformer = (self.transformers.get(&(from,to)).expect("There is no known transformation for '{from}' to '{to}'"))()?;
         let loader = (self.word_loaders.get(from).expect("There is no word loader for '{from}'"))()?;
         let validator = self.word_validators.get(to).map(|v| v()).transpose()?;

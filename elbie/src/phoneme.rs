@@ -7,7 +7,7 @@ use std::rc::Rc;
 use rand::rngs::ThreadRng;
 
 use crate::bag::Bag;
-use crate::errors::LanguageError;
+use crate::errors::ElbieError;
 
 pub const PHONEME: &str = "phoneme";
 pub const EMPTY: &str = "empty";
@@ -38,15 +38,15 @@ impl Display for Phoneme {
 
 pub trait InventoryLoader {
 
-    fn add_phoneme(&mut self, phoneme: &'static str, sets: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError>;
+    fn add_phoneme(&mut self, phoneme: &'static str, sets: &[&'static str]) -> Result<Rc<Phoneme>,ElbieError>;
 
-    fn add_difference(&mut self, name: &'static str, base_set: &'static str, exclude_sets: &[&'static str]) -> Result<(),LanguageError>;
+    fn add_difference(&mut self, name: &'static str, base_set: &'static str, exclude_sets: &[&'static str]) -> Result<(),ElbieError>;
 
-    fn add_intersection(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),LanguageError>;
+    fn add_intersection(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),ElbieError>;
 
-    fn add_union(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),LanguageError>;
+    fn add_union(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),ElbieError>;
 
-    fn add_exclusion(&mut self, name: &'static str, set: &'static str, exclude_phoneme_strs: &[&'static str]) -> Result<(),LanguageError>;
+    fn add_exclusion(&mut self, name: &'static str, set: &'static str, exclude_phoneme_strs: &[&'static str]) -> Result<(),ElbieError>;
 
 }
 
@@ -81,12 +81,12 @@ impl Inventory {
         &self.phonemes
     }
 
-    fn add_phoneme_to_set(&mut self, class: &'static str, phoneme: Rc<Phoneme>) -> Result<(),LanguageError> {
+    fn add_phoneme_to_set(&mut self, class: &'static str, phoneme: Rc<Phoneme>) -> Result<(),ElbieError> {
       let class = match self.sets.entry(class) {
         Entry::Occupied(entry) => entry.into_mut(),
         Entry::Vacant(entry) => {
             if self.phonemes.contains_key(class) {
-                return Err(LanguageError::PhonemeExistsWithSetName(class))
+                return Err(ElbieError::PhonemeExistsWithSetName(class))
             }
             entry.insert(Bag::new())
         },
@@ -98,21 +98,21 @@ impl Inventory {
     }
 
 
-    pub(crate) fn get_set(&self, set: &'static str) -> Result<&Bag<Rc<Phoneme>>,LanguageError> {
+    pub(crate) fn get_set(&self, set: &'static str) -> Result<&Bag<Rc<Phoneme>>,ElbieError> {
       match self.sets.get(set) {
         Some(set) => Ok(set),
-        None => Err(LanguageError::UnknownSet(set))
+        None => Err(ElbieError::UnknownSet(set))
       }
     }
 
-    pub(crate) fn get_phoneme(&self, phoneme: &'static str) -> Result<&Rc<Phoneme>,LanguageError> {
+    pub(crate) fn get_phoneme(&self, phoneme: &'static str) -> Result<&Rc<Phoneme>,ElbieError> {
       match self.phonemes.get(phoneme) {
         Some(phoneme) => Ok(phoneme),
-        None => Err(LanguageError::UnknownPhoneme(phoneme))
+        None => Err(ElbieError::UnknownPhoneme(phoneme))
       }
     }
 
-    pub(crate) fn get_set_without(&self, set: &'static str, exclude_phonemes: &[&Rc<Phoneme>]) -> Result<Bag<Rc<Phoneme>>,LanguageError> {
+    pub(crate) fn get_set_without(&self, set: &'static str, exclude_phonemes: &[&Rc<Phoneme>]) -> Result<Bag<Rc<Phoneme>>,ElbieError> {
       let mut set = self.get_set(set)?.clone();
       for phoneme in exclude_phonemes {
         _ = set.remove(phoneme);
@@ -120,25 +120,25 @@ impl Inventory {
       Ok(set)
     }
 
-    pub(crate) fn phoneme_is(&self, phoneme: &Rc<Phoneme>, set: &'static str) -> Result<bool,LanguageError> {
+    pub(crate) fn phoneme_is(&self, phoneme: &Rc<Phoneme>, set: &'static str) -> Result<bool,ElbieError> {
       Ok(self.get_set(set)?.contains(phoneme))
     }
 
-    pub(crate) fn choose(&self, set: &'static str, rng: &mut ThreadRng) -> Result<Rc<Phoneme>,LanguageError> {
+    pub(crate) fn choose(&self, set: &'static str, rng: &mut ThreadRng) -> Result<Rc<Phoneme>,ElbieError> {
       match self.get_set(set)?.choose(rng) {
         Some(phoneme) => Ok(phoneme.clone()),
-        None => Err(LanguageError::SetIsEmpty(set))
+        None => Err(ElbieError::SetIsEmpty(set))
       }
     }
 
-    pub(crate) fn choose_except(&self, set: &'static str, exclude_phonemes: &[&Rc<Phoneme>], rng: &mut ThreadRng) -> Result<Rc<Phoneme>,LanguageError> {
+    pub(crate) fn choose_except(&self, set: &'static str, exclude_phonemes: &[&Rc<Phoneme>], rng: &mut ThreadRng) -> Result<Rc<Phoneme>,ElbieError> {
       match self.get_set_without(set,exclude_phonemes)?.choose(rng) {
         Some(phoneme) => Ok(phoneme.clone()),
-        None => Err(LanguageError::SetIsEmptyWithFilter(set))
+        None => Err(ElbieError::SetIsEmptyWithFilter(set))
       }
     }
 
-    pub(crate) fn extend(&mut self, other: &Self, containing_set: &'static str) -> Result<(),LanguageError> {
+    pub(crate) fn extend(&mut self, other: &Self, containing_set: &'static str) -> Result<(),ElbieError> {
         #[expect(clippy::iter_over_hash_type,reason="Order for this doesn't matter")]
         for (name,bag) in &other.sets {
             for phoneme in bag.iter() {
@@ -163,11 +163,11 @@ impl Inventory {
 impl InventoryLoader for Inventory {
 
 
-    fn add_phoneme(&mut self, phoneme: &'static str, sets: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
+    fn add_phoneme(&mut self, phoneme: &'static str, sets: &[&'static str]) -> Result<Rc<Phoneme>,ElbieError> {
       if self.phonemes.contains_key(phoneme) {
-        Err(LanguageError::PhonemeAlreadyExists(phoneme))
+        Err(ElbieError::PhonemeAlreadyExists(phoneme))
       } else if self.sets.contains_key(phoneme) {
-        Err(LanguageError::SetExistsWithPhonemeName(phoneme))
+        Err(ElbieError::SetExistsWithPhonemeName(phoneme))
       } else {
         let phoneme = Phoneme::new(phoneme);
         _ = self.phonemes.insert(phoneme.name, phoneme.clone());
@@ -180,11 +180,11 @@ impl InventoryLoader for Inventory {
 
     }
 
-    fn add_difference(&mut self, name: &'static str, base_set: &'static str, exclude_sets: &[&'static str]) -> Result<(),LanguageError> {
+    fn add_difference(&mut self, name: &'static str, base_set: &'static str, exclude_sets: &[&'static str]) -> Result<(),ElbieError> {
       if self.sets.contains_key(name) {
-        Err(LanguageError::SetAlreadyExists(name))
+        Err(ElbieError::SetAlreadyExists(name))
       } else if self.phonemes.contains_key(name) {
-        Err(LanguageError::PhonemeExistsWithSetName(name))
+        Err(ElbieError::PhonemeExistsWithSetName(name))
       } else {
         let mut set = self.get_set(base_set)?.clone();
         for subset in exclude_sets {
@@ -196,11 +196,11 @@ impl InventoryLoader for Inventory {
       }
     }
 
-    fn add_intersection(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),LanguageError> {
+    fn add_intersection(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),ElbieError> {
       if self.sets.contains_key(name) {
-        Err(LanguageError::SetAlreadyExists(name))
+        Err(ElbieError::SetAlreadyExists(name))
       } else if self.phonemes.contains_key(name) {
-        Err(LanguageError::PhonemeExistsWithSetName(name))
+        Err(ElbieError::PhonemeExistsWithSetName(name))
       } else {
           let mut sets = sets.iter();
           if let Some(set) = sets.next() {
@@ -212,18 +212,18 @@ impl InventoryLoader for Inventory {
               _ = self.sets.insert(name, set);
               Ok(())
           } else {
-              Err(LanguageError::SetIsEmpty(name))
+              Err(ElbieError::SetIsEmpty(name))
           }
 
       }
 
     }
 
-    fn add_union(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),LanguageError> {
+    fn add_union(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),ElbieError> {
       if self.sets.contains_key(name) {
-        Err(LanguageError::SetAlreadyExists(name))
+        Err(ElbieError::SetAlreadyExists(name))
       } else if self.phonemes.contains_key(name) {
-        Err(LanguageError::PhonemeExistsWithSetName(name))
+        Err(ElbieError::PhonemeExistsWithSetName(name))
       } else {
         let mut set = Bag::new();
         for subset in sets {
@@ -236,12 +236,12 @@ impl InventoryLoader for Inventory {
 
     }
 
-    fn add_exclusion(&mut self, name: &'static str, set: &'static str, exclude_phoneme_strs: &[&'static str]) -> Result<(),LanguageError> {
+    fn add_exclusion(&mut self, name: &'static str, set: &'static str, exclude_phoneme_strs: &[&'static str]) -> Result<(),ElbieError> {
 
       if self.sets.contains_key(name) {
-        Err(LanguageError::SetAlreadyExists(name))
+        Err(ElbieError::SetAlreadyExists(name))
       } else if self.phonemes.contains_key(name) {
-        Err(LanguageError::PhonemeExistsWithSetName(name))
+        Err(ElbieError::PhonemeExistsWithSetName(name))
       } else {
         let mut exclude_phonemes = vec![];
         for phoneme in exclude_phoneme_strs {

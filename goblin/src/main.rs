@@ -7,7 +7,7 @@ use elbie::language::Language;
 use elbie::language_cli;
 use elbie::phoneme::Phoneme;
 use elbie::phoneme::InventoryLoader as _;
-use elbie::errors::LanguageError;
+use elbie::errors::ElbieError;
 use elbie::phoneme_table::TableOption;
 use elbie::phoneme::PHONEME;
 use elbie::phonotactics::EnvironmentBranch;
@@ -257,7 +257,7 @@ fn spell_eng(_: &Language<1>, _: &Rc<Phoneme>, result: &mut String, next: Option
   }
 }
 
-fn create_goblin_language() -> Result<Language<1>,LanguageError> {
+fn create_goblin_language() -> Result<Language<1>,ElbieError> {
   let mut language = Language::new(GOBLIN,INITIAL_ONSET_PHONEME,ONSET,["Transcription"]);
 
   _ = language.add_phoneme(M,&[CONSONANT,LABIAL,BILABIAL,NASAL,UNASPIRATED,VOICED])?;

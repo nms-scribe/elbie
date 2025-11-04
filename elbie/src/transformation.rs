@@ -5,7 +5,7 @@ use std::fmt::Formatter;
 use std::rc::Rc;
 use core::slice::Iter;
 
-use crate::errors::LanguageError;
+use crate::errors::ElbieError;
 use crate::language::Language;
 use crate::phoneme::Inventory;
 use crate::phoneme::Phoneme;
@@ -39,11 +39,11 @@ struct WordSplice {
 
 pub enum RuleStateError {
     MatchFailed,
-    Elbie(LanguageError)
+    Elbie(ElbieError)
 }
 
-impl From<LanguageError> for RuleStateError {
-    fn from(value: LanguageError) -> Self {
+impl From<ElbieError> for RuleStateError {
+    fn from(value: ElbieError) -> Self {
         Self::Elbie(value)
     }
 }
@@ -76,7 +76,7 @@ impl RuleState<'_> {
     }
 
     /// Returns true if the next phoneme matches the specified name, or is in a set with that name. The position is not changed. An error will be returned if the name is neither a valid phoneme nor a valid set.
-    pub fn peek_is(&mut self, name: &'static str) -> Result<bool,LanguageError> {
+    pub fn peek_is(&mut self, name: &'static str) -> Result<bool,ElbieError> {
         if let Some(phoneme) = self.phonemes.peek().cloned() {
             self.phoneme_is(phoneme, name)
         } else {
@@ -86,7 +86,7 @@ impl RuleState<'_> {
     }
 
     /// Check if a phoneme (probably returned by `peek`) matches the specified name or is in the specified set. The position is not changed. An error will be returned if the name is neither a valid phoneme nor a valid set.
-    pub fn phoneme_is(&mut self, phoneme: &Rc<Phoneme>, name: &'static str) -> Result<bool,LanguageError> {
+    pub fn phoneme_is(&mut self, phoneme: &Rc<Phoneme>, name: &'static str) -> Result<bool,ElbieError> {
         if self.inventory.phonemes().contains_key(name) {
             Ok(phoneme.name == name)
         } else {
@@ -154,7 +154,7 @@ impl RuleState<'_> {
     }
 
     /// Uses `is` to match the current phoneme. If the match fails, it captures the error and returns a length of 0 instead, allowing the match to succeed.
-    pub fn opt(&mut self, name: &'static str) -> Result<usize,LanguageError> {
+    pub fn opt(&mut self, name: &'static str) -> Result<usize,ElbieError> {
         match self.is(name) {
             Ok(length) => Ok(length),
             Err(RuleStateError::MatchFailed) => Ok(0),
@@ -163,7 +163,7 @@ impl RuleState<'_> {
     }
 
     /// Creates a new Pattern based off of the current state, and processes it using `seq`. If the match succeeds, the state is merged back into the main Pattern and the length of the match is returned. If the match fails, the state is not merged back in, but a length of 0 is returned, indicating a successful but empty match.
-    pub fn opt_seq<Sequence: Fn(&mut Self) -> Result<bool,RuleStateError>>(&mut self, sequence: Sequence) -> Result<usize,LanguageError> {
+    pub fn opt_seq<Sequence: Fn(&mut Self) -> Result<bool,RuleStateError>>(&mut self, sequence: Sequence) -> Result<usize,ElbieError> {
         let mut inner = Self {
             inventory: self.inventory,
             phonemes: self.phonemes.clone(),
@@ -185,7 +185,7 @@ impl RuleState<'_> {
 
     }
 
-    fn get_replacement(&self, phonemes: &[&'static str]) -> Result<Vec<Rc<Phoneme>>,LanguageError> {
+    fn get_replacement(&self, phonemes: &[&'static str]) -> Result<Vec<Rc<Phoneme>>,ElbieError> {
         phonemes.iter().map(|phoneme| {
             self.inventory.get_phoneme(phoneme).cloned()
         }).collect()
@@ -193,7 +193,7 @@ impl RuleState<'_> {
     }
 
     /// Adds a new splice at the current position that replaces a length of 0 and contains the specified phonemes. Will return an error if the phonemes do not exist in the inventory.
-    pub fn ins(&mut self, phonemes: &[&'static str]) -> Result<(),LanguageError> {
+    pub fn ins(&mut self, phonemes: &[&'static str]) -> Result<(),ElbieError> {
 
         let replace = self.get_replacement(phonemes)?;
 
@@ -223,7 +223,7 @@ impl RuleState<'_> {
     }
 
     /// Calls `opt`, and if there is a non-empty match adds a new splice to replace the matching phoneme with the specified phonemes. If the match was empty, not replacement is made. Will return an error if the phonemes do not exist in the inventory.
-    pub fn opt_repl(&mut self, name: &'static str, phonemes: &[&'static str]) -> Result<usize,LanguageError> {
+    pub fn opt_repl(&mut self, name: &'static str, phonemes: &[&'static str]) -> Result<usize,ElbieError> {
         let replace = self.get_replacement(phonemes)?;
         let start_index = self.word_index;
         let length = self.opt(name)?;
@@ -254,7 +254,7 @@ impl RuleState<'_> {
     }
 
     /// Calls `opt_seq` with the specified closure, and if it returns a non-empty match adds a new splice which replaces the match with the specified phonemes. If the match is empty, no splice is added.
-    pub fn opt_repl_seq<Sequence: Fn(&mut Self) -> Result<bool,RuleStateError>>(&mut self, sequence: Sequence, phonemes: &[&'static str]) -> Result<usize,LanguageError> {
+    pub fn opt_repl_seq<Sequence: Fn(&mut Self) -> Result<bool,RuleStateError>>(&mut self, sequence: Sequence, phonemes: &[&'static str]) -> Result<usize,ElbieError> {
         let replace = self.get_replacement(phonemes)?;
         let start_index = self.word_index;
         let length = self.opt_seq(sequence)?;
@@ -294,13 +294,13 @@ impl Rule {
 
     A string replace function generally replaces one at a time, matches can not overlap. `"sss".replace("ss","test")` results in `"tests", not "testtest" or something weird, even though the last two characters also match.
 
-    However, since the rules for language change transform based on the environment around the replacement, I can't do that here. Say we have a sound change rule `CVhC` become `CesC`, and we apply it to the word /tuhtiht/. The result should be /testest/. However, with string replace rules, one would get /testiht/. The second syllable wouldn't match because it was already part of the previous match. 
+    However, since the rules for language change transform based on the environment around the replacement, I can't do that here. Say we have a sound change rule `CVhC` become `CesC`, and we apply it to the word /tuhtiht/. The result should be /testest/. However, with string replace rules, one would get /testiht/. The second syllable wouldn't match because it was already part of the previous match.
 
     To fix this, the matches are tested starting from each phoneme, on the original word, and the replacements are spliced in after all the matches have been tested.
 
-    One complication added to this change is a possibility of this resulting in overlapping replacements if the user defining the rule is not careful. Overlapping replacements will be reported as an error rather than try to guess what the user really meant. 
+    One complication added to this change is a possibility of this resulting in overlapping replacements if the user defining the rule is not careful. Overlapping replacements will be reported as an error rather than try to guess what the user really meant.
     */
-    fn transform(&self, transformer: &Transformation, word: Word, trace: &TransformationTraceCallback) -> Result<Word,LanguageError> {
+    fn transform(&self, transformer: &Transformation, word: Word, trace: &TransformationTraceCallback) -> Result<Word,ElbieError> {
 
         let mut phonemes = word.phonemes().iter();
         let mut current_index = 0;
@@ -340,7 +340,7 @@ impl Rule {
                 // end_index is not inclusive: 5 length 1, and 6 length 1 do not intersect.
                 // Also, since it's sorted, I don't have to check if the prev start is greater than next start, because it won't be.
                 if (prev.start_index == next.start_index) || (prev.start_index + prev.length) > next.start_index {
-                    return Err(LanguageError::TransformationCreatedOverlappingReplacements(self.name))
+                    return Err(ElbieError::TransformationCreatedOverlappingReplacements(self.name))
                 }
 
             }
@@ -405,7 +405,7 @@ impl Transformation {
         _ = self.add_inventory(source.name(), source.inventory());
     }
 
-    pub fn add_inventory(&mut self, name: &'static str, inventory: &Inventory) -> Result<(),LanguageError> {
+    pub fn add_inventory(&mut self, name: &'static str, inventory: &Inventory) -> Result<(),ElbieError> {
         self.inventory.extend(inventory,name)
     }
 
@@ -416,7 +416,7 @@ impl Transformation {
 
     /// Applies transformation rules in order, and returns the final word if successful.
     /// The word has not been validated for any specific language, so this should still be done before reporting the result to the user.
-    pub(crate) fn transform(&self, word: Word, trace: &TransformationTraceCallback) -> Result<Word,LanguageError> {
+    pub(crate) fn transform(&self, word: Word, trace: &TransformationTraceCallback) -> Result<Word,ElbieError> {
         let mut transformed = word;
         for rule in &self.rules {
             transformed = rule.transform(self, transformed, trace)?

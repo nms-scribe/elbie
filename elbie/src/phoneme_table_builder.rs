@@ -3,7 +3,7 @@ use crate::phoneme_table::Table0DDef;
 use crate::phoneme_table::Table1DDef;
 use crate::phoneme_table::Table2DDef;
 use crate::phoneme_table::Table3DDef;
-use crate::errors::LanguageError;
+use crate::errors::ElbieError;
 use crate::phoneme_table::TableOption;
 use crate::phoneme_table::Table4DDef;
 use std::collections::HashSet;
@@ -66,10 +66,10 @@ impl<'language, const ORTHOGRAPHIES: usize> TableBuilder<'language, ORTHOGRAPHIE
         }
     }
 
-    pub fn axis(mut self,new_axis: &'language [(&'static str,&'static str)]) -> Result<Self,LanguageError> {
+    pub fn axis(mut self,new_axis: &'language [(&'static str,&'static str)]) -> Result<Self,ElbieError> {
         self.axisses = match self.axisses {
             Some((_axis_1,Some((_axis_2,Some((_axis_3,Some(_axis_4))))))) => {
-                return Err(LanguageError::TooManyAxisses)
+                return Err(ElbieError::TooManyAxisses)
             },
             Some((axis_1,Some((axis_2,Some((axis_3,None)))))) => {
                 Some((axis_1,Some((axis_2,Some((axis_3,Some(new_axis)))))))
@@ -95,7 +95,7 @@ impl<'language, const ORTHOGRAPHIES: usize> TableBuilder<'language, ORTHOGRAPHIE
         self
     }
 
-    pub fn add(self) -> Result<(),LanguageError> {
+    pub fn add(self) -> Result<(),ElbieError> {
         let mut table_def = match self.axisses {
             Some((axis_1,Some((axis_2,Some((axis_3,Some(axis_4))))))) => {
                 let mut def = Table4DDef::new(self.caption.to_owned());
@@ -136,7 +136,7 @@ impl<'language, const ORTHOGRAPHIES: usize> TableBuilder<'language, ORTHOGRAPHIE
         }
 
         if self.language.tables().iter().any(|t| t.id == self.id) {
-            return Err(LanguageError::DuplicateTableDef(self.id.to_owned()));
+            return Err(ElbieError::DuplicateTableDef(self.id.to_owned()));
         }
 
         self.language.tables_mut().push(TableEntry {

@@ -36,7 +36,7 @@ use core::slice::Iter;
 use core::iter::Peekable;
 use crate::orthography::SpellingCallback;
 use crate::orthography::SpellingBehavior;
-use crate::errors::LanguageError;
+use crate::errors::ElbieError;
 use crate::phoneme_table_builder::TableEntry;
 use crate::phonotactics::EnvironmentBranch;
 use crate::phoneme::Phoneme;
@@ -117,23 +117,23 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
     }
 
 
-    fn add_phoneme_to_inventory(&mut self, phoneme: &'static str, sets: &[&'static str], behavior: PhonemeBehavior<ORTHOGRAPHIES>) -> Result<Rc<Phoneme>,LanguageError> {
+    fn add_phoneme_to_inventory(&mut self, phoneme: &'static str, sets: &[&'static str], behavior: PhonemeBehavior<ORTHOGRAPHIES>) -> Result<Rc<Phoneme>,ElbieError> {
       let phoneme = self.inventory.add_phoneme(phoneme, sets)?;
       _ = self.phoneme_behavior.insert(phoneme.clone(), behavior);
       Ok(phoneme)
 
     }
 
-    fn add_phoneme_with_spelling_behavior(&mut self, phoneme: &'static str, behaviors: [SpellingBehavior<ORTHOGRAPHIES>; ORTHOGRAPHIES], classes: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
+    fn add_phoneme_with_spelling_behavior(&mut self, phoneme: &'static str, behaviors: [SpellingBehavior<ORTHOGRAPHIES>; ORTHOGRAPHIES], classes: &[&'static str]) -> Result<Rc<Phoneme>,ElbieError> {
       self.add_phoneme_to_inventory(phoneme,classes,PhonemeBehavior::new(behaviors))
     }
 
-    pub fn add_phoneme_with_spelling(&mut self, phoneme: &'static str, orthography: [&'static str; ORTHOGRAPHIES], classes: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
+    pub fn add_phoneme_with_spelling(&mut self, phoneme: &'static str, orthography: [&'static str; ORTHOGRAPHIES], classes: &[&'static str]) -> Result<Rc<Phoneme>,ElbieError> {
       let behaviors = orthography.map(SpellingBehavior::Text);
       self.add_phoneme_with_spelling_behavior(phoneme, behaviors, classes)
     }
 
-    pub fn add_phoneme_with_spelling_fn(&mut self, phoneme: &'static str, callbacks: [SpellingCallback<ORTHOGRAPHIES>; ORTHOGRAPHIES], classes: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
+    pub fn add_phoneme_with_spelling_fn(&mut self, phoneme: &'static str, callbacks: [SpellingCallback<ORTHOGRAPHIES>; ORTHOGRAPHIES], classes: &[&'static str]) -> Result<Rc<Phoneme>,ElbieError> {
       let behaviors = callbacks.map(|f| SpellingBehavior::Callback(f));
       self.add_phoneme_with_spelling_behavior(phoneme, behaviors, classes)
     }
@@ -165,32 +165,32 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     // will eventually be used over add_difference
     #[deprecated(since="0.2.2",note="Use `<Language as InventoryLoader>::add_difference`")]
-    pub fn build_difference(&mut self, name: &'static str, base_set: &'static str, exclude_sets: &[&'static str]) -> Result<(),LanguageError> {
+    pub fn build_difference(&mut self, name: &'static str, base_set: &'static str, exclude_sets: &[&'static str]) -> Result<(),ElbieError> {
       self.inventory.add_difference(name, base_set, exclude_sets)
     }
 
     #[deprecated(since="0.2.2",note="Use `<Language as InventoryLoader>::add_intersection`")]
-    pub fn build_intersection(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),LanguageError> {
+    pub fn build_intersection(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),ElbieError> {
       self.inventory.add_intersection(name, sets)
     }
 
     // allows building a union out of multiple sets... FUTURE: The 'add' functions will become obsolete and replace with 'build' functions.
     #[deprecated(since="0.2.2",note="Use `<Language as InventoryLoader>::add_union`")]
-    pub fn build_union(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),LanguageError> {
+    pub fn build_union(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),ElbieError> {
       self.inventory.add_union(name, sets)
 
     }
 
-    pub(crate) fn get_environment(&self, environment: &'static str) -> Result<&Vec<EnvironmentBranch>,LanguageError> {
+    pub(crate) fn get_environment(&self, environment: &'static str) -> Result<&Vec<EnvironmentBranch>,ElbieError> {
       match self.environments.get(environment) {
         Some(environment) => Ok(environment),
-        None => Err(LanguageError::UnknownEnvironment(environment))
+        None => Err(ElbieError::UnknownEnvironment(environment))
       }
     }
 
-    pub fn add_environment(&mut self, name: &'static str, environment: &[EnvironmentBranch]) -> Result<(),LanguageError> {
+    pub fn add_environment(&mut self, name: &'static str, environment: &[EnvironmentBranch]) -> Result<(),ElbieError> {
       if self.environments.contains_key(name) {
-        Err(LanguageError::EnvironmentAlreadyExists(name))
+        Err(ElbieError::EnvironmentAlreadyExists(name))
       } else {
         _ = self.environments.insert(name,environment.to_vec());
         Ok(())
@@ -204,7 +204,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
     }
 
 
-    pub(crate) fn build_word(&self, environment_name: &'static str, word: &mut Word, phoneme: &Rc<Phoneme>, rng: &mut ThreadRng) -> Result<(),LanguageError> {
+    pub(crate) fn build_word(&self, environment_name: &'static str, word: &mut Word, phoneme: &Rc<Phoneme>, rng: &mut ThreadRng) -> Result<(),ElbieError> {
 
         let environment = self.get_environment(environment_name)?;
 
@@ -212,7 +212,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
             if self.inventory.phoneme_is(phoneme, branch.set())? {
                 word.push(phoneme.clone()); // have to clone because we're referencing it again later. It's an RC, so that's okay.
                 match branch.choices().choose(rng) {
-                    None => return Err(LanguageError::NoEnvironmentChoices(environment_name)),
+                    None => return Err(ElbieError::NoEnvironmentChoices(environment_name)),
                     Some(EnvironmentChoice::Done) => return Ok(()),
                     Some(EnvironmentChoice::Continuing(generate_set,continuing_environment,can_duplicate)) => {
                         let phoneme = if *can_duplicate {
@@ -227,12 +227,12 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
             }
         }
 
-        Err(LanguageError::IncompleteBranches(environment_name))
+        Err(ElbieError::IncompleteBranches(environment_name))
 
     }
 
 
-    pub(crate) fn make_word(&self) -> Result<Word,LanguageError> {
+    pub(crate) fn make_word(&self) -> Result<Word,ElbieError> {
 
         let mut word = Word::new(&[]);
         let mut rng = rand::rng();
@@ -245,7 +245,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     pub(crate) fn validate_word(&self, environment_name: &'static str,
                             word: &mut Enumerate<Iter<Rc<Phoneme>>>, idx: usize, phoneme: &Rc<Phoneme>,
-                            level: usize, validated: &[ValidWordElement], trace: &ValidationTraceCallback) -> Result<Vec<ValidWordElement>,LanguageError> {
+                            level: usize, validated: &[ValidWordElement], trace: &ValidationTraceCallback) -> Result<Vec<ValidWordElement>,ElbieError> {
         let environment = self.get_environment(environment_name)?;
         let mut validated = validated.to_vec();
 
@@ -293,10 +293,10 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
                 for choice in branch.choices().items() {
                     match (choice, next_phoneme) {
                         ((EnvironmentChoice::Done,_),Some((next_idx,next_phoneme))) => {
-                          check_error!(LanguageError::ExpectedEndOfWord(next_idx,next_phoneme.clone(),environment_name));
+                          check_error!(ElbieError::ExpectedEndOfWord(next_idx,next_phoneme.clone(),environment_name));
                         },
                         ((EnvironmentChoice::Continuing(generate_set,_,_),_),None) => {
-                          check_error!(LanguageError::ExpectedPhonemeFoundEndOfWord(idx + 1,generate_set,environment_name));
+                          check_error!(ElbieError::ExpectedPhonemeFoundEndOfWord(idx + 1,generate_set,environment_name));
                         },
                         ((EnvironmentChoice::Continuing(generate_set,continuing_environment,can_duplicate),_),Some((next_idx,next_phoneme))) => {
                             let valid_phoneme = if *can_duplicate {
@@ -318,7 +318,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
                                 }
                               }
                             } else {
-                              check_error!(LanguageError::IncorrectPhoneme(next_idx,next_phoneme.clone(),generate_set,environment_name));
+                              check_error!(ElbieError::IncorrectPhoneme(next_idx,next_phoneme.clone(),generate_set,environment_name));
                             }
                         },
                         ((EnvironmentChoice::Done,_),None) => {
@@ -336,7 +336,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
                   // no successful choices were found. Check if error was set, and if not, then we didn't find
                   // any choices at all, which is an error.
-                  check_error!(LanguageError::IncompleteBranches(environment_name));
+                  check_error!(ElbieError::IncompleteBranches(environment_name));
 
                 }
 
@@ -353,7 +353,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
           match error {
             None =>
               // if we got here, then there were no branches that fit the current phoneme.
-              Err(trace_error!(LanguageError::NoBranchFitsPhoneme(idx,phoneme.clone(),environment_name))),
+              Err(trace_error!(ElbieError::NoBranchFitsPhoneme(idx,phoneme.clone(),environment_name))),
             Some(err) => Err(err)
           }
         }
@@ -361,27 +361,27 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
-    pub(crate) fn build_phoneme_grid(&self, master_set: &Bag<Rc<Phoneme>>, table_def: &TableDef, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<Grid,LanguageError> {
+    pub(crate) fn build_phoneme_grid(&self, master_set: &Bag<Rc<Phoneme>>, table_def: &TableDef, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<Grid,ElbieError> {
 
         match table_def {
             TableDef::OneCell(definition) => {
                 let mut table = Table0D::new(definition);
 
-                table.add_phonemes(self, master_set, unprinted_phonemes).map_err(LanguageError::InvalidAxisForPhoneme)?;
+                table.add_phonemes(self, master_set, unprinted_phonemes).map_err(ElbieError::InvalidAxisForPhoneme)?;
 
                 Ok(table.build_grid())
             },
             TableDef::ListTable(definition) => {
                 let mut table = Table1D::new(definition);
 
-                table.add_phonemes(self, master_set, unprinted_phonemes).map_err(LanguageError::InvalidAxisForPhoneme)?;
+                table.add_phonemes(self, master_set, unprinted_phonemes).map_err(ElbieError::InvalidAxisForPhoneme)?;
 
                 Ok(table.build_grid())
             },
             TableDef::SimpleTable(definition) => {
                 let mut table = Table2D::new(definition);
 
-                table.add_phonemes(self, master_set, unprinted_phonemes).map_err(LanguageError::InvalidAxisForPhoneme)?;
+                table.add_phonemes(self, master_set, unprinted_phonemes).map_err(ElbieError::InvalidAxisForPhoneme)?;
 
                 Ok(table.build_grid())
             },
@@ -389,7 +389,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
                 let mut table = Table3D::new(definition);
 
 
-                table.add_phonemes(self, master_set, unprinted_phonemes).map_err(LanguageError::InvalidAxisForPhoneme)?;
+                table.add_phonemes(self, master_set, unprinted_phonemes).map_err(ElbieError::InvalidAxisForPhoneme)?;
 
                 Ok(table.build_grid())
             },
@@ -398,14 +398,14 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
                 let mut table = Table4D::new(definition);
 
 
-                table.add_phonemes(self, master_set, unprinted_phonemes).map_err(LanguageError::InvalidAxisForPhoneme)?;
+                table.add_phonemes(self, master_set, unprinted_phonemes).map_err(ElbieError::InvalidAxisForPhoneme)?;
 
                 Ok(table.build_grid())
             },
         }
     }
 
-    pub(crate) fn build_all_phoneme_tables(&self) -> Result<Vec<(&'static str,Grid)>,LanguageError> {
+    pub(crate) fn build_all_phoneme_tables(&self) -> Result<Vec<(&'static str,Grid)>,ElbieError> {
 
       let mut result = Vec::new();
 
@@ -431,7 +431,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
-    pub(crate) fn build_phoneme_table(&self, table_name: &String) -> Result<Option<Grid>,LanguageError> {
+    pub(crate) fn build_phoneme_table(&self, table_name: &String) -> Result<Option<Grid>,ElbieError> {
 
         if table_name == "uncategorized" { // FUTURE: Make that a constant
             // we need to build all of the tables to find the uncategorized phonemes
@@ -460,7 +460,7 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
     }
 
-    pub(crate) fn display_spelling(&self, columns: usize) -> Result<Grid,LanguageError> {
+    pub(crate) fn display_spelling(&self, columns: usize) -> Result<Grid,ElbieError> {
 
       let phonemes: Bag<Rc<Phoneme>> = self.inventory.get_set(PHONEME)?.clone();
       let phonemes = phonemes.list();
@@ -547,23 +547,23 @@ impl<const ORTHOGRAPHIES: usize> Language<ORTHOGRAPHIES> {
 
 impl<const ORTHOGRAPHIES: usize> InventoryLoader for Language<ORTHOGRAPHIES> {
 
-    fn add_phoneme(&mut self, phoneme: &'static str, sets: &[&'static str]) -> Result<Rc<Phoneme>,LanguageError> {
+    fn add_phoneme(&mut self, phoneme: &'static str, sets: &[&'static str]) -> Result<Rc<Phoneme>,ElbieError> {
         self.add_phoneme_to_inventory(phoneme,sets,PhonemeBehavior::default())
     }
 
-    fn add_difference(&mut self, name: &'static str, base_set: &'static str, exclude_sets: &[&'static str]) -> Result<(),LanguageError> {
+    fn add_difference(&mut self, name: &'static str, base_set: &'static str, exclude_sets: &[&'static str]) -> Result<(),ElbieError> {
         self.inventory.add_difference(name, base_set, exclude_sets)
     }
 
-    fn add_intersection(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),LanguageError> {
+    fn add_intersection(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),ElbieError> {
         self.inventory.add_intersection(name, sets)
     }
 
-    fn add_union(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),LanguageError> {
+    fn add_union(&mut self, name: &'static str, sets: &[&'static str]) -> Result<(),ElbieError> {
         self.inventory.add_union(name, sets)
     }
 
-    fn add_exclusion(&mut self, name: &'static str, set: &'static str, exclude_phoneme_strs: &[&'static str]) -> Result<(),LanguageError> {
+    fn add_exclusion(&mut self, name: &'static str, set: &'static str, exclude_phoneme_strs: &[&'static str]) -> Result<(),ElbieError> {
         self.inventory.add_exclusion(name, set, exclude_phoneme_strs)
     }
 
@@ -573,7 +573,7 @@ impl<const ORTHOGRAPHIES: usize> InventoryLoader for Language<ORTHOGRAPHIES> {
 impl<const ORTHOGRAPHIES: usize> WordLoader for Language<ORTHOGRAPHIES> {
 
 
-    fn read_word(&self,input: &str) -> Result<Word,LanguageError> {
+    fn read_word(&self,input: &str) -> Result<Word,ElbieError> {
         // not an efficient algorithm, but it works...
         let mut phonemes: Vec<Rc<Phoneme>> = self.inventory.phonemes().values().cloned().collect();
         phonemes.sort_by(sort_phonemes_by_length_descending);
@@ -591,7 +591,7 @@ impl<const ORTHOGRAPHIES: usize> WordLoader for Language<ORTHOGRAPHIES> {
                     continue 'outer;
                 }
             }
-            return Err(LanguageError::UnknownPhonemeWhileReading(input.to_owned(),source.to_owned()));
+            return Err(ElbieError::UnknownPhonemeWhileReading(input.to_owned(),source.to_owned()));
         }
 
         Ok(Word::new(&word))
@@ -601,7 +601,7 @@ impl<const ORTHOGRAPHIES: usize> WordLoader for Language<ORTHOGRAPHIES> {
 
 impl<const ORTHOGRAPHIES: usize> WordValidator for Language<ORTHOGRAPHIES> {
 
-    fn check_word(&self,word: &Word, trace: &ValidationTraceCallback) -> Result<Vec<ValidWordElement>,LanguageError> {
+    fn check_word(&self,word: &Word, trace: &ValidationTraceCallback) -> Result<Vec<ValidWordElement>,ElbieError> {
 
         let mut word = word.phonemes().iter().enumerate();
         if let Some((idx,phoneme)) = word.next() {
@@ -610,12 +610,12 @@ impl<const ORTHOGRAPHIES: usize> WordValidator for Language<ORTHOGRAPHIES> {
               trace(0,ValidationTraceMessage::FoundValid(&valid));
               self.validate_word(self.initial_environment, &mut word, idx, phoneme,1,&[valid],trace)
             } else {
-              let err = LanguageError::IncorrectPhoneme(idx,phoneme.clone(),self.initial_phoneme_set,self.initial_environment);
+              let err = ElbieError::IncorrectPhoneme(idx,phoneme.clone(),self.initial_phoneme_set,self.initial_environment);
               trace(0,ValidationTraceMessage::FoundError(&err));
               Err(err)
             }
         } else {
-            Err(LanguageError::EmptyWord)
+            Err(ElbieError::EmptyWord)
         }
     }
 

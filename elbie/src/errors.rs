@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 #[derive(Debug,Clone,Error)]
 // TODO: This should just be ElbieError instead.
-pub enum LanguageError {
+pub enum ElbieError {
     #[error("Set {0} has no phonemes.")]
     SetIsEmpty(&'static str),
     #[error("Set {0} as filtered has no phonemes.")]
@@ -65,3 +65,6 @@ pub enum LanguageError {
     #[error("Transformation rule '{0}' created an overlapping splice.")]
     TransformationCreatedOverlappingReplacements(&'static str)
 }
+
+#[deprecated="Use `ElbieError` instead."]
+pub type LanguageError = ElbieError;

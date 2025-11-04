@@ -58,7 +58,7 @@ pub mod transformation_cli;
 
 // Old paths: remove once I'm sure I've fixed all of my languages... Or, maybe just wait until I increase the version number.
 #[deprecated(since="0.2.2",note="Use `elbie::errors::LanguageError` instead.")]
-pub type LanguageError = errors::LanguageError;
+pub type LanguageError = errors::ElbieError;
 #[deprecated(since="0.2.2",note="Use `elbie::phoneme::EMPTY` instead.")]
 pub const EMPTY: &str = phoneme::EMPTY;
 #[deprecated(since="0.2.2",note="Use `elbie::phoneme::PHONEME` instead.")]
@@ -85,6 +85,6 @@ pub type Word = word::Word;
 
 
 #[deprecated(since="0.2.2",note="use `elbie::language_cli::run` instead.")]
-pub fn run_main<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHOGRAPHIES: usize>(args: &mut Args, language: Result<language::Language<ORTHOGRAPHIES>,errors::LanguageError>) {
+pub fn run_main<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHOGRAPHIES: usize>(args: &mut Args, language: Result<language::Language<ORTHOGRAPHIES>,errors::ElbieError>) {
     language_cli::run(args, language)
 }

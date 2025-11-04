@@ -9,7 +9,7 @@ use crate::grid::Grid;
 use crate::grid::GridRow;
 use crate::grid::RowHeader;
 use crate::phoneme_table::sealed::InnerTable as _;
-use crate::errors::LanguageError;
+use crate::errors::ElbieError;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::hash_map::Entry;
@@ -1164,7 +1164,7 @@ pub(crate) enum TableDef {
 
 impl TableDef {
 
-  pub(crate) fn set_option(&mut self, option: &TableOption) -> Result<(),LanguageError> {
+  pub(crate) fn set_option(&mut self, option: &TableOption) -> Result<(),ElbieError> {
       match (self,&option) {
         (Self::TableWithSubcolumnsAndSubrows(definition), TableOption::HideSubcolumnCaptions) => {
             definition.hide_subcolumn_captions(true);
@@ -1181,7 +1181,7 @@ impl TableDef {
          Self::SimpleTable(_), TableOption::HideSubrowCaptions) |
         (Self::OneCell(_) |
          Self::ListTable(_) |
-         Self::SimpleTable(_), TableOption::HideSubcolumnCaptions) => return Err(LanguageError::InvalidOptionForTable(option.clone()))
+         Self::SimpleTable(_), TableOption::HideSubcolumnCaptions) => return Err(ElbieError::InvalidOptionForTable(option.clone()))
     }
     Ok(())
 
