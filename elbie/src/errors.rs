@@ -6,6 +6,7 @@ use crate::phoneme_table::TableOption;
 use std::rc::Rc;
 
 #[derive(Debug,Clone,Error)]
+// TODO: This should just be ElbieError instead.
 pub enum LanguageError {
     #[error("Set {0} has no phonemes.")]
     SetIsEmpty(&'static str),
@@ -61,8 +62,6 @@ pub enum LanguageError {
     TooManyAxisses,
 
     // transformation errors
-    #[error("Sequence '{0}' was already defined.")]
-    TransformationSequenceAlreadyExists(&'static str),
     #[error("Transformation rule '{0}' created an overlapping splice.")]
     TransformationCreatedOverlappingReplacements(&'static str)
 }

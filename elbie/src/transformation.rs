@@ -11,6 +11,7 @@ use crate::phoneme::Inventory;
 use crate::phoneme::Phoneme;
 use crate::word::Word;
 
+
 pub(crate) enum TransformationTraceMessage {
   MatchedRule(&'static str,Word),
   UnmatchedRule(&'static str)
@@ -36,242 +37,256 @@ struct WordSplice {
     replace: Vec<Rc<Phoneme>>
 }
 
-#[derive(Clone)]
-enum PatternEntity {
-    /// Match is successful if the current phoneme has this name.
-    Phoneme(&'static str),
-    /// Match is successful if the current phoneme is in the specified set from the specified namespace
-    Set(&'static str),
-    /// Match is successful if the contents of the sequence match.
-    Sequence(Vec<Pattern>)
+pub enum RuleStateError {
+    MatchFailed,
+    Elbie(LanguageError)
 }
 
-impl PatternEntity {
+impl From<LanguageError> for RuleStateError {
+    fn from(value: LanguageError) -> Self {
+        Self::Elbie(value)
+    }
+}
 
-    fn match_(&self, transformer: &Transformation, phonemes: &mut Peekable<Iter<'_, Rc<Phoneme>>>) -> Result<Option<usize>,LanguageError> {
-        match self {
-            Self::Phoneme(name) => if phonemes.next_if(|phoneme| phoneme.name == *name).is_some() {
-                Ok(Some(1))
-            } else {
-                Ok(None)
+pub struct RuleState<'phonemes> {
+    inventory: &'phonemes Inventory,
+    phonemes: Peekable<Iter<'phonemes, Rc<Phoneme>>>,
+    word_index: usize,
+    splices: Vec<WordSplice>
+}
+
+impl<'phonemes> RuleState<'phonemes> {
+
+    fn new(inventory: &'phonemes Inventory, phonemes: Peekable<Iter<'phonemes, Rc<Phoneme>>>, word_index: usize) -> Self {
+        Self {
+            inventory,
+            phonemes,
+            word_index,
+            splices: Vec::new()
+        }
+    }
+}
+
+impl RuleState<'_> {
+
+
+    /// Peek at the next phoneme in the iterator. This function does not change the position.
+    pub fn peek(&mut self) -> Option<&Rc<Phoneme>> {
+        self.phonemes.peek().copied()
+    }
+
+    /// Returns true if the next phoneme matches the specified name, or is in a set with that name. The position is not changed. An error will be returned if the name is neither a valid phoneme nor a valid set.
+    pub fn peek_is(&mut self, name: &'static str) -> Result<bool,LanguageError> {
+        if let Some(phoneme) = self.phonemes.peek().cloned() {
+            self.phoneme_is(phoneme, name)
+        } else {
+            Ok(false)
+        }
+
+    }
+
+    /// Check if a phoneme (probably returned by `peek`) matches the specified name or is in the specified set. The position is not changed. An error will be returned if the name is neither a valid phoneme nor a valid set.
+    pub fn phoneme_is(&mut self, phoneme: &Rc<Phoneme>, name: &'static str) -> Result<bool,LanguageError> {
+        if self.inventory.phonemes().contains_key(name) {
+            Ok(phoneme.name == name)
+        } else {
+            Ok(self.inventory.get_set(name)?.contains(phoneme))
+        }
+    }
+
+    /// Returns true if the iterator is at the beginning of the word (word_index is 0). The position is not changed.
+    pub fn peek_initial(&self) -> bool {
+        self.word_index == 0
+    }
+
+    /// If the iterator is at the beginning of the word, returns a match of 0 length, otherwise returns a MatchFailed error.
+    pub fn initial(&mut self) -> Result<usize,RuleStateError> {
+        if self.peek_initial() {
+            Ok(0)
+        } else {
+            Err(RuleStateError::MatchFailed)
+        }
+    }
+
+    /// Returns true if the iterator is at the end of the word (there are no tokens when peeking). The position is not changed.
+    pub fn peek_final(&mut self) -> bool {
+        self.phonemes.peek().is_none()
+    }
+
+    /// If the iterator is at the end of the word, returns a match of 0 length. Otherwise, returns a MatchFailed error.
+    pub fn final_(&mut self) -> Result<usize,RuleStateError> {
+        if self.peek_final() {
+            Ok(0)
+        } else {
+            Err(RuleStateError::MatchFailed)
+        }
+    }
+
+
+    /// Matches any phoneme. If there is a phoneme in the iterator, it shifts the position forward and returns 1 (the length of the match). Otherwise, returns a MatchFailed error.
+    pub fn any(&mut self) -> Result<usize,RuleStateError> {
+        if self.phonemes.next().is_some() {
+            self.word_index += 1;
+            Ok(1)
+        } else {
+            Err(RuleStateError::MatchFailed)
+        }
+    }
+
+    /// Peeks at the next phoneme, useing `peek_is`. If it matches, shifts the position forward by one and returns 1 (the length of the match). Otherwise, returns a MatchFailed error.
+    pub fn is(&mut self, name: &'static str) -> Result<usize,RuleStateError> {
+        if self.peek_is(name)? {
+            self.any()
+        } else {
+            Err(RuleStateError::MatchFailed)
+        }
+
+    }
+
+    /// Processes the current pattern in the provided closure, to allow for code reuse. The closure should immediately return any errors from pattern function calls. The closure should return `Ok(true)` if it thinks there is a successful match, or `Ok(false)` if the pattern is still considered to have failed despite successful pattern calls. Returns the length of the matched sequence as determined by the number of phonemes which have been moved forward. If the sequence does not match, a MatchFailed is returned.
+    pub fn seq<Sequence: Fn(&mut Self) -> Result<bool,RuleStateError>>(&mut self, sequence: Sequence) -> Result<usize,RuleStateError> {
+        let start = self.word_index;
+        if sequence(self)? {
+            Ok(self.word_index - start)
+        } else {
+            Err(RuleStateError::MatchFailed)
+        }
+    }
+
+    /// Uses `is` to match the current phoneme. If the match fails, it captures the error and returns a length of 0 instead, allowing the match to succeed.
+    pub fn opt(&mut self, name: &'static str) -> Result<usize,LanguageError> {
+        match self.is(name) {
+            Ok(length) => Ok(length),
+            Err(RuleStateError::MatchFailed) => Ok(0),
+            Err(RuleStateError::Elbie(err)) => Err(err),
+        }
+    }
+
+    /// Creates a new Pattern based off of the current state, and processes it using `seq`. If the match succeeds, the state is merged back into the main Pattern and the length of the match is returned. If the match fails, the state is not merged back in, but a length of 0 is returned, indicating a successful but empty match.
+    pub fn opt_seq<Sequence: Fn(&mut Self) -> Result<bool,RuleStateError>>(&mut self, sequence: Sequence) -> Result<usize,LanguageError> {
+        let mut inner = Self {
+            inventory: self.inventory,
+            phonemes: self.phonemes.clone(),
+            word_index: self.word_index,
+            splices: Vec::new()
+        };
+        match inner.seq(sequence) {
+            Ok(length) => {
+                self.phonemes = inner.phonemes;
+                self.word_index = inner.word_index;
+                self.splices.extend(inner.splices);
+                Ok(length)
             },
-            Self::Set(name) => if let Some(phoneme) = phonemes.peek() && transformer.inventory.phoneme_is(phoneme, name)? {
-                // iterate the peek. I can't use next_if for sets because phoneme_is returns a result, not a bool.
-                _ = phonemes.next();
-                Ok(Some(1))
-            } else {
-                Ok(None)
+            Err(RuleStateError::MatchFailed) => {
+                Ok(0)
             },
-            Self::Sequence(patterns) => Pattern::match_(patterns, transformer, phonemes)
+            Err(RuleStateError::Elbie(err)) => Err(err)
         }
 
     }
 
-}
+    fn get_replacement(&self, phonemes: &[&'static str]) -> Result<Vec<Rc<Phoneme>>,LanguageError> {
+        phonemes.iter().map(|phoneme| {
+            self.inventory.get_phoneme(phoneme).cloned()
+        }).collect()
 
-#[derive(Clone)]
-pub struct Pattern {
-    /// If true, the match can be successful even if the pattern does not match.
-    optional: bool,
-    /// If true, the match is repeated after the first successful attempt, and the word position will be incremented for each match, but the match will always be successful no matter how many repetitions are found.
-    /// If optional is false, then at least the first one is required, the remaining are optional.
-    repeatable: bool,
-    /// Match is successful if the current position in the word matches this entity.
-    entity: PatternEntity
-}
+    }
 
-impl Pattern {
+    /// Adds a new splice at the current position that replaces a length of 0 and contains the specified phonemes. Will return an error if the phonemes do not exist in the inventory.
+    pub fn ins(&mut self, phonemes: &[&'static str]) -> Result<(),LanguageError> {
 
-    #[must_use]
-    pub const fn phoneme(name: &'static str) -> Self {
-        Self {
-            optional: false,
-            repeatable: false,
-            entity: PatternEntity::Phoneme(name)
+        let replace = self.get_replacement(phonemes)?;
+
+        self.splices.push(WordSplice {
+            start_index: self.word_index,
+            length: 0,
+            replace,
+        });
+
+        Ok(())
+    }
+
+    /// Calls `is`, and if there is a match adds a new splice to replace the matching phoneme with the specified phonemes. Will return an error if the phonemes do not exist in the inventory.
+    pub fn repl(&mut self, name: &'static str, phonemes: &[&'static str]) -> Result<usize,RuleStateError> {
+        let replace = self.get_replacement(phonemes)?;
+        let start_index = self.word_index;
+        let length = self.is(name)?;
+
+        self.splices.push(WordSplice {
+            start_index,
+            length,
+            replace,
+        });
+
+        Ok(length)
+
+    }
+
+    /// Calls `opt`, and if there is a non-empty match adds a new splice to replace the matching phoneme with the specified phonemes. If the match was empty, not replacement is made. Will return an error if the phonemes do not exist in the inventory.
+    pub fn opt_repl(&mut self, name: &'static str, phonemes: &[&'static str]) -> Result<usize,LanguageError> {
+        let replace = self.get_replacement(phonemes)?;
+        let start_index = self.word_index;
+        let length = self.opt(name)?;
+
+        if length > 0 {
+            self.splices.push(WordSplice {
+                start_index,
+                length,
+                replace,
+            });
         }
+
+        Ok(length)
+
+    }
+
+    /// Calls `seq` with the specified closure, and if it matches adds a new splice which replaces the match with the specified phonemes.
+    pub fn repl_seq<Sequence: Fn(&mut Self) -> Result<bool,RuleStateError>>(&mut self, sequence: Sequence, phonemes: &[&'static str]) -> Result<usize,RuleStateError> {
+        let replace = self.get_replacement(phonemes)?;
+        let start_index = self.word_index;
+        let length = self.seq(sequence)?;
+        self.splices.push(WordSplice {
+            start_index,
+            length,
+            replace,
+        });
+        Ok(length)
+    }
+
+    /// Calls `opt_seq` with the specified closure, and if it returns a non-empty match adds a new splice which replaces the match with the specified phonemes. If the match is empty, no splice is added.
+    pub fn opt_repl_seq<Sequence: Fn(&mut Self) -> Result<bool,RuleStateError>>(&mut self, sequence: Sequence, phonemes: &[&'static str]) -> Result<usize,LanguageError> {
+        let replace = self.get_replacement(phonemes)?;
+        let start_index = self.word_index;
+        let length = self.opt_seq(sequence)?;
+
+        if length > 0 {
+            self.splices.push(WordSplice {
+                start_index,
+                length,
+                replace,
+            });
+        }
+        Ok(length)
     }
 
 
-    #[must_use]
-    pub const fn set(entity: &'static str) -> Self {
-        Self {
-            optional: false,
-            repeatable: false,
-            entity: PatternEntity::Set(entity)
-        }
-    }
-
-    #[must_use]
-    pub const fn sequence(patterns: Vec<Self>) -> Self {
-        Self {
-            optional: false,
-            repeatable: false,
-            entity: PatternEntity::Sequence(patterns)
-        }
-    }
-
-    #[must_use]
-    pub fn optional(self) -> Self {
-        let Self {
-            optional: _,
-            repeatable,
-            entity,
-        } = self;
-        Self {
-            optional: true,
-            repeatable,
-            entity
-        }
-    }
-
-    #[must_use]
-    pub fn repeatable(self) -> Self {
-        let Self {
-            optional,
-            repeatable: _,
-            entity,
-        } = self;
-        Self {
-            optional,
-            repeatable: true,
-            entity
-        }
-    }
-
-    fn match_(patterns: &[Self], transformer: &Transformation, phonemes: &mut Peekable<Iter<'_, Rc<Phoneme>>>) -> Result<Option<usize>,LanguageError> {
-        let mut length = 0;
-        for pattern in patterns {
-            length += if let Some(mut match_length) = pattern.entity.match_(transformer, phonemes)? {
-                if pattern.repeatable {
-                    while let Some(next_length) = pattern.entity.match_(transformer, phonemes)? {
-                        match_length += next_length;
-                    }
-                }
-                match_length
-            } else if pattern.optional {
-                0
-            } else {
-                return Ok(None)
-            }
-
-        }
-        Ok(Some(length))
-
-    }
-}
-
-
-pub enum Instruction {
-    /// Attempts to match the current position of the word, incrementing through the word if successful, otherwise failing the match.
-    Match(Vec<Pattern>),
-    /// Attempts the match, if successful, replaces the matched content with the specified replacement and still increments through the word
-    Replace(Vec<Pattern>,Vec<&'static str>)
 }
 
 
 pub struct Rule {
     name: &'static str,
-    /// Rule only matches if the pattern starts at the beginning of the word
-    initial: bool,
-    /// Rule only matches if the pattern ends at the end of the word
-    final_: bool,
-    instructions: Vec<Instruction>
+    sequence: Box<dyn Fn(&mut RuleState) -> Result<bool,RuleStateError>>
+
 }
 
 impl Rule {
 
     #[must_use]
-    pub const fn new(name: &'static str) -> Self {
+    fn new<Sequence: Fn(&mut RuleState) -> Result<bool,RuleStateError> + 'static>(name: &'static str, sequence: Sequence) -> Self {
         Self {
             name,
-            initial: false,
-            final_: false,
-            instructions: Vec::new()
+            sequence: Box::new(sequence)
         }
-    }
-
-    #[must_use]
-    pub fn initial(self) -> Self {
-        Self {
-            name: self.name,
-            initial: true,
-            final_: self.final_,
-            instructions: self.instructions,
-        }
-    }
-
-    #[must_use]
-    pub fn final_(self) -> Self {
-        Self {
-            name: self.name,
-            initial: self.initial,
-            final_: true,
-            instructions: self.instructions,
-        }
-    }
-
-    #[must_use]
-    pub fn match_(self, patterns: &[Pattern]) -> Self {
-        let Self {
-            name,
-            initial,
-            final_,
-            mut instructions,
-        } = self;
-        instructions.push(Instruction::Match(patterns.to_vec()));
-        Self {
-            name,
-            initial,
-            final_,
-            instructions,
-        }
-    }
-
-    #[must_use]
-    pub fn replace(self, patterns: &[Pattern], phonemes: &[&'static str]) -> Self {
-        let Self {
-            name,
-            initial,
-            final_,
-            mut instructions,
-        } = self;
-        instructions.push(Instruction::Replace(patterns.to_vec(),phonemes.to_vec()));
-        Self {
-            name,
-            initial,
-            final_,
-            instructions,
-        }
-    }
-
-
-    fn match_instructions(&self, transformer: &Transformation, mut start_index: usize, phonemes: &mut Peekable<Iter<'_, Rc<Phoneme>>>) -> Result<Vec<WordSplice>,LanguageError> {
-        let mut splices = Vec::new();
-        for instruction in &self.instructions {
-            match instruction {
-                Instruction::Match(pattern) => if let Some(length) = Pattern::match_(pattern,transformer,phonemes)? {
-                    start_index += length;
-                } else {
-                    // the instructions did not match, so the whole thing doesn't match. return an empty list of splices.
-                    return Ok(Vec::new())
-                },
-                Instruction::Replace(pattern, replacement) => if let Some(length) = Pattern::match_(pattern,transformer,phonemes)? {
-                    start_index += length;
-                    let replace = replacement.iter().map(|name| {
-                        transformer.inventory.get_phoneme(name).cloned()
-                    }).collect::<Result<_,_>>()?;
-                    splices.push(WordSplice {
-                        start_index,
-                        length,
-                        replace
-                    });
-                } else {
-                    // the instructions did not match, so the whole thing doesn't match.
-                    return Ok(Vec::new())
-                },
-            }
-        }
-        Ok(splices)
     }
 
     /**
@@ -279,11 +294,11 @@ impl Rule {
 
     A string replace function generally replaces one at a time, matches can not overlap. `"sss".replace("ss","test")` results in `"tests", not "testtest" or something weird, even though the last two characters also match.
 
-    However, since the rules for language change transform based on the environment around, I can't do that here. Say we have a sound change rule `CVhC` become `CesC`, and we apply it to the word /tuhtiht/. The result should be /testest/. However, with string replace rules, one would get /testiht/. The second syllable wouldn't match because it was already part of the previous match. This is because only part of the match is replaced.
+    However, since the rules for language change transform based on the environment around the replacement, I can't do that here. Say we have a sound change rule `CVhC` become `CesC`, and we apply it to the word /tuhtiht/. The result should be /testest/. However, with string replace rules, one would get /testiht/. The second syllable wouldn't match because it was already part of the previous match. 
 
     To fix this, the matches are tested starting from each phoneme, on the original word, and the replacements are spliced in after all the matches have been tested.
 
-    There is a possibility of this resulting in overlapping replacements, which will be reported as an error. In theory, I could require matches to start after the replacement, but this can get complicated if there's more than one replacement section in a rule.
+    One complication added to this change is a possibility of this resulting in overlapping replacements if the user defining the rule is not careful. Overlapping replacements will be reported as an error rather than try to guess what the user really meant. 
     */
     fn transform(&self, transformer: &Transformation, word: Word, trace: &TransformationTraceCallback) -> Result<Word,LanguageError> {
 
@@ -292,21 +307,19 @@ impl Rule {
         let mut splices = Vec::new();
 
         loop {
-            // copy the enumerator to store it's current position
-            let mut match_phonemes = phonemes.clone().peekable();
-            let match_splices = self.match_instructions(transformer,current_index,&mut match_phonemes)?;
-            if self.final_ {
-                // if the match enumerator has more, then it wasn't at the final, so this isn't a match if we're expecting a final.
-                if match_phonemes.next().is_some() {
-                    continue;
-                }
+            // clone the enumerator to store it's current position, so the normal iterator isn't incremented.
+            let match_phonemes = phonemes.clone().peekable();
+            let mut state = RuleState::new(&transformer.inventory, match_phonemes, current_index);
+            match (self.sequence)(&mut state) {
+                Ok(true) => {
+                    splices.extend(state.splices);
+                },
+                Ok(false) |
+                Err(RuleStateError::MatchFailed) => (),
+                Err(RuleStateError::Elbie(err)) => return Err(err)
             }
-            splices.extend(match_splices);
-            if self.initial {
-                // it's only possible to match on the first one, so we can just break.
-                break;
-            }
-            // iterate the enumerator, if it's none we're done, otherwise we keep trying to match with the next character
+
+            // iterate the enumerator, if it's none we're done, otherwise we keep trying to match with the next phoneme
             // NOTE: this would return None only if the iteration we just went through was also none. Which means we do an extra
             // loop at the end. But the instructions shouldn't match anything (although there's a small possibility they do if the match
             // was optional) and everything should sort of fall through without having done anything.
@@ -322,7 +335,7 @@ impl Rule {
         // now find all overlaps.
         for window in splices.windows(2) {
             // Using if..let to avoid having to index the element. This should always be true.
-            // It doesn't like `for [prev,next] in splices.windows(2)` because it doesn't handle [_] or [_,_,..]
+            // It doesn't like `for [prev,next] in splices.windows(2)` because it doesn't handle [_] or [_,_,..]. Here's a case where a for loop style construct which filters by match pattern as well would be useful.
             if let [prev,next,..] = window {
                 // end_index is not inclusive: 5 length 1, and 6 length 1 do not intersect.
                 // Also, since it's sorted, I don't have to check if the prev start is greater than next start, because it won't be.
@@ -368,35 +381,6 @@ impl Rule {
 
 }
 
-/* TODO: Macro for building rules and sequences
-
-rule!('^'? instruction,+ '^'?)
-instruction = match ('=>' replacement)
-match = (phoneme | set | sequence) ('+' | '*' | '?')?
-phoneme = '/' ident '/'
-set = '{' ident '}'
-sequence = '(' (phoneme | set | sequence),* ')'
-replacement = '/' ident '/',*
-
-
-rule!(^...) -- specifies initial is true
-rule!(...^) -- specifies final is true
-rule!(^...^) -- initial and final are true
-rule!(match,*) -- list of matches
-rule!(match => replacement,*) -- list of replacements
-match!(/ident/) -- phoneme match
-match!(/ident:ident/) -- inventoried phoneme
-match!({ident:ident}) -- set
-match!(ident) -- sequence
-match!(...+) -- optional is false, repeatable is true
-match!(...*) -- optional is true, repeatable is true
-match!(...?) -- optional is true, repeatable is false
-replacement!(/ident:ident/,*) -- replace with specified phonemes
-replacement!({ident:ident,*} -> {ident:ident,*}) -- replace sets
-replacement!(ident) -- convert_namespace
-
-*/
-
 
 pub struct Transformation {
     inventory: Inventory,
@@ -425,9 +409,10 @@ impl Transformation {
         self.inventory.extend(inventory,name)
     }
 
-    pub fn add_rule(&mut self, rule: Rule) {
-        self.rules.push(rule);
+    pub fn add_rule<Sequence: Fn(&mut RuleState) -> Result<bool,RuleStateError> + 'static>(&mut self, name: &'static str, sequence: Sequence) {
+        self.rules.push(Rule::new(name, sequence));
     }
+
 
     /// Applies transformation rules in order, and returns the final word if successful.
     /// The word has not been validated for any specific language, so this should still be done before reporting the result to the user.
@@ -438,8 +423,6 @@ impl Transformation {
         }
         Ok(transformed)
 
-
     }
-
 
 }
