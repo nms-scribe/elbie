@@ -70,5 +70,5 @@ pub enum ElbieError {
     UnknownTransformationLoader(String)
 }
 
-#[deprecated="Use `ElbieError` instead."]
+#[deprecated(since="0.2.2",note="Use `ElbieError` instead.")]
 pub type LanguageError = ElbieError;
