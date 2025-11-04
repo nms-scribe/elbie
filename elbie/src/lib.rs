@@ -52,6 +52,7 @@ pub mod validation;
 pub mod phoneme_table_builder;
 pub mod language;
 pub mod transformation;
+mod cli_functions;
 pub mod language_cli;
 pub mod transformation_cli;
 #[cfg(test)] mod test;

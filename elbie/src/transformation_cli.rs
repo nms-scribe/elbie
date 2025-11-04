@@ -1,17 +1,9 @@
 use std::collections::HashMap;
-use std::process;
 use crate::errors::ElbieError;
 use crate::transformation::Transformation;
-use crate::validation::ValidationTraceCallback;
-use crate::transformation::TransformationTraceCallback;
 use crate::language::Language;
-use crate::language_cli::validate_word;
-
-pub(crate) enum TransformationOption {
-  Simple,
-  Explain,
-  Trace
-}
+use crate::cli_functions::TransformationOption;
+use crate::cli_functions::transform_words;
 
 pub(crate) enum Command {
     TransformWords(String,String,Vec<String>,TransformationOption), // words to validate, whether to trace
@@ -97,59 +89,6 @@ pub(crate) fn show_usage(environment: &TransformationEnvironment) {
     println!("      same as --trace, but provides detailed explanation of valid phonemes on success, assuming the transformer has a validator.");
     println!("   --help");
     println!("      display this information.");
-}
-
-fn transform_words(transformation: &Transformation, from: &Language, validator: Option<&Language>, words: Vec<String>, option: &TransformationOption) {
-    let mut invalid_found = false;
-
-
-    let validation_trace_cb: Option<&ValidationTraceCallback> = if matches!(option,TransformationOption::Trace) {
-      Some(&|level,message| {
-        /* eat message, no need to report */
-        println!("{}{}",str::repeat(" ",level*2),message);
-      })
-    } else {
-        None
-    };
-
-    let transformation_trace_cb: Option<&TransformationTraceCallback> = if matches!(option,TransformationOption::Trace) {
-        Some(&|message| {
-            println!("{message}")
-        })
-    } else {
-        None
-    };
-
-
-    for word in words {
-        match from.read_word(&word) {
-            Ok(word) => {
-                match transformation.transform(word, transformation_trace_cb) {
-                    Ok(word) => {
-                        if let Some(validator) = validator {
-                            if !validate_word(validator, &word, matches!(option,TransformationOption::Explain), validation_trace_cb) {
-                                invalid_found = true;
-                            }
-                        }
-                        println!("{word}");
-                    },
-                    Err(err) => {
-                        invalid_found = true;
-                        eprintln!("!!!! transformation error: {err}")
-                    },
-                }
-            },
-            Err(err) => {
-                invalid_found = true;
-                eprintln!("!!!! can't read word: {err}")
-            },
-        }
-    }
-    if invalid_found {
-        process::exit(1)
-    }
-
-
 }
 
 type LanguageCreator = Box<dyn Fn() -> Result<Language, ElbieError>>;
