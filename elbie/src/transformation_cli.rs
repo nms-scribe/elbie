@@ -4,6 +4,8 @@ use crate::transformation::Transformation;
 use crate::language::Language;
 use crate::cli_functions::TransformationOption;
 use crate::cli_functions::transform_words;
+use std::path::Path;
+use std::ffi::OsStr;
 
 pub(crate) enum Command {
     TransformWords(String,String,Vec<String>,TransformationOption), // words to validate, whether to trace
@@ -72,8 +74,8 @@ pub(crate) fn parse_args<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(ar
 
 }
 
-pub(crate) fn show_usage(environment: &TransformationEnvironment) {
-    println!("usage: transform [options] <from_language> <to_language> <words>...");
+pub(crate) fn show_usage(program: &str, environment: &TransformationEnvironment) {
+    println!("usage: {program} [options] <from_language> <to_language> <words>...");
     println!();
     println!("available transformations:");
     let mut keys = environment.transformers.keys().collect::<Vec<_>>();
@@ -136,7 +138,11 @@ pub fn run<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHOGRAPH
              Err(err) => eprintln!("!!!! {err}"),
         }
       },
-      Command::ShowUsage => show_usage(environment),
+      Command::ShowUsage => {
+          let exe_name = std::env::current_exe().ok().as_deref().and_then(Path::file_name).map(OsStr::display).as_ref().map(ToString::to_string);
+          let program = exe_name.as_deref().unwrap_or("transform");
+          show_usage(program,environment)
+    },
   }
 
 }

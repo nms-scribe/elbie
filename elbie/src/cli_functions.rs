@@ -11,7 +11,6 @@ use crate::word::Word;
 use crate::transformation::Transformation;
 use crate::transformation::TransformationTraceCallback;
 
-
 pub(crate) enum ValidateOption {
   Simple,
   Explain,
