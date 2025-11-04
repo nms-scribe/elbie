@@ -64,7 +64,7 @@ pub const EMPTY: &str = phoneme::EMPTY;
 #[deprecated(since="0.2.2",note="Use `elbie::phoneme::PHONEME` instead.")]
 pub const PHONEME: &str = phoneme::PHONEME;
 #[deprecated(since="0.2.2",note="Use `elbie::language::Language` instead.")]
-pub type Language<const ORTHOGRAPHIES: usize> = language::Language;
+pub type Language = language::Language;
 #[deprecated(since="0.2.2",note="Use `elbie::phoneme::Phoneme` instead.")]
 pub type Phoneme = phoneme::Phoneme;
 #[deprecated(since="0.2.2",note="Use `elbie::phoneme_table::TableOption` instead.")]

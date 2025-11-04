@@ -3,7 +3,6 @@ use core::fmt::Formatter;
 use core::fmt::Display;
 use crate::phoneme::Phoneme;
 use std::rc::Rc;
-use crate::errors::ElbieError;
 
 #[derive(Debug,Clone)]
 pub struct Word {
@@ -51,17 +50,5 @@ impl From<Vec<Rc<Phoneme>>> for Word {
         Self {
             phonemes
         }
-    }
-}
-
-pub trait WordLoader {
-
-    fn read_word(&self,input: &str) -> Result<Word,ElbieError>;
-
-}
-
-impl WordLoader for Box<dyn WordLoader> {
-    fn read_word(&self,input: &str) -> Result<Word,ElbieError> {
-        self.as_ref().read_word(input)
     }
 }

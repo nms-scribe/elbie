@@ -3,9 +3,8 @@ use std::process;
 use crate::errors::ElbieError;
 use crate::transformation::Transformation;
 use crate::validation::ValidationTraceCallback;
-use crate::word::WordLoader;
-use crate::validation::WordValidator;
 use crate::transformation::TransformationTraceCallback;
+use crate::language::Language;
 
 pub(crate) enum TransformationOption {
   Simple,
@@ -99,7 +98,7 @@ pub(crate) fn show_usage(environment: &TransformationEnvironment) {
     println!("      display this information.");
 }
 
-fn transform_words(transformation: &Transformation, loader: &impl WordLoader, validator: Option<&impl WordValidator>, words: Vec<String>, option: &TransformationOption) {
+fn transform_words(transformation: &Transformation, from: &Language, validator: Option<&Language>, words: Vec<String>, option: &TransformationOption) {
     let mut invalid_found = false;
 
 
@@ -122,7 +121,7 @@ fn transform_words(transformation: &Transformation, loader: &impl WordLoader, va
 
 
     for word in words {
-        match loader.read_word(&word) {
+        match from.read_word(&word) {
             Ok(word) => {
                 match transformation.transform(word, &transformation_trace_cb) {
                     Ok(word) => {
@@ -168,36 +167,35 @@ fn transform_words(transformation: &Transformation, loader: &impl WordLoader, va
 
 }
 
-type WordValidatorCreator = Box<dyn Fn() -> Result<Box<dyn WordValidator>, ElbieError>>;
-type WordLoaderCreator = Box<dyn Fn() -> Result<Box<dyn WordLoader>, ElbieError>>;
+type LanguageCreator = Box<dyn Fn() -> Result<Language, ElbieError>>;
 type TransformerCreator = Box<dyn Fn() -> Result<Transformation, ElbieError>>;
 
 #[derive(Default)]
 pub struct TransformationEnvironment {
-    transformers: HashMap<(&'static str, &'static str),TransformerCreator>,
-    word_loaders: HashMap<&'static str,WordLoaderCreator>,
-    word_validators: HashMap<&'static str,WordValidatorCreator>,
+    transformers: HashMap<(&'static str, &'static str),(TransformerCreator,bool)>,
+    languages: HashMap<&'static str,LanguageCreator>
 }
 
 impl TransformationEnvironment {
 
-    pub fn transformer(&mut self, from: &'static str, to: &'static str, transformer: impl Fn() -> Result<Transformation,ElbieError> + 'static) -> Option<TransformerCreator> {
-        self.transformers.insert((from,to), Box::new(transformer))
+    pub fn transformer(&mut self, from: &'static str, to: &'static str, transformer: impl Fn() -> Result<Transformation,ElbieError> + 'static, validate_result: bool) -> Option<(TransformerCreator,bool)> {
+        self.transformers.insert((from,to), (Box::new(transformer),validate_result))
     }
 
-    pub fn word_loader(&mut self, language: &'static str, loader: impl Fn() -> Result<Box<dyn WordLoader>,ElbieError> + 'static) -> Option<WordLoaderCreator> {
-        self.word_loaders.insert(language, Box::new(loader))
-    }
-
-    pub fn word_validator(&mut self, language: &'static str, loader: impl Fn() -> Result<Box<dyn WordValidator>,ElbieError> + 'static) -> Option<WordValidatorCreator> {
-        self.word_validators.insert(language, Box::new(loader))
+    pub fn language(&mut self, language: &'static str, loader: impl Fn() -> Result<Language,ElbieError> + 'static) -> Option<LanguageCreator> {
+        self.languages.insert(language, Box::new(loader))
     }
 
     fn transform_words(&self, from: &str, to: &str, words: Vec<String>, option: &TransformationOption) -> Result<(),ElbieError> {
-        let transformer = (self.transformers.get(&(from,to)).ok_or_else(|| ElbieError::UnknownTransformation(from.to_owned(),to.to_owned()))?)()?;
-        let loader = (self.word_loaders.get(from).ok_or_else(|| ElbieError::UnknownTransformationLoader(from.to_owned()))?)()?;
+        let (creator,validate_result) = self.transformers.get(&(from,to)).ok_or_else(|| ElbieError::UnknownTransformation(from.to_owned(),to.to_owned()))?;
+        let transformer = (creator)()?;
+        let loader = (self.languages.get(from).ok_or_else(|| ElbieError::UnknownTransformationLoader(from.to_owned()))?)()?;
         // validators don't have to be defined.
-        let validator = self.word_validators.get(to).map(|v| v()).transpose()?;
+        let validator = if *validate_result {
+            self.languages.get(to).map(|v| v()).transpose()?
+        } else {
+            None
+        };
         transform_words(&transformer, &loader, validator.as_ref(), words, option);
         Ok(())
 

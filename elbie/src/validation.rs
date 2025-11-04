@@ -4,7 +4,6 @@ use core::fmt;
 use core::fmt::Formatter;
 use core::fmt::Display;
 use std::rc::Rc;
-use crate::word::Word;
 
 #[derive(Clone)]
 pub enum ValidWordElement {
@@ -40,15 +39,3 @@ impl Display for ValidationTraceMessage<'_> {
 }
 
 pub(crate) type ValidationTraceCallback = dyn Fn(usize, ValidationTraceMessage);
-
-pub trait WordValidator {
-
-    fn check_word(&self,word: &Word, trace: &ValidationTraceCallback) -> Result<Vec<ValidWordElement>,ElbieError>;
-
-}
-
-impl WordValidator for Box<dyn WordValidator> {
-    fn check_word(&self,word: &Word, trace: &ValidationTraceCallback) -> Result<Vec<ValidWordElement>,ElbieError> {
-        self.as_ref().check_word(word, trace)
-    }
-}

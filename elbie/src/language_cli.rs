@@ -8,8 +8,6 @@ use crate::validation::ValidationTraceCallback;
 use crate::grid::Grid;
 use crate::grid::GridRow;
 use crate::grid::GridStyle;
-use crate::word::WordLoader as _;
-use crate::validation::WordValidator as _;
 
 pub(crate) enum ValidateOption {
   Simple,

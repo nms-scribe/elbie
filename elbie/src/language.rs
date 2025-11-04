@@ -40,8 +40,6 @@ use crate::phoneme_table_builder::TableEntry;
 use crate::phonotactics::EnvironmentBranch;
 use crate::phoneme::Phoneme;
 use std::collections::HashMap;
-use crate::word::WordLoader;
-use crate::validation::WordValidator;
 
 
 
@@ -245,6 +243,29 @@ impl Language {
     }
 
 
+    pub(crate) fn read_word(&self,input: &str) -> Result<Word,ElbieError> {
+        // not an efficient algorithm, but it works...
+        let mut phonemes: Vec<Rc<Phoneme>> = self.inventory.phonemes().values().cloned().collect();
+        phonemes.sort_by(sort_phonemes_by_length_descending);
+
+        let mut word: Vec<Rc<Phoneme>> = vec![];
+
+        let mut source = input;
+
+        'outer: while !source.is_empty() {
+            for phoneme in &phonemes {
+                let name = phoneme.name;
+                if let Some(after) = source.strip_prefix(name) {
+                    word.push((*phoneme).clone()); // clone twice because apparently phoneme is a double reference
+                    source = after;
+                    continue 'outer;
+                }
+            }
+            return Err(ElbieError::UnknownPhonemeWhileReading(input.to_owned(),source.to_owned()));
+        }
+
+        Ok(Word::new(&word))
+    }
 
     pub(crate) fn validate_word(&self, environment_name: &'static str,
                             word: &mut Enumerate<Iter<Rc<Phoneme>>>, idx: usize, phoneme: &Rc<Phoneme>,
@@ -363,6 +384,26 @@ impl Language {
 
 
     }
+
+    pub(crate) fn check_word(&self,word: &Word, trace: &ValidationTraceCallback) -> Result<Vec<ValidWordElement>,ElbieError> {
+
+        let mut word = word.phonemes().iter().enumerate();
+        if let Some((idx,phoneme)) = word.next() {
+            if self.inventory.phoneme_is(phoneme, self.initial_phoneme_set)? {
+              let valid = ValidWordElement::Phoneme(idx,phoneme.clone(),self.initial_phoneme_set,self.initial_environment);
+              trace(0,ValidationTraceMessage::FoundValid(&valid));
+              self.validate_word(self.initial_environment, &mut word, idx, phoneme,1,&[valid],trace)
+            } else {
+              let err = ElbieError::IncorrectPhoneme(idx,phoneme.clone(),self.initial_phoneme_set,self.initial_environment);
+              trace(0,ValidationTraceMessage::FoundError(&err));
+              Err(err)
+            }
+        } else {
+            Err(ElbieError::EmptyWord)
+        }
+    }
+
+
 
     pub(crate) fn build_phoneme_grid(&self, master_set: &Bag<Rc<Phoneme>>, table_def: &TableDef, unprinted_phonemes: &mut Option<&mut Bag<Rc<Phoneme>>>) -> Result<Grid,ElbieError> {
 
@@ -568,58 +609,6 @@ impl InventoryLoader for Language {
 
     fn add_exclusion(&mut self, name: &'static str, set: &'static str, exclude_phoneme_strs: &[&'static str]) -> Result<(),ElbieError> {
         self.inventory.add_exclusion(name, set, exclude_phoneme_strs)
-    }
-
-
-}
-
-impl WordLoader for Language {
-
-
-    fn read_word(&self,input: &str) -> Result<Word,ElbieError> {
-        // not an efficient algorithm, but it works...
-        let mut phonemes: Vec<Rc<Phoneme>> = self.inventory.phonemes().values().cloned().collect();
-        phonemes.sort_by(sort_phonemes_by_length_descending);
-
-        let mut word: Vec<Rc<Phoneme>> = vec![];
-
-        let mut source = input;
-
-        'outer: while !source.is_empty() {
-            for phoneme in &phonemes {
-                let name = phoneme.name;
-                if let Some(after) = source.strip_prefix(name) {
-                    word.push((*phoneme).clone()); // clone twice because apparently phoneme is a double reference
-                    source = after;
-                    continue 'outer;
-                }
-            }
-            return Err(ElbieError::UnknownPhonemeWhileReading(input.to_owned(),source.to_owned()));
-        }
-
-        Ok(Word::new(&word))
-    }
-
-}
-
-impl WordValidator for Language {
-
-    fn check_word(&self,word: &Word, trace: &ValidationTraceCallback) -> Result<Vec<ValidWordElement>,ElbieError> {
-
-        let mut word = word.phonemes().iter().enumerate();
-        if let Some((idx,phoneme)) = word.next() {
-            if self.inventory.phoneme_is(phoneme, self.initial_phoneme_set)? {
-              let valid = ValidWordElement::Phoneme(idx,phoneme.clone(),self.initial_phoneme_set,self.initial_environment);
-              trace(0,ValidationTraceMessage::FoundValid(&valid));
-              self.validate_word(self.initial_environment, &mut word, idx, phoneme,1,&[valid],trace)
-            } else {
-              let err = ElbieError::IncorrectPhoneme(idx,phoneme.clone(),self.initial_phoneme_set,self.initial_environment);
-              trace(0,ValidationTraceMessage::FoundError(&err));
-              Err(err)
-            }
-        } else {
-            Err(ElbieError::EmptyWord)
-        }
     }
 
 
