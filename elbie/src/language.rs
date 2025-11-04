@@ -269,7 +269,7 @@ impl Language {
 
     pub(crate) fn validate_word(&self, environment_name: &'static str,
                             word: &mut Enumerate<Iter<Rc<Phoneme>>>, idx: usize, phoneme: &Rc<Phoneme>,
-                            level: usize, validated: &[ValidWordElement], trace: &ValidationTraceCallback) -> Result<Vec<ValidWordElement>,ElbieError> {
+                            level: usize, validated: &[ValidWordElement], trace: Option<&ValidationTraceCallback>) -> Result<Vec<ValidWordElement>,ElbieError> {
         let environment = self.get_environment(environment_name)?;
         let mut validated = validated.to_vec();
 
@@ -278,7 +278,9 @@ impl Language {
 
         macro_rules! trace_error {
           ($error: expr) => {{
-            trace(level,ValidationTraceMessage::FoundError(&$error));
+            if let Some(trace) = trace {
+                trace(level,ValidationTraceMessage::FoundError(&$error));
+            }
             $error
           }};
         }
@@ -297,7 +299,9 @@ impl Language {
         macro_rules! trace_valid {
           ($valid: expr) => {{
             let this_valid = $valid;
-            trace(level,ValidationTraceMessage::FoundValid(&this_valid));
+            if let Some(trace) = trace {
+                trace(level,ValidationTraceMessage::FoundValid(&this_valid));
+            }
             validated.push(this_valid);
           }};
         }
@@ -385,17 +389,21 @@ impl Language {
 
     }
 
-    pub(crate) fn check_word(&self,word: &Word, trace: &ValidationTraceCallback) -> Result<Vec<ValidWordElement>,ElbieError> {
+    pub(crate) fn check_word(&self,word: &Word, trace: Option<&ValidationTraceCallback>) -> Result<Vec<ValidWordElement>,ElbieError> {
 
         let mut word = word.phonemes().iter().enumerate();
         if let Some((idx,phoneme)) = word.next() {
             if self.inventory.phoneme_is(phoneme, self.initial_phoneme_set)? {
               let valid = ValidWordElement::Phoneme(idx,phoneme.clone(),self.initial_phoneme_set,self.initial_environment);
-              trace(0,ValidationTraceMessage::FoundValid(&valid));
+              if let Some(trace) = trace {
+                  trace(0,ValidationTraceMessage::FoundValid(&valid));
+              }
               self.validate_word(self.initial_environment, &mut word, idx, phoneme,1,&[valid],trace)
             } else {
               let err = ElbieError::IncorrectPhoneme(idx,phoneme.clone(),self.initial_phoneme_set,self.initial_environment);
-              trace(0,ValidationTraceMessage::FoundError(&err));
+              if let Some(trace) = trace {
+                  trace(0,ValidationTraceMessage::FoundError(&err));
+              }
               Err(err)
             }
         } else {

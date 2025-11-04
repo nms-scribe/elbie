@@ -5,6 +5,7 @@ use crate::transformation::Transformation;
 use crate::validation::ValidationTraceCallback;
 use crate::transformation::TransformationTraceCallback;
 use crate::language::Language;
+use crate::language_cli::validate_word;
 
 pub(crate) enum TransformationOption {
   Simple,
@@ -102,49 +103,33 @@ fn transform_words(transformation: &Transformation, from: &Language, validator: 
     let mut invalid_found = false;
 
 
-    let validation_trace_cb: Box<ValidationTraceCallback> = if matches!(option,TransformationOption::Trace) {
-      Box::new(|level,message| {
+    let validation_trace_cb: Option<&ValidationTraceCallback> = if matches!(option,TransformationOption::Trace) {
+      Some(&|level,message| {
         /* eat message, no need to report */
         println!("{}{}",str::repeat(" ",level*2),message);
       })
     } else {
-      Box::new(|_,_| {})
+        None
     };
 
-    let transformation_trace_cb: Box<TransformationTraceCallback> = if matches!(option,TransformationOption::Trace) {
-        Box::new(|message| {
+    let transformation_trace_cb: Option<&TransformationTraceCallback> = if matches!(option,TransformationOption::Trace) {
+        Some(&|message| {
             println!("{message}")
         })
     } else {
-        Box::new(|_| {})
+        None
     };
 
 
     for word in words {
         match from.read_word(&word) {
             Ok(word) => {
-                match transformation.transform(word, &transformation_trace_cb) {
+                match transformation.transform(word, transformation_trace_cb) {
                     Ok(word) => {
                         if let Some(validator) = validator {
-                            match validator.check_word(&word, &validation_trace_cb) {
-                                Ok(validated) => {
-                                  if matches!(option,TransformationOption::Explain) {
-                                    for valid in validated {
-                                      println!("{valid}")
-                                    }
-                                  }
-
-                                },
-                                Err(err) => {
-                                    invalid_found = true;
-                                    if matches!(option,TransformationOption::Trace) {
-                                        println!("!!!! invalid word (see trace)")
-                                    } else {
-                                        eprintln!("{err}")
-                                    }
-                                },
+                            if !validate_word(validator, &word, matches!(option,TransformationOption::Explain), validation_trace_cb) {
+                                invalid_found = true;
                             }
-
                         }
                         println!("{word}");
                     },

@@ -301,7 +301,7 @@ impl Rule {
 
     One complication added to this change is a possibility of this resulting in overlapping replacements if the user defining the rule is not careful. Overlapping replacements will be reported as an error rather than try to guess what the user really meant.
     */
-    fn transform(&self, transformer: &Transformation, word: Word, trace: &TransformationTraceCallback) -> Result<Word,ElbieError> {
+    fn transform(&self, transformer: &Transformation, word: Word, trace: Option<&TransformationTraceCallback>) -> Result<Word,ElbieError> {
 
         let mut phonemes = word.phonemes().iter();
         let mut current_index = 0;
@@ -370,11 +370,13 @@ impl Rule {
 
         let transformed_word = Word::from(new_phonemes);
 
-        trace(if transformed {
-            TransformationTraceMessage::MatchedRule(self.name, transformed_word.clone())
-        } else {
-            TransformationTraceMessage::UnmatchedRule(self.name)
-        });
+        if let Some(trace) = trace {
+            trace(if transformed {
+                TransformationTraceMessage::MatchedRule(self.name, transformed_word.clone())
+            } else {
+                TransformationTraceMessage::UnmatchedRule(self.name)
+            });
+        }
 
         Ok(transformed_word)
 
@@ -417,7 +419,7 @@ impl Transformation {
 
     /// Applies transformation rules in order, and returns the final word if successful.
     /// The word has not been validated for any specific language, so this should still be done before reporting the result to the user.
-    pub(crate) fn transform(&self, word: Word, trace: &TransformationTraceCallback) -> Result<Word,ElbieError> {
+    pub(crate) fn transform(&self, word: Word, trace: Option<&TransformationTraceCallback>) -> Result<Word,ElbieError> {
         let mut transformed = word;
         for rule in &self.rules {
             transformed = rule.transform(self, transformed, trace)?

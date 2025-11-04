@@ -8,6 +8,7 @@ use crate::validation::ValidationTraceCallback;
 use crate::grid::Grid;
 use crate::grid::GridRow;
 use crate::grid::GridStyle;
+use crate::word::Word;
 
 pub(crate) enum ValidateOption {
   Simple,
@@ -227,38 +228,20 @@ pub(crate) fn show_phonemes(grid_style: Option<&GridStyle>, language: &Language,
 
 pub(crate) fn validate_words(language: &Language, words: Vec<String>, option: &ValidateOption) {
     let mut invalid_found = false;
+    let trace_cb: Option<&ValidationTraceCallback> = if matches!(option,ValidateOption::Trace) {
+      Some(&|level,message| {
+        /* eat message, no need to report */
+        println!("{}{}",str::repeat(" ",level*2),message);
+      })
+    } else {
+      None
+    };
+
     for word in words {
         match language.read_word(&word) {
             Ok(word) => {
-                let trace_cb: Box<ValidationTraceCallback> = if matches!(option,ValidateOption::Trace) {
-                  Box::new(|level,message| {
-                    /* eat message, no need to report */
-                    println!("{}{}",str::repeat(" ",level*2),message);
-                   })
-                } else {
-                  Box::new(|_,_| {})
-                };
-                match language.check_word(&word,&trace_cb) {
-                    Err(err) => {
-                      invalid_found = true;
-                      if matches!(option,ValidateOption::Trace) {
-                        println!("!!!! invalid word (see trace)");
-                      } else {
-                        println!("{err}");
-                      }
-                    },
-                    Ok(validated) => {
-                      if matches!(option,ValidateOption::Explain) {
-                        for valid in validated {
-                          println!("{valid}")
-                        }
-                      }
-
-                      for orthography in 0..language.orthographies().len() {
-                        print!("{} ",language.spell_word(&word,orthography));
-                      }
-                      println!("{word}");
-                    }
+                if !validate_word(language, &word, matches!(option,ValidateOption::Explain), trace_cb) {
+                    invalid_found = true;
                 }
             },
             Err(err) => {
@@ -269,6 +252,32 @@ pub(crate) fn validate_words(language: &Language, words: Vec<String>, option: &V
     }
     if invalid_found {
       process::exit(1);
+    }
+}
+
+pub(crate) fn validate_word(language: &Language, word: &Word, explain: bool, trace_cb: Option<&ValidationTraceCallback>) -> bool {
+    match language.check_word(&word,trace_cb) {
+        Err(err) => {
+          if trace_cb.is_some() {
+            println!("!!!! invalid word (see trace)");
+          } else {
+            println!("{err}");
+          }
+          false
+        },
+        Ok(validated) => {
+          if explain {
+            for valid in validated {
+              println!("{valid}")
+            }
+          }
+
+          for orthography in 0..language.orthographies().len() {
+            print!("{} ",language.spell_word(&word,orthography));
+          }
+          println!("{word}");
+          true
+        }
     }
 }
 
@@ -288,7 +297,7 @@ pub(crate) fn generate_words(grid_style: Option<&GridStyle>, language: &Language
                 row.push_cell(Cell::content(format!("{word}"),None));
 
                 // the following is a sanity check. It might catch some logic errors, but really it's just GIGO.
-                if let Err(err) = language.check_word(&word,&|_,_| { /* eat message, no need to report */}) {
+                if let Err(err) = language.check_word(&word,None /* eat message, no need to report */) {
                     eprintln!("-- !!!! invalid word: {err}");
                     process::exit(1);
                 }
