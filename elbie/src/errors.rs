@@ -63,7 +63,11 @@ pub enum ElbieError {
 
     // transformation errors
     #[error("Transformation rule '{0}' created an overlapping splice.")]
-    TransformationCreatedOverlappingReplacements(&'static str)
+    TransformationCreatedOverlappingReplacements(&'static str),
+    #[error("No transformation available for '{0}' => '{1}'")]
+    UnknownTransformation(String,String),
+    #[error("No word loader available for '{0}'")]
+    UnknownTransformationLoader(String)
 }
 
 #[deprecated="Use `ElbieError` instead."]

@@ -1,10 +1,9 @@
 use core::fmt;
 use core::iter::Peekable;
-use std::fmt::Display;
-use std::fmt::Formatter;
+use core::fmt::Display;
+use core::fmt::Formatter;
 use std::rc::Rc;
 use core::slice::Iter;
-
 use crate::errors::ElbieError;
 use crate::language::Language;
 use crate::phoneme::Inventory;
@@ -57,7 +56,7 @@ pub struct RuleState<'phonemes> {
 
 impl<'phonemes> RuleState<'phonemes> {
 
-    fn new(inventory: &'phonemes Inventory, phonemes: Peekable<Iter<'phonemes, Rc<Phoneme>>>, word_index: usize) -> Self {
+    const fn new(inventory: &'phonemes Inventory, phonemes: Peekable<Iter<'phonemes, Rc<Phoneme>>>, word_index: usize) -> Self {
         Self {
             inventory,
             phonemes,
@@ -77,7 +76,7 @@ impl RuleState<'_> {
 
     /// Returns true if the next phoneme matches the specified name, or is in a set with that name. The position is not changed. An error will be returned if the name is neither a valid phoneme nor a valid set.
     pub fn peek_is(&mut self, name: &'static str) -> Result<bool,ElbieError> {
-        if let Some(phoneme) = self.phonemes.peek().cloned() {
+        if let Some(phoneme) = self.phonemes.peek().copied() {
             self.phoneme_is(phoneme, name)
         } else {
             Ok(false)
@@ -95,12 +94,13 @@ impl RuleState<'_> {
     }
 
     /// Returns true if the iterator is at the beginning of the word (word_index is 0). The position is not changed.
-    pub fn peek_initial(&self) -> bool {
+    #[must_use]
+    pub const fn peek_initial(&self) -> bool {
         self.word_index == 0
     }
 
     /// If the iterator is at the beginning of the word, returns a match of 0 length, otherwise returns a MatchFailed error.
-    pub fn initial(&mut self) -> Result<usize,RuleStateError> {
+    pub const fn initial(&mut self) -> Result<usize,RuleStateError> {
         if self.peek_initial() {
             Ok(0)
         } else {
@@ -272,10 +272,11 @@ impl RuleState<'_> {
 
 }
 
+type Sequence = Box<dyn Fn(&mut RuleState) -> Result<bool,RuleStateError>>;
 
 pub struct Rule {
     name: &'static str,
-    sequence: Box<dyn Fn(&mut RuleState) -> Result<bool,RuleStateError>>
+    sequence: Sequence
 
 }
 
@@ -367,15 +368,15 @@ impl Rule {
         // push the remaining phonemes, after the last splice, onto the new phonemes.
         new_phonemes.extend(old_phonemes.map(|(_,p)| p));
 
-        let word = Word::from(new_phonemes);
+        let transformed_word = Word::from(new_phonemes);
 
         trace(if transformed {
-            TransformationTraceMessage::MatchedRule(self.name, word.clone())
+            TransformationTraceMessage::MatchedRule(self.name, transformed_word.clone())
         } else {
             TransformationTraceMessage::UnmatchedRule(self.name)
         });
 
-        Ok(word)
+        Ok(transformed_word)
 
     }
 

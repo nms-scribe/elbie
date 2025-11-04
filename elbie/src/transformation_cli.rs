@@ -40,7 +40,7 @@ pub(crate) fn parse_args<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(ar
       };
   }
 
-  while let Some(arg) = args.next() {
+  for arg in args {
     match arg.as_ref() {
       "--explain" => {
         transformation_option = TransformationOption::Explain;
@@ -80,11 +80,13 @@ pub(crate) fn parse_args<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(ar
 
 }
 
-pub(crate) fn show_usage(environment: TransformationEnvironment) {
+pub(crate) fn show_usage(environment: &TransformationEnvironment) {
     println!("usage: transform [options] <from_language> <to_language> <words>...");
     println!();
     println!("available transformations:");
-    for (from,to) in environment.transformers.keys() {
+    let mut keys = environment.transformers.keys().collect::<Vec<_>>();
+    keys.sort();
+    for (from,to) in keys {
         println!("   {from} -> {to}");
     }
     println!();
@@ -166,43 +168,50 @@ fn transform_words(transformation: &Transformation, loader: &impl WordLoader, va
 
 }
 
+type WordValidatorCreator = Box<dyn Fn() -> Result<Box<dyn WordValidator>, ElbieError>>;
+type WordLoaderCreator = Box<dyn Fn() -> Result<Box<dyn WordLoader>, ElbieError>>;
+type TransformerCreator = Box<dyn Fn() -> Result<Transformation, ElbieError>>;
+
 #[derive(Default)]
 pub struct TransformationEnvironment {
-    transformers: HashMap<(&'static str, &'static str),Box<dyn Fn() -> Result<Transformation,ElbieError>>>,
-    word_loaders: HashMap<&'static str,Box<dyn Fn() -> Result<Box<dyn WordLoader>,ElbieError>>>,
-    word_validators: HashMap<&'static str,Box<dyn Fn() -> Result<Box<dyn WordValidator>,ElbieError>>>,
+    transformers: HashMap<(&'static str, &'static str),TransformerCreator>,
+    word_loaders: HashMap<&'static str,WordLoaderCreator>,
+    word_validators: HashMap<&'static str,WordValidatorCreator>,
 }
 
 impl TransformationEnvironment {
 
-    pub fn transformer(&mut self, from: &'static str, to: &'static str, transformer: impl Fn() -> Result<Transformation,ElbieError> + 'static) -> Option<Box<dyn Fn() -> Result<Transformation, ElbieError> + 'static>> {
+    pub fn transformer(&mut self, from: &'static str, to: &'static str, transformer: impl Fn() -> Result<Transformation,ElbieError> + 'static) -> Option<TransformerCreator> {
         self.transformers.insert((from,to), Box::new(transformer))
     }
 
-    pub fn word_loader(&mut self, language: &'static str, loader: impl Fn() -> Result<Box<dyn WordLoader>,ElbieError> + 'static) -> Option<Box<dyn Fn() -> Result<Box<dyn WordLoader>, ElbieError> + 'static>> {
+    pub fn word_loader(&mut self, language: &'static str, loader: impl Fn() -> Result<Box<dyn WordLoader>,ElbieError> + 'static) -> Option<WordLoaderCreator> {
         self.word_loaders.insert(language, Box::new(loader))
     }
 
-    pub fn word_validator(&mut self, language: &'static str, loader: impl Fn() -> Result<Box<dyn WordValidator>,ElbieError> + 'static) -> Option<Box<dyn Fn() -> Result<Box<dyn WordValidator>, ElbieError> + 'static>> {
+    pub fn word_validator(&mut self, language: &'static str, loader: impl Fn() -> Result<Box<dyn WordValidator>,ElbieError> + 'static) -> Option<WordValidatorCreator> {
         self.word_validators.insert(language, Box::new(loader))
     }
 
-    fn expect_transformer(&self, from: &str, to: &str) -> Result<(Transformation, Box<dyn WordLoader>, Option<Box<dyn WordValidator>>),ElbieError> {
-        let transformer = (self.transformers.get(&(from,to)).expect("There is no known transformation for '{from}' to '{to}'"))()?;
-        let loader = (self.word_loaders.get(from).expect("There is no word loader for '{from}'"))()?;
+    fn transform_words(&self, from: &str, to: &str, words: Vec<String>, option: &TransformationOption) -> Result<(),ElbieError> {
+        let transformer = (self.transformers.get(&(from,to)).ok_or_else(|| ElbieError::UnknownTransformation(from.to_owned(),to.to_owned()))?)()?;
+        let loader = (self.word_loaders.get(from).ok_or_else(|| ElbieError::UnknownTransformationLoader(from.to_owned()))?)()?;
+        // validators don't have to be defined.
         let validator = self.word_validators.get(to).map(|v| v()).transpose()?;
-        Ok((transformer,loader,validator))
+        transform_words(&transformer, &loader, validator.as_ref(), words, option);
+        Ok(())
+
     }
 }
 
-pub fn run<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHOGRAPHIES: usize>(args: &mut Args, environment: TransformationEnvironment) {
+pub fn run<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>, const ORTHOGRAPHIES: usize>(args: &mut Args, environment: &TransformationEnvironment) {
   let arguments = parse_args(&mut args.skip(1));
 
   match arguments.command {
       Command::TransformWords(from, to, words, options) => {
-         match environment.expect_transformer(&from,&to) {
-             Ok((transformer,loader,validator)) => transform_words(&transformer,&loader,validator.as_ref(),words,&options),
-             Err(err) => eprintln!("!!! Couldn't initialize transformation: {err}"),
+         match environment.transform_words(&from, &to, words, &options) {
+             Ok(()) => (),
+             Err(err) => eprintln!("!!!! {err}"),
         }
       },
       Command::ShowUsage => show_usage(environment),
