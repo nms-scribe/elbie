@@ -53,8 +53,11 @@ pub mod phoneme_table_builder;
 pub mod language;
 pub mod transformation;
 mod cli_functions;
+#[deprecated(since="0.2.2",note="Use `cli::run_language` instead.")]
 pub mod language_cli;
 pub mod transformation_cli;
+pub mod family;
+pub mod cli;
 #[cfg(test)] mod test;
 
 // Old paths: remove once I'm sure I've fixed all of my languages... Or, maybe just wait until I increase the version number.
@@ -85,7 +88,11 @@ pub type Word = word::Word;
 
 
 
-#[deprecated(since="0.2.2",note="use `elbie::language_cli::run` instead.")]
+#[deprecated(since="0.2.2",note="use `elbie::cli::run_language` instead.")]
 pub fn run_main<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Args, language: Result<language::Language,errors::ElbieError>) {
-    language_cli::run(args, language)
+    // Just a workaround to get past the deprecation
+    match language {
+        Ok(language) => cli::run_language(&args.collect::<Vec<_>>(), language.name(), || Ok(language)),
+        Err(err) => cli::run_language(&args.collect::<Vec<_>>(), "<error>", || Err(err)),
+    }
 }

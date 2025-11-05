@@ -12,6 +12,7 @@ use prettytable::format::TableFormat as PrettyTableFormat;
 use prettytable::Table as PrettyTable;
 use prettytable::Row as PrettyRow;
 use prettytable::Cell as PrettyCell;
+use std::str::FromStr;
 
 
 /*
@@ -204,6 +205,34 @@ pub(crate) enum GridStyle {
     JSON
 }
 
+impl FromStr for GridStyle {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_ref() {
+            "plain" => Ok(GridStyle::Plain),
+            "terminal" => Ok(GridStyle::Terminal { spans: true }),
+            "markdown" => Ok(GridStyle::Markdown),
+            "html" => Ok(GridStyle::HTML { spans: true }),
+            "json" => Ok(GridStyle::JSON),
+            name => Err(format!("Unknown grid style '{name}'."))
+        }
+    }
+}
+
+impl GridStyle {
+
+
+    pub(crate) fn with_no_spans(&self) -> Self {
+        match self {
+            Self::Plain => Self::Plain,
+            Self::Terminal { spans: _  } => Self::Terminal { spans: false },
+            Self::Markdown => Self::Markdown,
+            Self::HTML { spans: _  } => Self::HTML { spans: false },
+            Self::JSON => Self::JSON,
+        }
+    }
+}
 
 pub(crate) enum TableOutput {
     Pretty(PrettyTable),

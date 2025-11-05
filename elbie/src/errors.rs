@@ -66,10 +66,18 @@ pub enum ElbieError {
     // transformation errors
     #[error("Transformation rule '{0}' created an overlapping splice.")]
     TransformationCreatedOverlappingReplacements(&'static str),
+
+    // family errors
+    #[error("Language '{0}' was already added.")]
+    LanguageAlreadyAdded(String),
+    #[error("Transformation for '{0}' to '{1}' was already added.")]
+    TransformationAlreadyAdded(String,String),
+    #[error("Unknown language '{0}'")]
+    UnknownLanguage(String),
     #[error("No transformation available for '{0}' => '{1}'")]
     UnknownTransformation(String,String),
-    #[error("No word loader available for '{0}'")]
-    UnknownTransformationLoader(String)
+    #[error("No default language available.")]
+    NoDefaultLanguage,
 }
 
 #[deprecated(since="0.2.2",note="Use `ElbieError` instead.")]

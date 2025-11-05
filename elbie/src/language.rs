@@ -564,7 +564,7 @@ impl Language {
 
     }
 
-    pub(crate) fn load_lexicon(&self, path: String, primary_orthography: usize) -> Result<Lexicon,Box<dyn Error>> {
+    pub(crate) fn load_lexicon(&self, path: &str, primary_orthography: usize) -> Result<Lexicon,Box<dyn Error>> {
 
 
       let mut reader = Reader::from_path(path)?;

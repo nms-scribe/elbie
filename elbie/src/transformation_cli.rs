@@ -115,7 +115,7 @@ impl TransformationEnvironment {
     fn transform_words(&self, from: &str, to: &str, words: Vec<String>, option: &TransformationOption) -> Result<(),ElbieError> {
         let (creator,validate_result) = self.transformers.get(&(from,to)).ok_or_else(|| ElbieError::UnknownTransformation(from.to_owned(),to.to_owned()))?;
         let transformer = (creator)()?;
-        let loader = (self.languages.get(from).ok_or_else(|| ElbieError::UnknownTransformationLoader(from.to_owned()))?)()?;
+        let loader = (self.languages.get(from).ok_or_else(|| ElbieError::UnknownLanguage(from.to_owned()))?)()?;
         // validators don't have to be defined.
         let validator = if *validate_result {
             self.languages.get(to).map(|v| v()).transpose()?

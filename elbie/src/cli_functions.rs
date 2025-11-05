@@ -84,7 +84,7 @@ pub(crate) fn validate_word(language: &Language, word: &Word, explain: bool, tra
     }
 }
 
-pub(crate) fn validate_words(language: &Language, words: Vec<String>, option: &ValidateOption) {
+pub(crate) fn validate_words(language: &Language, words: &Vec<String>, option: &ValidateOption) {
     let mut invalid_found = false;
     let trace_cb: Option<&ValidationTraceCallback> = if matches!(option,ValidateOption::Trace) {
       Some(&|level,message| {
@@ -152,10 +152,10 @@ pub(crate) fn show_phonemes(grid_style: Option<&GridStyle>, language: &Language,
 
 
 
-pub(crate) fn show_spelling(grid_style: Option<GridStyle>, language: &Language, columns: usize) {
+pub(crate) fn show_spelling(grid_style: Option<&GridStyle>, language: &Language, columns: usize) {
     match language.display_spelling(columns) {
         Ok(grid) => {
-            grid.into_output(&grid_style.unwrap_or(GridStyle::Terminal { spans: false })).print_to_stdout();
+            grid.into_output(grid_style.unwrap_or(&GridStyle::Terminal { spans: false })).print_to_stdout();
         },
         Err(err) => {
             eprintln!("!!! Couldn't display spelling: {err}");
@@ -166,12 +166,12 @@ pub(crate) fn show_spelling(grid_style: Option<GridStyle>, language: &Language, 
 
 
 
-pub(crate) fn format_lexicon(grid_style: Option<GridStyle>, language: &Language, path: String, ortho_index: usize) {
+pub(crate) fn format_lexicon(grid_style: Option<&GridStyle>, language: &Language, path: &str, ortho_index: usize) {
   if ortho_index >= language.orthographies().len() {
         panic!("Language only has {} orthographies.",language.orthographies().len())
   }
 
-  let grid_style = grid_style.unwrap_or(GridStyle::Plain);
+  let grid_style = grid_style.unwrap_or(&GridStyle::Plain);
 
   match language.load_lexicon(path,ortho_index) {
     Ok(lexicon) => {

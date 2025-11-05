@@ -4,7 +4,6 @@ use std::rc::Rc;
 use core::slice::Iter;
 
 use elbie::language::Language;
-use elbie::language_cli;
 use elbie::phoneme::Phoneme;
 use elbie::phoneme::InventoryLoader as _;
 use elbie::errors::ElbieError;
@@ -12,6 +11,8 @@ use elbie::phoneme_table::TableOption;
 use elbie::phoneme::PHONEME;
 use elbie::phonotactics::EnvironmentBranch;
 use elbie::phonotactics::EnvironmentChoice;
+use elbie::cli;
+use elbie::family::Family;
 
 /* FUTURE: Another attempt at making a DSL for this.
 
@@ -390,5 +391,10 @@ fn create_goblin_language() -> Result<Language,ElbieError> {
 }
 
 fn main() {
-  language_cli::run(&mut env::args(),create_goblin_language());
+  // TODO: language_cli::run(&mut env::args(),create_goblin_language());
+  cli::run_family(&env::args().skip(1).collect::<Vec<_>>(),|| {
+      let mut family = Family::default();
+      family.default_language(GOBLIN, create_goblin_language)?;
+      Ok(family)
+  })
 }
