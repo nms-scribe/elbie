@@ -55,7 +55,6 @@ pub mod transformation;
 mod cli_functions;
 #[deprecated(since="0.2.2",note="Use `cli::run_language` instead.")]
 pub mod language_cli;
-pub mod transformation_cli;
 pub mod family;
 pub mod cli;
 #[cfg(test)] mod test;
@@ -87,12 +86,8 @@ pub type EnvironmentChoice = phonotactics::EnvironmentChoice;
 pub type Word = word::Word;
 
 
-
-#[deprecated(since="0.2.2",note="use `elbie::cli::run_language` instead.")]
+#[deprecated(since="0.2.2",note="use `elbie::cli::run_language` instead (includes changes to arguments).")]
 pub fn run_main<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Args, language: Result<language::Language,errors::ElbieError>) {
-    // Just a workaround to get past the deprecation
-    match language {
-        Ok(language) => cli::run_language(&args.collect::<Vec<_>>(), language.name(), || Ok(language)),
-        Err(err) => cli::run_language(&args.collect::<Vec<_>>(), "<error>", || Err(err)),
-    }
+    #[expect(deprecated)]
+    language_cli::run(args, language);
 }

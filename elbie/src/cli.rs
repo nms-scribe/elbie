@@ -15,7 +15,6 @@ use crate::language::Language;
 use crate::cli_functions::transform_words;
 use crate::cli_functions::TransformationOption;
 
-// TODO: I would no longer need the transformation_cli, since I need a family to do transformations.
 // TODO: Test transformations with a new goblin to hobgoblin language transformation
 
 // Gumdrop kind of makes showing usage difficult. The only way it works is if you have a --help flag on each command, and then only if it's discovered in `parse_args_or_exit`. And I'm not calling that because I want to be able to supply my own arguments. I would prefer to have a help command that takes an optional command name parameter anyway.
