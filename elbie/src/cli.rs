@@ -12,15 +12,13 @@ use gumdrop::Options;
 use std::process;
 use crate::family::Family;
 use crate::language::Language;
+use crate::cli_functions::transform_words;
+use crate::cli_functions::TransformationOption;
 
-// TODO: Add a combined Trace/Explain option to validation and transformation
-// TODO: Add a transformation command to this unit which works with the family. Options for command:
-// - target language
-// - trace and explain
-// - turn off validation (this might be another option like trace and explain)
 // TODO: I would no longer need the transformation_cli, since I need a family to do transformations.
+// TODO: Test transformations with a new goblin to hobgoblin language transformation
 
-// Gumdrop kind of makes showing this difficult. The only way it works is if you have a --help flag on each command. I would prefer to have a help command that takes an optional command name parameter.
+// Gumdrop kind of makes showing usage difficult. The only way it works is if you have a --help flag on each command, and then only if it's discovered in `parse_args_or_exit`. And I'm not calling that because I want to be able to supply my own arguments. I would prefer to have a help command that takes an optional command name parameter anyway.
 fn show_usage<Command: Options>(program: &str, selected_command: Option<&str>) {
     let sub_commands = Command::command_list();
     match (selected_command,sub_commands) {
@@ -30,6 +28,8 @@ fn show_usage<Command: Options>(program: &str, selected_command: Option<&str>) {
         (Some(subcommand), Some(_)) => println!("usage: {program} {subcommand} [ARGUMENTS] [COMMAND]"),
     }
     println!();
+    // FUTURE: It would be nice to have some way to control this formatting as well.
+    // FUTURE: Also, to be able to tell if the Options have positional, required, or optional arguments so I can change the usage header above.
     println!("{}",Command::usage());
     println!();
     if let Some(commands) = sub_commands {
@@ -45,15 +45,16 @@ trait DoIt {
 }
 
 #[derive(Options)]
+/// Generates words for a language. Options allow specifying the count and the output format.
 pub struct GenerateWords {
 
     #[options(default="1")]
-    /// The number of words to generate, default is 1.
+    /// The number of words to generate.
     count: usize,
 
     #[options(default="plain")]
     #[options(no_short)]
-    /// Changes the format of grid output. Default is \"plain\".
+    /// Changes the format of grid output.
     format: GridStyle,
 
     #[options(no_short)]
@@ -73,6 +74,8 @@ impl DoIt for GenerateWords {
 
         let mut family = family()?;
 
+        family.load_language_or_default(language.as_deref())?;
+
         let language = family.get_language_or_default(language.as_deref())?;
 
         generate_words(Some(&grid_style), &language, self.count);
@@ -82,6 +85,7 @@ impl DoIt for GenerateWords {
 }
 
 #[derive(Options)]
+/// Validate a list of words for a language, verifying that it would be possible to generate them. Pass a list of words to process at the end of the command. Options allow getting more detail about the validation.
 pub struct ValidateWords {
 
     #[options(no_short)]
@@ -104,16 +108,16 @@ impl DoIt for ValidateWords {
 
         let mut family = family()?;
 
+        family.load_language_or_default(language.as_deref())?;
+
         let language = family.get_language_or_default(language.as_deref())?;
 
 
-        // TODO: I think there should be some way of mixing explain and trace together. But also good to have them separate if you only want one.
-        validate_words(language, &self.words, &if self.explain {
-            ValidateOption::Explain
-        } else if self.trace {
-            ValidateOption::Trace
-        } else {
-            ValidateOption::Simple
+        validate_words(language, &self.words, &match (self.explain,self.trace)  {
+            (true, true) => ValidateOption::ExplainAndTrace,
+            (true, false) => ValidateOption::Explain,
+            (false, true) => ValidateOption::Trace,
+            (false, false) => ValidateOption::Simple,
         });
 
         Ok(())
@@ -122,6 +126,7 @@ impl DoIt for ValidateWords {
 }
 
 #[derive(Options)]
+/// Prints out tables of phonemes for a language. Options allow limiting to one table, and controlling the output format.
 pub struct ShowPhonemes {
 
     #[options(no_short)]
@@ -130,7 +135,7 @@ pub struct ShowPhonemes {
 
     #[options(default="terminal")]
     #[options(no_short)]
-    /// Changes the format of grid output. Default is \"terminal\".
+    /// Changes the format of grid output.
     format: GridStyle,
 
     #[options(no_short)]
@@ -151,6 +156,8 @@ impl DoIt for ShowPhonemes {
 
         let mut family = family()?;
 
+        family.load_language_or_default(language.as_deref())?;
+
         let language = family.get_language_or_default(language.as_deref())?;
 
         show_phonemes(Some(&grid_style), &language, self.table.as_ref());
@@ -160,6 +167,7 @@ impl DoIt for ShowPhonemes {
 }
 
 #[derive(Options)]
+/// Prints out a table of orthographies for a language. Options include controlling the output format and breaking the table into extra columns.
 pub struct ShowSpelling {
 
     #[options(no_short)]
@@ -169,7 +177,7 @@ pub struct ShowSpelling {
 
     #[options(default="terminal")]
     #[options(no_short)]
-    /// Changes the format of grid output. Default is \"terminal\".
+    /// Changes the format of grid output.
     format: GridStyle,
 
     #[options(no_short)]
@@ -189,6 +197,8 @@ impl DoIt for ShowSpelling {
 
         let mut family = family()?;
 
+        family.load_language_or_default(language.as_deref())?;
+
         let language = family.get_language_or_default(language.as_deref())?;
 
         // TODO: These things should now be able to throw errors, maybe?
@@ -199,6 +209,7 @@ impl DoIt for ShowSpelling {
 }
 
 #[derive(Options)]
+/// Loads a lexicon of words in CSV format for a language, validates them and prints out a formatted listing. Requires a file name to load and an orthography index to spell the main entries. Options allow controlling the output format.
 pub struct FormatLexicon {
 
 
@@ -207,10 +218,10 @@ pub struct FormatLexicon {
     file: String,
 
     #[options(required)]
-    /// Orthography index to use for generating main entries.
+    /// Orthography index (0-based) to use for generating main entries.
     spelling: usize,
 
-    /// Changes the format of grid output. Default is \"plain\".
+    /// Changes the format of grid output.
     #[options(default="plain")]
     #[options(no_short)]
     format: GridStyle,
@@ -231,6 +242,8 @@ impl DoIt for FormatLexicon {
 
         let mut family = family()?;
 
+        family.load_language_or_default(language.as_deref())?;
+
         let language = family.get_language_or_default(language.as_deref())?;
 
         format_lexicon(Some(grid_style), language, &self.file, self.spelling);
@@ -242,25 +255,116 @@ impl DoIt for FormatLexicon {
 
 }
 
-
 #[derive(Options)]
-pub struct ShowDefault {
+pub struct Transform {
 
+    #[options(required)]
+    /// The target language for transformation. Used to lookup the transformation even if dont_validate is true.
+    target: String,
+
+    #[options(no_short)]
+    /// Requests that the words not be validated after transformation.
+    dont_validate: bool,
+
+    #[options(no_short)]
+    /// Traces the validation through all phonotactic branches
+    trace: bool,
+
+    #[options(no_short)]
+    /// Provides detailed explanation of valid phonemes on success.
+    explain: bool,
+
+    #[options(free)]
+    /// Words to validate
+    words: Vec<String>
 
 }
 
-impl DoIt for ShowDefault {
+impl DoIt for Transform {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),ElbieError> {
+
+        let mut family = family()?;
+
+
+        let source_language = language.or_else(|| family.default_language_name().map(ToOwned::to_owned)).ok_or_else(|| ElbieError::NoDefaultLanguage)?;
+
+        // in theory the transformation should take care of loading any languages it needs to get phonemes from. If it doesn't, they'll get an error pretty quickly.
+        family.load_transformation(&source_language, &self.target)?;
+
+        let source_language = family.get_language(&source_language)?;
+
+        let transformation = family.get_transformation(source_language.name(),&self.target)?;
+
+        let target_language = if self.dont_validate || !transformation.validate() {
+            None
+        } else {
+            Some(family.get_language(&self.target)?)
+        };
+
+        transform_words(&transformation,source_language,target_language,&self.words,&match (self.explain,self.trace)  {
+            (true, true) => TransformationOption::ExplainAndTrace,
+            (true, false) => TransformationOption::Explain,
+            (false, true) => TransformationOption::Trace,
+            (false, false) => TransformationOption::Simple,
+        });
+
+        Ok(())
+
+
+
+    }
+}
+
+#[derive(Options)]
+/// Print the languages and transformations available in the tool.
+pub struct ShowInformation {
+}
+
+impl DoIt for ShowInformation {
 
     fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, _: Option<String>) -> Result<(),ElbieError> {
 
         let family = family()?;
 
-        if let Some(default) = family.default_language_name() {
-            println!("{default}");
-            Ok(())
-        } else {
-            Err(ElbieError::NoDefaultLanguage)
+
+        let mut languages = family.language_keys();
+        if !languages.is_empty() {
+            languages.sort();
+            let default = if languages.len() > 1 {
+                family.default_language_name()
+            } else {
+                // we might have a default name, but there's no reason to mark anything as default if there's only one.
+                None
+            };
+            if default.is_some() {
+                println!("LANGUAGES: (* = default)")
+            } else {
+                println!("LANGUAGES:");
+            }
+            for language in &languages {
+                if Some(language.as_str()) == default {
+                    println!("{language} *")
+                } else {
+                    println!("{language}")
+                }
+            }
         }
+
+        let mut transformations = family.transformation_keys();
+        if !transformations.is_empty() {
+            transformations.sort();
+            if !languages.is_empty() {
+                // need a space
+                println!();
+            }
+            println!("TRANSFORMATIONS:");
+            for (from,to) in transformations {
+                println!("{from} 🡺 {to}")
+            }
+        }
+
+
+        Ok(())
 
     }
 
@@ -268,6 +372,7 @@ impl DoIt for ShowDefault {
 }
 
 #[derive(Options)]
+/// Print out this information. Use 'help COMMAND' to get help on a specific command.
 pub struct FamilyShowUsage {
 
     #[options(free)]
@@ -290,8 +395,10 @@ impl DoIt for FamilyShowUsage {
                 "phonemes" => show_usage::<ShowPhonemes>(program, Some(&command)),
                 "spelling" => show_usage::<ShowSpelling>(program, Some(&command)),
                 "lexicon" => show_usage::<FormatLexicon>(program, Some(&command)),
+                "transform" => show_usage::<Transform>(program, Some(&command)),
+                "information" => show_usage::<ShowInformation>(program, Some(&command)),
                 "help" => show_usage::<FamilyShowUsage>(program, Some(&command)),
-                "default" => show_usage::<ShowDefault>(program, Some(&command)),
+                "default" => show_usage::<ShowInformation>(program, Some(&command)),
                 command => {
                     eprintln!("Unknown command '{command}'");
                     eprintln!();
@@ -319,8 +426,10 @@ pub enum FamilyCommand {
     Spelling(ShowSpelling),
     /// Loads a lexicon of words in CSV format for a language, validates them and prints out a formatted listing.
     Lexicon(FormatLexicon),
-    /// Print the default language name.
-    Default(ShowDefault),
+    /// Transforms words from a source language to another.
+    Transform(Transform),
+    /// Print the information about the available languages.
+    Information(ShowInformation),
     /// Print out this information. Use 'help COMMAND' to get help on a specific command.
     Help(FamilyShowUsage),
 }
@@ -341,9 +450,9 @@ impl DoIt for FamilyCommand {
             Self::Phonemes(command) => command.doit(family,language),
             Self::Spelling(command) => command.doit(family,language),
             Self::Lexicon(command) => command.doit(family,language),
-            Self::Default(command) => command.doit(family,language),
+            Self::Transform(command) => command.doit(family,language),
+            Self::Information(command) => command.doit(family,language),
             Self::Help(command) => command.doit(family,language),
-
         }
 
     }
@@ -359,9 +468,9 @@ pub struct FamilyArguments {
     /// prints out the text '<!-- Content auto-generated by {{0}} -->' before any output, where '{{0}}' is replaced by the specified text. Also see `--comment`.
     creator: Option<String>,
 
-    /// The source language for commands. Use default command to print default language.
-    // NOTE: this is not under the commands, so that I can create a simplified "one language" version of this tool to replace language_cli, but that still uses the same code.
-    // To do that, I just have to have a different Arguments object and call the run_command below.
+    /// The source language for commands. If the tool has more than one language, and does not have a default language (see 'information' command), this option will be required for some commands.
+    // NOTE: this is not under the commands, so that I can reuse the commands for the LanguageArguments object, where the language doesn't need to be specified.
+    // FUTURE: If there were some way of "requiring" this based on the command chosen, that would be great. Or adding the required commands to the option based on generic type parameters or something. At best I could do macros now, but that gets icky quickly for lots of commands with different gumdrop options.
     language: Option<String>,
 
     #[options(command)]
@@ -371,6 +480,7 @@ pub struct FamilyArguments {
 
 
 #[derive(Options)]
+/// Print out this information. Use 'help COMMAND' to get help on a specific command.
 pub struct LanguageShowUsage {
 
     #[options(free)]
@@ -411,7 +521,7 @@ impl DoIt for LanguageShowUsage {
 
 #[derive(Options)]
 pub enum LanguageCommand {
-    /// Generates a words for a language.
+    /// Generates words for a language.
     Generate(GenerateWords),
     /// Validate a list of words for a language, verifying that it would be possible to generate them.
     Validate(ValidateWords),

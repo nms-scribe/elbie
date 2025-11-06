@@ -74,8 +74,12 @@ pub enum ElbieError {
     TransformationAlreadyAdded(String,String),
     #[error("Unknown language '{0}'")]
     UnknownLanguage(String),
+    #[error("Language '{0}' needs to be loaded before it can be accessed.")]
+    LanguageNotLoaded(String),
     #[error("No transformation available for '{0}' => '{1}'")]
     UnknownTransformation(String,String),
+    #[error("Transformation for '{0}' => '{1}' needs to be loaded before it can be accessed.")]
+    TransformationNotLoaded(String,String),
     #[error("No default language available.")]
     NoDefaultLanguage,
 }

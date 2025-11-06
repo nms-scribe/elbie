@@ -122,7 +122,7 @@ impl TransformationEnvironment {
         } else {
             None
         };
-        transform_words(&transformer, &loader, validator.as_ref(), words, option);
+        transform_words(&transformer, &loader, validator.as_ref(), &words, option);
         Ok(())
 
     }

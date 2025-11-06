@@ -14,14 +14,16 @@ use crate::transformation::TransformationTraceCallback;
 pub(crate) enum ValidateOption {
   Simple,
   Explain,
-  Trace
+  Trace,
+  ExplainAndTrace
 }
 
 
 pub(crate) enum TransformationOption {
   Simple,
   Explain,
-  Trace
+  Trace,
+  ExplainAndTrace
 }
 
 
@@ -86,7 +88,7 @@ pub(crate) fn validate_word(language: &Language, word: &Word, explain: bool, tra
 
 pub(crate) fn validate_words(language: &Language, words: &Vec<String>, option: &ValidateOption) {
     let mut invalid_found = false;
-    let trace_cb: Option<&ValidationTraceCallback> = if matches!(option,ValidateOption::Trace) {
+    let trace_cb: Option<&ValidationTraceCallback> = if matches!(option,ValidateOption::Trace | ValidateOption::ExplainAndTrace) {
       Some(&|level,message| {
         /* eat message, no need to report */
         println!("{}{}",str::repeat(" ",level*2),message);
@@ -98,7 +100,7 @@ pub(crate) fn validate_words(language: &Language, words: &Vec<String>, option: &
     for word in words {
         match language.read_word(&word) {
             Ok(word) => {
-                if !validate_word(language, &word, matches!(option,ValidateOption::Explain), trace_cb) {
+                if !validate_word(language, &word, matches!(option,ValidateOption::Explain | ValidateOption::ExplainAndTrace), trace_cb) {
                     invalid_found = true;
                 }
             },
@@ -188,11 +190,11 @@ pub(crate) fn format_lexicon(grid_style: Option<&GridStyle>, language: &Language
 
 
 
-pub(crate) fn transform_words(transformation: &Transformation, from: &Language, validator: Option<&Language>, words: Vec<String>, option: &TransformationOption) {
+pub(crate) fn transform_words(transformation: &Transformation, from: &Language, validator: Option<&Language>, words: &Vec<String>, option: &TransformationOption) {
     let mut invalid_found = false;
 
 
-    let validation_trace_cb: Option<&ValidationTraceCallback> = if matches!(option,TransformationOption::Trace) {
+    let validation_trace_cb: Option<&ValidationTraceCallback> = if matches!(option,TransformationOption::Trace | TransformationOption::ExplainAndTrace) {
       Some(&|level,message| {
         /* eat message, no need to report */
         println!("{}{}",str::repeat(" ",level*2),message);
@@ -201,7 +203,7 @@ pub(crate) fn transform_words(transformation: &Transformation, from: &Language, 
         None
     };
 
-    let transformation_trace_cb: Option<&TransformationTraceCallback> = if matches!(option,TransformationOption::Trace) {
+    let transformation_trace_cb: Option<&TransformationTraceCallback> = if matches!(option,TransformationOption::Trace | TransformationOption::ExplainAndTrace) {
         Some(&|message| {
             println!("{message}")
         })
@@ -216,7 +218,7 @@ pub(crate) fn transform_words(transformation: &Transformation, from: &Language, 
                 match transformation.transform(word, transformation_trace_cb) {
                     Ok(word) => {
                         if let Some(validator) = validator {
-                            if !validate_word(validator, &word, matches!(option,TransformationOption::Explain), validation_trace_cb) {
+                            if !validate_word(validator, &word, matches!(option,TransformationOption::Explain | TransformationOption::ExplainAndTrace), validation_trace_cb) {
                                 invalid_found = true;
                             }
                         }

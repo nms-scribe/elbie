@@ -388,6 +388,7 @@ impl Rule {
 pub struct Transformation {
     inventory: Inventory,
     rules: Vec<Rule>,
+    validate: bool,
 }
 
 impl Transformation {
@@ -398,10 +399,19 @@ impl Transformation {
         let rules = Vec::new();
         let mut result = Self {
             inventory,
-            rules
+            rules,
+            validate: true
         };
         result.add_language(source);
         result
+    }
+
+    pub fn set_validate(&mut self, value: bool) {
+        self.validate = value;
+    }
+
+    pub fn validate(&self) -> bool {
+        self.validate
     }
 
     pub fn add_language(&mut self, source: &Language) {

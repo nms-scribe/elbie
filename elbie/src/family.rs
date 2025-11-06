@@ -2,29 +2,18 @@ use crate::language::Language;
 use crate::errors::ElbieError;
 use crate::transformation::Transformation;
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 
 
 type LanguageCreator = Box<dyn FnOnce() -> Result<Language,ElbieError>>;
 type TransformationCreator = Box<dyn FnOnce(&mut Family) -> Result<Transformation,ElbieError>>;
-
-struct TransformationCreatorEntry {
-    creator: TransformationCreator,
-    validate: bool
-}
-
-struct TransformationEntry {
-    transformation: Transformation,
-    validate: bool
-}
 
 #[derive(Default)]
 pub struct Family {
     default_language: Option<String>,
     delayed_languages: HashMap<String,LanguageCreator>,
     languages: HashMap<String,Language>,
-    delayed_transformations: HashMap<(String,String),TransformationCreatorEntry>,
-    transformations: HashMap<(String,String),TransformationEntry>
+    delayed_transformations: HashMap<(String,String),TransformationCreator>,
+    transformations: HashMap<(String,String),Transformation>
 }
 
 impl Family {
@@ -36,7 +25,15 @@ impl Family {
     }
 
     pub(crate) fn default_language_name(&self) -> Option<&str> {
-        self.default_language.as_deref()
+        if let Some(default) = &self.default_language {
+            Some(default.as_str())
+        } else if (self.delayed_languages.len() == 1) && self.languages.is_empty() {
+            self.delayed_languages.keys().collect::<Vec<_>>().first().copied().map(String::as_str)
+        } else if (self.languages.len() == 1) && self.delayed_languages.is_empty() {
+            self.languages.keys().collect::<Vec<_>>().first().copied().map(String::as_str)
+        } else {
+            None
+        }
     }
 
     pub fn language<Creator: FnOnce() -> Result<Language,ElbieError> + 'static>(&mut self, name: &'static str, creator: Creator) -> Result<(),ElbieError> {
@@ -46,35 +43,80 @@ impl Family {
         }
     }
 
-    pub fn transformation<Creator: FnOnce(&mut Family) -> Result<Transformation,ElbieError> + 'static>(&mut self, from: &'static str, to: &'static str, creator: Creator, validate: bool) -> Result<(),ElbieError> {
-        match self.delayed_transformations.insert((from.to_owned(),to.to_owned()), TransformationCreatorEntry {
-            creator: Box::new(creator),
-            validate
-        }) {
+    pub fn transformation<Creator: FnOnce(&mut Family) -> Result<Transformation,ElbieError> + 'static>(&mut self, from: &'static str, to: &'static str, creator: Creator) -> Result<(),ElbieError> {
+        match self.delayed_transformations.insert((from.to_owned(),to.to_owned()), Box::new(creator)) {
             Some(_) => Err(ElbieError::TransformationAlreadyAdded(from.to_owned(),to.to_owned())),
             None => Ok(()),
         }
     }
 
-    // needs to be pub because the transformation creator can use it to access languages.
-    pub fn get_language(&mut self, name: &str) -> Result<&Language,ElbieError> {
+    pub(crate) fn language_keys(&self) -> Vec<String> {
+        self.delayed_languages.keys().chain(self.languages.keys()).cloned().collect()
+    }
 
-        let language = match self.languages.entry(name.to_owned()) {
-            // Why 'into_mut'? 1) `get` tells me that I can not return value referencing local variable entry. 2) the next branch of the match returns &mut anyway...
-            Entry::Occupied(entry) => entry.into_mut(),
-            Entry::Vacant(entry) => {
-                let creator = self.delayed_languages.remove(name).ok_or_else(|| ElbieError::UnknownLanguage(name.to_owned()))?;
-                let language = (creator)()?;
-                entry.insert(language)
-            }
-        };
+    pub(crate) fn transformation_keys(&self) -> Vec<(String,String)> {
+        self.delayed_transformations.keys().chain(self.transformations.keys()).cloned().collect()
+    }
 
-        Ok(language)
+    // I originally tried to do this automatically in the get_language, but because of the mutable borrow, I could only get and keep one language
+    // at a time, which became a problem with transformations, which need two languages. There may be better ways to solve this, but for now
+    // it's pretty clear if the programmer fails to load, because they'll get a NotLoaded error.
+    pub fn load_language(&mut self, name: &str) -> Result<(),ElbieError> {
+
+        if self.languages.contains_key(name) {
+            Ok(())
+        } else if let Some(creator) = self.delayed_languages.remove(name) {
+            let language = (creator)()?;
+            _ = self.languages.insert(name.to_owned(), language);
+            Ok(())
+        } else {
+            Err(ElbieError::UnknownLanguage(name.to_owned()))
+        }
 
     }
 
-    pub fn get_language_or_default(&mut self, name: Option<&str>) -> Result<&Language,ElbieError> {
-        let name = name.map(ToOwned::to_owned).or_else(|| self.default_language.clone());
+    pub fn load_language_or_default(&mut self, name: Option<&str>) -> Result<(),ElbieError> {
+        let name = name.or_else(|| self.default_language_name()).map(ToOwned::to_owned);
+        if let Some(name) = name {
+            self.load_language(&name)
+        } else {
+            Err(ElbieError::NoDefaultLanguage)
+        }
+    }
+
+    pub(crate) fn load_transformation(&mut self, from: &str, to: &str) -> Result<(),ElbieError> {
+
+        let key = (from.to_owned(),to.to_owned());
+        if self.transformations.contains_key(&key) {
+            Ok(())
+        } else if let Some(creator) = self.delayed_transformations.remove(&key) {
+            let transformation = (creator)(self)?;
+            _ = self.transformations.insert(key.clone(), transformation);
+
+            Ok(())
+        } else {
+            Err(ElbieError::UnknownTransformation(key.0,key.1))
+        }
+
+    }
+
+
+    // needs to be pub because the transformation creator can use it to access languages.
+    pub fn get_language(&self, name: &str) -> Result<&Language,ElbieError> {
+
+        match self.languages.get(name) {
+            Some(language) => Ok(language),
+            None => if self.delayed_languages.contains_key(name) {
+                Err(ElbieError::LanguageNotLoaded(name.to_owned()))
+            } else {
+                Err(ElbieError::UnknownLanguage(name.to_owned()))
+            },
+        }
+
+    }
+
+    pub(crate) fn get_language_or_default(&self, name: Option<&str>) -> Result<&Language,ElbieError> {
+        let name = name.or_else(|| self.default_language_name()).map(ToOwned::to_owned);
         if let Some(name) = name {
             self.get_language(&name)
         } else {
@@ -82,28 +124,17 @@ impl Family {
         }
     }
 
-    fn get_transformation(&mut self, from: &'static str, to: &'static str) -> Result<&TransformationEntry,ElbieError> {
+    pub(crate) fn get_transformation(&self, from: &str, to: &str) -> Result<&Transformation,ElbieError> {
 
         let key = (from.to_owned(),to.to_owned());
-        // Although the method used in get_language seems to be preferred, I can't do that here. The issue is getting a second mutable borrowing of self
-        // in the closure that creates the transformation. Because the transformer creator needs to access all of the required languages to fill the
-        // phonemes. The process I'm using below works because once it's created, it's also removed from the delayed_transformations, which means I
-        // won't be creating it twice. If it's already created, this is just a quick check before getting the created one.
-        if let Some(delayed) = self.delayed_transformations.remove(&key) {
-            let TransformationCreatorEntry {
-                creator,
-                validate,
-            } = delayed;
-            let transformation = (creator)(self)?;
-            _ = self.transformations.insert(key.clone(), TransformationEntry {
-                transformation,
-                validate,
-            });
+        match self.transformations.get(&key) {
+            Some(transformation) => Ok(transformation),
+            None => if self.delayed_transformations.contains_key(&key) {
+                Err(ElbieError::TransformationNotLoaded(from.to_owned(), to.to_owned()))
+            } else {
+                Err(ElbieError::UnknownTransformation(from.to_owned(), to.to_owned()))
+            }
         }
-
-        let entry = self.transformations.get(&key).ok_or_else(|| ElbieError::UnknownTransformation(from.to_owned(), to.to_owned()))?;
-
-        Ok(entry)
 
     }
 
