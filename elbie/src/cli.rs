@@ -17,7 +17,7 @@ use crate::cli_functions::TransformationOption;
 use std::error::Error;
 use crate::cli_functions::read_words;
 
-// TODO: Test transformations with a new goblin to hobgoblin language transformation. One thing I'm really wondering about is whether I will need namespaces after all.
+// TODO: Need some switch options for the rules. Also, could I have reference entities so I can go like rule.opt.switch? rule.opt.is, etc... Makes it much easier to repeat functions.
 
 // Gumdrop kind of makes showing usage difficult. The only way it works is if you have a --help flag on each command, and then only if it's discovered in `parse_args_or_exit`. And I'm not calling that because I want to be able to supply my own arguments. I would prefer to have a help command that takes an optional command name parameter anyway.
 fn show_usage<Command: Options>(program: &str, selected_command: Option<&str>) {

@@ -305,19 +305,18 @@ pub(crate) mod to_hobgoblin {
 
         transformation.add_rule("aspirated to affricate", |rule| {
             // NOTE: This is one way to do a choice, but more complicated choices may want to use if...then
-            _ = rule.opt_repl(phonemes::VHEE,&[PFA])?;
-            _ = rule.opt_repl(phonemes::ZHEE,&[TSA])?;
-            _ = rule.opt_repl(phonemes::GHHEE,&[KXA])?;
+            _ = rule.opt_repl(phonemes::VHEE,&[PFA])? ||
+            rule.opt_repl(phonemes::ZHEE,&[TSA])? ||
+            rule.opt_repl(phonemes::GHHEE,&[KXA])?;
 
             Ok(true)
         });
 
         transformation.add_rule("palatalize and break affricates", |rule| {
-            if rule.opt_repl(PFA, &[phonemes::P])? > 0 {
-            } else if rule.opt_repl(TSA, &[phonemes::T,phonemes::ESH])? > 0 {
-            } else if rule.opt_repl(KXA, &[phonemes::K,phonemes::ESH])? > 0 {
-
-            }
+            _ = rule.opt_repl(PFA, &[phonemes::P])? ||
+            rule.opt_repl(TSA, &[phonemes::T,phonemes::ESH])? ||
+            rule.opt_repl(KXA, &[phonemes::K,phonemes::ESH])? ||
+            return Ok(false);
 
             // only before front vowels...
             _ = rule.is(goblin::FRONT)?;
@@ -330,9 +329,9 @@ pub(crate) mod to_hobgoblin {
 
             _ = rule.is(goblin::FRONT)?;
 
-            if rule.opt_repl(phonemes::EHK, &[phonemes::ESH,phonemes::K])? > 0 {
-            } else if rule.opt_repl(phonemes::EHG, &[EZH,phonemes::G])? > 0 {
-            }
+            _ = rule.opt_repl(phonemes::EHK, &[phonemes::ESH,phonemes::K])? ||
+            rule.opt_repl(phonemes::EHG, &[EZH,phonemes::G])? ||
+            return Ok(false);
 
             Ok(true)
 
@@ -340,13 +339,13 @@ pub(crate) mod to_hobgoblin {
 
 
         transformation.add_rule("break non-final affricates", |rule| {
-            if rule.opt_repl(PFA, &[phonemes::P,PHI])? > 0 {
-            } else if rule.opt_repl(TSA, &[phonemes::T,phonemes::S])? > 0 {
-            } else if rule.opt_repl(KXA, &[phonemes::K,phonemes::X])? > 0 {
-            } else if rule.opt_repl(phonemes::ESHT, &[phonemes::ESH,phonemes::T])? > 0 {
-            } else if rule.opt_repl(phonemes::EHK, &[phonemes::X,phonemes::K])? > 0 {
-            } else if rule.opt_repl(phonemes::EHG, &[phonemes::AGH,phonemes::G])? > 0 {
-            }
+            _ = rule.opt_repl(PFA, &[phonemes::P,PHI])? ||
+            rule.opt_repl(TSA, &[phonemes::T,phonemes::S])? ||
+            rule.opt_repl(KXA, &[phonemes::K,phonemes::X])? ||
+            rule.opt_repl(phonemes::ESHT, &[phonemes::ESH,phonemes::T])? ||
+            rule.opt_repl(phonemes::EHK, &[phonemes::X,phonemes::K])? ||
+            rule.opt_repl(phonemes::EHG, &[phonemes::AGH,phonemes::G])? ||
+            return Ok(false);
 
             // Only if not final
             _ = rule.not_final()?;
@@ -356,30 +355,24 @@ pub(crate) mod to_hobgoblin {
         });
 
 
-        transformation.add_rule("consonant shift", |rule| {
-            // some consonants  soften between vowels.
+        transformation.add_rule("consonant softening", |rule| {
+            // some consonants soften between vowels.
             _ = rule.is(goblin::VOWEL)?;
 
             // voiced plosives become fricative
-            if rule.opt_repl(phonemes::B, &[BHI])? > 0 {
-            } else if rule.opt_repl(phonemes::D, &[phonemes::Z])? > 0 {
-            } else if rule.opt_repl(phonemes::G, &[phonemes::AGH])? > 0 {
-            }
+            _ = (rule.opt_repl(phonemes::B, &[BHI])?) ||
+            (rule.opt_repl(phonemes::D, &[phonemes::Z])?) ||
+            (rule.opt_repl(phonemes::G, &[phonemes::AGH])?) ||
             // voiced fricatives become approximant
-            else if rule.opt_repl(phonemes::V, &[VWA])? > 0 {
-            } else if rule.opt_repl(phonemes::Z, &[phonemes::R])? > 0 {
-            } else if rule.opt_repl(phonemes::AGH, &[GYA])? > 0 {
-            }
+            (rule.opt_repl(phonemes::V, &[VWA])?) ||
+            (rule.opt_repl(phonemes::Z, &[phonemes::R])?) ||
+            (rule.opt_repl(phonemes::AGH, &[GYA])?) ||
             // the unvoiced approximant becomes voiced
-            else if rule.opt_repl(phonemes::AHR,&[phonemes::R])? > 0 {
-            }
+            (rule.opt_repl(phonemes::AHR,&[phonemes::R])?) ||
             // the tap becomes an approximant
-            else if rule.opt_repl(phonemes::AGGA, &[GYA])? > 0 {
-            }
+            (rule.opt_repl(phonemes::AGGA, &[GYA])?) ||
             // other approximants do not change, causing some merging...
-            else {
-                return Ok(false)
-            }
+            return Ok(false);
 
             _ = rule.is(goblin::VOWEL)?;
 
@@ -393,28 +386,21 @@ pub(crate) mod to_hobgoblin {
             // This whole process may have happened all at once, in which case the syllabified consonants for J, VWA and GYA probably never existed (see the 4th part of the rule)
             // Separation of these rules makes it easier to do in the program, though.
 
-            if rule.opt_repl(goblin::OPEN, &[])? > 0 {
+            _ = rule.opt_repl(goblin::OPEN, &[])? ||
+            rule.opt_repl(goblin::OPENMID, &[])? ||
+            return Ok(false);
 
-            } else if rule.opt_repl(goblin::OPENMID, &[])? > 0 {
-
-            } else {
-                return Ok(false)
-            }
-
-            // TODO: I really need choices or some easier way to make these branch.
-            if rule.opt_repl(phonemes::L, &[L_SYL])? > 0 {
-            } else if rule.opt_repl(phonemes::R, &[R_SYL])? > 0 {
-            } else if rule.opt_repl(phonemes::AHR, &[R_SYL])? > 0 {
-            } else if rule.opt_repl(phonemes::J, &[J_SYL])? > 0 {
-            } else if rule.opt_repl(VWA, &[VWA_SYL])? > 0 {
-            } else if rule.opt_repl(GYA, &[GYA_SYL])? > 0 {
-            } else if rule.opt_repl(phonemes::N, &[N_SYL])? > 0 {
-            } else if rule.opt_repl(phonemes::M, &[M_SYL])? > 0 {
-            } else if rule.opt_repl(phonemes::ENG, &[ENG_SYL])? > 0 {
-            } else if rule.opt_repl(phonemes::NYE, &[NYE_SYL])? > 0 {
-            } else {
-                return Ok(false)
-            }
+            _ = rule.opt_repl(phonemes::L, &[L_SYL])? ||
+            rule.opt_repl(phonemes::R, &[R_SYL])? ||
+            rule.opt_repl(phonemes::AHR, &[R_SYL])? ||
+            rule.opt_repl(phonemes::J, &[J_SYL])? ||
+            rule.opt_repl(VWA, &[VWA_SYL])? ||
+            rule.opt_repl(GYA, &[GYA_SYL])? ||
+            rule.opt_repl(phonemes::N, &[N_SYL])? ||
+            rule.opt_repl(phonemes::M, &[M_SYL])? ||
+            rule.opt_repl(phonemes::ENG, &[ENG_SYL])? ||
+            rule.opt_repl(phonemes::NYE, &[NYE_SYL])? ||
+            return Ok(false);
 
             Ok(true)
 
@@ -424,18 +410,16 @@ pub(crate) mod to_hobgoblin {
             // Second, syllabified consonants that appear after a vowel are desyllabified
             _ = rule.is(goblin::VOWEL)?;
 
-            if rule.opt_repl(L_SYL, &[phonemes::L])? > 0 {
-            } else if rule.opt_repl(R_SYL, &[phonemes::R])? > 0 {
-            } else if rule.opt_repl(J_SYL, &[phonemes::J])? > 0 {
-            } else if rule.opt_repl(VWA_SYL, &[VWA])? > 0 {
-            } else if rule.opt_repl(GYA_SYL, &[GYA])? > 0 {
-            } else if rule.opt_repl(N_SYL, &[phonemes::N])? > 0 {
-            } else if rule.opt_repl(M_SYL, &[phonemes::M])? > 0 {
-            } else if rule.opt_repl(ENG_SYL, &[phonemes::ENG])? > 0 {
-            } else if rule.opt_repl(NYE_SYL, &[phonemes::NYE])? > 0 {
-            } else {
-                return Ok(false)
-            }
+            _ = rule.opt_repl(L_SYL, &[phonemes::L])? ||
+            rule.opt_repl(R_SYL, &[phonemes::R])? ||
+            rule.opt_repl(J_SYL, &[phonemes::J])? ||
+            rule.opt_repl(VWA_SYL, &[VWA])? ||
+            rule.opt_repl(GYA_SYL, &[GYA])? ||
+            rule.opt_repl(N_SYL, &[phonemes::N])? ||
+            rule.opt_repl(M_SYL, &[phonemes::M])? ||
+            rule.opt_repl(ENG_SYL, &[phonemes::ENG])? ||
+            rule.opt_repl(NYE_SYL, &[phonemes::NYE])? ||
+            return Ok(false);
 
             Ok(true)
 
@@ -443,23 +427,18 @@ pub(crate) mod to_hobgoblin {
 
         transformation.add_rule("syllabification (3)", |rule| {
             // Syllabified consonants that appear before a vowel, are also desyllabified
-            if rule.opt_repl(L_SYL, &[phonemes::L])? > 0 {
-            } else if rule.opt_repl(R_SYL, &[phonemes::R])? > 0 {
-            } else if rule.opt_repl(J_SYL, &[phonemes::J])? > 0 {
-            } else if rule.opt_repl(VWA_SYL, &[VWA])? > 0 {
-            } else if rule.opt_repl(GYA_SYL, &[GYA])? > 0 {
-            } else if rule.opt_repl(N_SYL, &[phonemes::N])? > 0 {
-            } else if rule.opt_repl(M_SYL, &[phonemes::M])? > 0 {
-            } else if rule.opt_repl(ENG_SYL, &[phonemes::ENG])? > 0 {
-            } else if rule.opt_repl(NYE_SYL, &[phonemes::NYE])? > 0 {
-            } else {
-                return Ok(false)
-            }
+            _ = rule.opt_repl(L_SYL, &[phonemes::L])? ||
+            rule.opt_repl(R_SYL, &[phonemes::R])? ||
+            rule.opt_repl(J_SYL, &[phonemes::J])? ||
+            rule.opt_repl(VWA_SYL, &[VWA])? ||
+            rule.opt_repl(GYA_SYL, &[GYA])? ||
+            rule.opt_repl(N_SYL, &[phonemes::N])? ||
+            rule.opt_repl(M_SYL, &[phonemes::M])? ||
+            rule.opt_repl(ENG_SYL, &[phonemes::ENG])? ||
+            rule.opt_repl(NYE_SYL, &[phonemes::NYE])? ||
+            return Ok(false);
 
-            if rule.opt(goblin::VOWEL)? > 0 {
-            } else {
-                return Ok(false)
-            }
+            rule.is(goblin::VOWEL)?;
 
             Ok(true)
 
@@ -470,12 +449,10 @@ pub(crate) mod to_hobgoblin {
             // first place. However, if the process did involve these four steps, then they had to exist in order to prevent some of those vowels
             // from being turned into consonants.
 
-            if rule.opt_repl(J_SYL, &[phonemes::EE])? > 0 {
-            } else if rule.opt_repl(VWA_SYL, &[phonemes::OO])? > 0 {
-            } else if rule.opt_repl(GYA_SYL, &[phonemes::A])? > 0 {
-            } else {
-                return Ok(false)
-            }
+            _ = rule.opt_repl(J_SYL, &[phonemes::EE])? ||
+            rule.opt_repl(VWA_SYL, &[phonemes::OO])? ||
+            rule.opt_repl(GYA_SYL, &[phonemes::A])? ||
+            return Ok(false);
 
             Ok(true)
 
@@ -490,21 +467,14 @@ pub(crate) mod to_hobgoblin {
 
         transformation.add_rule("syllabbification hiatus", |rule| {
             // If two syllabified consonants are paired, they gain an hiatus equal to the unsyallabified version of the firstsyllable.
-            if rule.opt(L_SYL)? > 0 {
-                rule.ins(&[phonemes::L])?;
-            } else if rule.opt(R_SYL)? > 0 {
-                rule.ins(&[phonemes::R])?;
-            } else if rule.opt(N_SYL)? > 0 {
-                rule.ins(&[phonemes::N])?;
-            } else if rule.opt(M_SYL)? > 0 {
-                rule.ins(&[phonemes::M])?;
-            } else if rule.opt(ENG_SYL)? > 0 {
-                rule.ins(&[phonemes::ENG])?;
-            } else if rule.opt(NYE_SYL)? > 0 {
-                rule.ins(&[phonemes::NYE])?;
-            } else {
-                return Ok(false)
-            }// tɰ
+
+            _ = rule.opt_repl(L_SYL,&[L_SYL, phonemes::L])? ||
+            rule.opt_repl(R_SYL,&[R_SYL, phonemes::R])? ||
+            rule.opt_repl(N_SYL,&[N_SYL, phonemes::N])? ||
+            rule.opt_repl(M_SYL,&[M_SYL, phonemes::M])? ||
+            rule.opt_repl(ENG_SYL,&[ENG_SYL, phonemes::ENG])? ||
+            rule.opt_repl(NYE_SYL,&[NYE_SYL, phonemes::NYE])? ||
+            return Ok(false);
 
             _ = rule.is(SYLLABIFIED)?;
 
@@ -516,19 +486,23 @@ pub(crate) mod to_hobgoblin {
         transformation.add_rule("reduction of clusters and affricates", |rule| {
 
             // fricatives and approximants next to unvoiced plosives disappear, remaining affricates become the plosive
-            if rule.opt_repl(phonemes::ESHT, &[phonemes::T])? > 0 {
-            } else if rule.opt_repl(phonemes::EHK, &[phonemes::K])? > 0 {
-            } else if rule.opt_repl(phonemes::EHG, &[phonemes::G])? > 0 {
-            } else if rule.opt_repl(PFA, &[phonemes::P])? > 0 {
-            } else if rule.opt_repl(TSA, &[phonemes::T])? > 0 {
-            } else if rule.opt_repl(KXA, &[phonemes::K])? > 0 {
-            } else if rule.opt_repl(goblin::FRICATIVE, &[])? > 0 {
-                _ = rule.is(goblin::PLOSIVE)?;
-            } else if rule.opt(goblin::PLOSIVE)? > 0 {
-                _ = rule.repl(goblin::FRICATIVE, &[])?;
-            } else {
-                return Ok(false)
-            }
+            _ = rule.opt_repl(phonemes::ESHT, &[phonemes::T])? ||
+            rule.opt_repl(phonemes::EHK, &[phonemes::K])? ||
+            rule.opt_repl(phonemes::EHG, &[phonemes::G])? ||
+            rule.opt_repl(PFA, &[phonemes::P])? ||
+            rule.opt_repl(TSA, &[phonemes::T])? ||
+            rule.opt_repl(KXA, &[phonemes::K])? ||
+            rule.opt_seq(|rule| {
+                rule.repl(goblin::FRICATIVE, &[])?;
+                rule.is(goblin::PLOSIVE)?;
+                Ok(true)
+            })? ||
+            rule.opt_seq(|rule| {
+                rule.is(goblin::PLOSIVE)?;
+                rule.repl(goblin::FRICATIVE, &[])?;
+                Ok(true)
+            })? ||
+            return Ok(false);
 
 
             Ok(true)
@@ -536,23 +510,25 @@ pub(crate) mod to_hobgoblin {
 
         transformation.add_rule("merge some diphthongs and vowel clusters", |rule| {
 
-            if rule.opt_repl(phonemes::AEU, &[phonemes::E])? > 0 {
-            } else if rule.opt_repl(phonemes::OU, &[phonemes::A])? > 0 {
-            } else if rule.opt_repl(phonemes::OI, &[phonemes::EE])? > 0 {
-            } else if rule.opt_repl(phonemes::UI, &[phonemes::EE])? > 0 {
-            } else if rule.opt(goblin::FRONT)? > 0 {
-                _ = rule.repl(goblin::FRONT,&[])?;
-            } else if rule.opt(goblin::BACK)? > 0 {
-                _ = rule.repl(goblin::BACK,&[])?;
-            }
+            _ = rule.opt_repl(phonemes::AEU, &[phonemes::E])? ||
+            rule.opt_repl(phonemes::OU, &[phonemes::A])? ||
+            rule.opt_repl(phonemes::OI, &[phonemes::EE])? ||
+            rule.opt_repl(phonemes::UI, &[phonemes::EE])? ||
+            rule.opt_seq(|rule| {
+                rule.is(goblin::FRONT)?;
+                rule.repl(goblin::FRONT,&[])?;
+                Ok(true)
+            })? ||
+            rule.opt_seq(|rule| {
+                rule.is(goblin::BACK)?;
+                rule.repl(goblin::BACK,&[])?;
+                Ok(true)
+            })? ||
+            return Ok(false);
 
             Ok(true)
 
         });
-
-
-
-
 
 
 

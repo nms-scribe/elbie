@@ -99,21 +99,21 @@ impl RuleState<'_> {
         self.word_index == 0
     }
 
-    /// If the iterator is at the beginning of the word, returns a match of 0 length, otherwise returns a MatchFailed error.
-    pub const fn initial(&mut self) -> Result<usize,RuleStateError> {
+    /// If the iterator is at the beginning of the word, returns Ok, otherwise returns a MatchFailed error.
+    pub const fn initial(&mut self) -> Result<(),RuleStateError> {
         if self.peek_initial() {
-            Ok(0)
+            Ok(())
         } else {
             Err(RuleStateError::MatchFailed)
         }
     }
 
-    /// If the iterator is not at the beginning of the word, returns a match of 0 length, otherwise returns a MatchFailed error.
-    pub const fn not_initial(&mut self) -> Result<usize,RuleStateError> {
+    /// If the iterator is not at the beginning of the word, returns Ok, otherwise returns a MatchFailed error.
+    pub const fn not_initial(&mut self) -> Result<(),RuleStateError> {
         if self.peek_initial() {
             Err(RuleStateError::MatchFailed)
         } else {
-            Ok(0)
+            Ok(())
         }
     }
 
@@ -122,37 +122,37 @@ impl RuleState<'_> {
         self.phonemes.peek().is_none()
     }
 
-    /// If the iterator is at the end of the word, returns a match of 0 length. Otherwise, returns a MatchFailed error.
-    pub fn final_(&mut self) -> Result<usize,RuleStateError> {
+    /// If the iterator is at the end of the word, returns Ok. Otherwise, returns a MatchFailed error.
+    pub fn final_(&mut self) -> Result<(),RuleStateError> {
         if self.peek_final() {
-            Ok(0)
+            Ok(())
         } else {
             Err(RuleStateError::MatchFailed)
         }
     }
 
-    /// If the iterator is not at the end of the word, returns a match of 0 length. Otherwise, returns a MatchFailed error.
-    pub fn not_final(&mut self) -> Result<usize,RuleStateError> {
+    /// If the iterator is not at the end of the word, returns Ok. Otherwise, returns a MatchFailed error.
+    pub fn not_final(&mut self) -> Result<(),RuleStateError> {
         if self.peek_final() {
             Err(RuleStateError::MatchFailed)
         } else {
-            Ok(0)
+            Ok(())
         }
     }
 
 
-    /// Matches any phoneme. If there is a phoneme in the iterator, it shifts the position forward and returns 1 (the length of the match). Otherwise, returns a MatchFailed error.
-    pub fn any(&mut self) -> Result<usize,RuleStateError> {
+    /// Matches any phoneme. If there is a phoneme in the iterator, it shifts the position forward and returns Ok. Otherwise, returns a MatchFailed error.
+    pub fn any(&mut self) -> Result<(),RuleStateError> {
         if self.phonemes.next().is_some() {
             self.word_index += 1;
-            Ok(1)
+            Ok(())
         } else {
             Err(RuleStateError::MatchFailed)
         }
     }
 
-    /// Peeks at the next phoneme, useing `peek_is`. If it matches, shifts the position forward by one and returns 1 (the length of the match). Otherwise, returns a MatchFailed error.
-    pub fn is(&mut self, name: &'static str) -> Result<usize,RuleStateError> {
+    /// Peeks at the next phoneme, useing `peek_is`. If it matches, shifts the position forward by one and returns Ok. Otherwise, returns a MatchFailed error.
+    pub fn is(&mut self, name: &'static str) -> Result<(),RuleStateError> {
         if self.peek_is(name)? {
             self.any()
         } else {
@@ -161,27 +161,26 @@ impl RuleState<'_> {
 
     }
 
-    /// Processes the current pattern in the provided closure, to allow for code reuse. The closure should immediately return any errors from pattern function calls. The closure should return `Ok(true)` if it thinks there is a successful match, or `Ok(false)` if the pattern is still considered to have failed despite successful pattern calls. Returns the length of the matched sequence as determined by the number of phonemes which have been moved forward. If the sequence does not match, a MatchFailed is returned.
-    pub fn seq<Sequence: Fn(&mut Self) -> Result<bool,RuleStateError>>(&mut self, sequence: Sequence) -> Result<usize,RuleStateError> {
-        let start = self.word_index;
+    /// Processes the current pattern in the provided closure, to allow for code reuse. The closure should immediately return any errors from pattern function calls. The closure should return `Ok(true)` if it thinks there is a successful match, or `Ok(false)` if the pattern is still considered to have failed despite successful pattern calls. Returns Ok if the sequence matched. If the sequence does not match, a MatchFailed is returned.
+    pub fn seq<Sequence: Fn(&mut Self) -> Result<bool,RuleStateError>>(&mut self, sequence: Sequence) -> Result<(),RuleStateError> {
         if sequence(self)? {
-            Ok(self.word_index - start)
+            Ok(())
         } else {
             Err(RuleStateError::MatchFailed)
         }
     }
 
-    /// Uses `is` to match the current phoneme. If the match fails, it captures the error and returns a length of 0 instead, allowing the match to succeed.
-    pub fn opt(&mut self, name: &'static str) -> Result<usize,ElbieError> {
+    /// Uses `is` to match the current phoneme and returns true if it matches. If the match fails, it returns false and does not move the iterator.
+    pub fn opt(&mut self, name: &'static str) -> Result<bool,ElbieError> {
         match self.is(name) {
-            Ok(length) => Ok(length),
-            Err(RuleStateError::MatchFailed) => Ok(0),
+            Ok(()) => Ok(true),
+            Err(RuleStateError::MatchFailed) => Ok(false),
             Err(RuleStateError::Elbie(err)) => Err(err),
         }
     }
 
-    /// Creates a new Pattern based off of the current state, and processes it using `seq`. If the match succeeds, the state is merged back into the main Pattern and the length of the match is returned. If the match fails, the state is not merged back in, but a length of 0 is returned, indicating a successful but empty match.
-    pub fn opt_seq<Sequence: Fn(&mut Self) -> Result<bool,RuleStateError>>(&mut self, sequence: Sequence) -> Result<usize,ElbieError> {
+    /// Creates a new Pattern based off of the current state, and processes it using `seq`. If the match succeeds, the state is merged back into the main Pattern and true is returned. If the match fails, the state is not merged back in, but false is returned, indicating a successful but empty match.
+    pub fn opt_seq<Sequence: Fn(&mut Self) -> Result<bool,RuleStateError>>(&mut self, sequence: Sequence) -> Result<bool,ElbieError> {
         let mut inner = Self {
             inventory: self.inventory,
             phonemes: self.phonemes.clone(),
@@ -189,19 +188,20 @@ impl RuleState<'_> {
             splices: Vec::new()
         };
         match inner.seq(sequence) {
-            Ok(length) => {
+            Ok(_) => {
                 self.phonemes = inner.phonemes;
                 self.word_index = inner.word_index;
                 self.splices.extend(inner.splices);
-                Ok(length)
+                Ok(true)
             },
             Err(RuleStateError::MatchFailed) => {
-                Ok(0)
+                Ok(false)
             },
             Err(RuleStateError::Elbie(err)) => Err(err)
         }
 
     }
+
 
     fn get_replacement(&self, phonemes: &[&'static str]) -> Result<Vec<Rc<Phoneme>>,ElbieError> {
         phonemes.iter().map(|phoneme| {
@@ -225,66 +225,66 @@ impl RuleState<'_> {
     }
 
     /// Calls `is`, and if there is a match adds a new splice to replace the matching phoneme with the specified phonemes. Will return an error if the phonemes do not exist in the inventory.
-    pub fn repl(&mut self, name: &'static str, phonemes: &[&'static str]) -> Result<usize,RuleStateError> {
+    pub fn repl(&mut self, name: &'static str, phonemes: &[&'static str]) -> Result<(),RuleStateError> {
         let replace = self.get_replacement(phonemes)?;
         let start_index = self.word_index;
-        let length = self.is(name)?;
+        self.is(name)?;
 
         self.splices.push(WordSplice {
             start_index,
-            length,
+            length: 1,
             replace,
         });
 
-        Ok(length)
+        Ok(())
 
     }
 
-    /// Calls `opt`, and if there is a non-empty match adds a new splice to replace the matching phoneme with the specified phonemes. If the match was empty, not replacement is made. Will return an error if the phonemes do not exist in the inventory.
-    pub fn opt_repl(&mut self, name: &'static str, phonemes: &[&'static str]) -> Result<usize,ElbieError> {
+    /// Calls `opt`, and if there is a non-empty match adds a new splice to replace the matching phoneme with the specified phonemes. On success, returns true. If the match failed, no replacement is made and returns false. Will return an error if the phonemes do not exist in the inventory.
+    pub fn opt_repl(&mut self, name: &'static str, phonemes: &[&'static str]) -> Result<bool,ElbieError> {
         let replace = self.get_replacement(phonemes)?;
         let start_index = self.word_index;
-        let length = self.opt(name)?;
+        let matched = self.opt(name)?;
 
-        if length > 0 {
+        if matched {
             self.splices.push(WordSplice {
                 start_index,
-                length,
+                length: 1,
                 replace,
             });
         }
 
-        Ok(length)
+        Ok(matched)
 
     }
 
-    /// Calls `seq` with the specified closure, and if it matches adds a new splice which replaces the match with the specified phonemes.
-    pub fn repl_seq<Sequence: Fn(&mut Self) -> Result<bool,RuleStateError>>(&mut self, sequence: Sequence, phonemes: &[&'static str]) -> Result<usize,RuleStateError> {
+    /// Calls `seq` with the specified closure, and if it matches adds a new splice which replaces the match with the specified phonemes. Returns Ok if the sequence that matched. If the sequence does not match, no replacement is done and the function returns MatchFailed.
+    pub fn repl_seq<Sequence: Fn(&mut Self) -> Result<bool,RuleStateError>>(&mut self, sequence: Sequence, phonemes: &[&'static str]) -> Result<(),RuleStateError> {
         let replace = self.get_replacement(phonemes)?;
         let start_index = self.word_index;
-        let length = self.seq(sequence)?;
+        self.seq(sequence)?;
         self.splices.push(WordSplice {
             start_index,
-            length,
+            length: self.word_index - start_index,
             replace,
         });
-        Ok(length)
+        Ok(())
     }
 
-    /// Calls `opt_seq` with the specified closure, and if it returns a non-empty match adds a new splice which replaces the match with the specified phonemes. If the match is empty, no splice is added.
-    pub fn opt_repl_seq<Sequence: Fn(&mut Self) -> Result<bool,RuleStateError>>(&mut self, sequence: Sequence, phonemes: &[&'static str]) -> Result<usize,ElbieError> {
+    /// Calls `opt_seq` with the specified closure, and if it returns a match adds a new splice which replaces the match with the specified phonemes. If the match is empty, no splice is added and false is returned.
+    pub fn opt_repl_seq<Sequence: Fn(&mut Self) -> Result<bool,RuleStateError>>(&mut self, sequence: Sequence, phonemes: &[&'static str]) -> Result<bool,ElbieError> {
         let replace = self.get_replacement(phonemes)?;
         let start_index = self.word_index;
-        let length = self.opt_seq(sequence)?;
+        let matched = self.opt_seq(sequence)?;
 
-        if length > 0 {
+        if matched {
             self.splices.push(WordSplice {
                 start_index,
-                length,
+                length: self.word_index - start_index,
                 replace,
             });
         }
-        Ok(length)
+        Ok(matched)
     }
 
 
