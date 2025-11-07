@@ -14,6 +14,10 @@ pub const EMPTY: &str = "empty";
 
 
 #[derive(Debug,Ord,PartialOrd,Eq,PartialEq,Hash)]
+// FUTURE: When I originally wrote this, I was under the impression that Rc objects would not be equal if they aren't the same object. However, I never tested that, and a simple test shows that they can be equal and be different objects. This means that what I'm doing here is wrong, and I probably shouldn't even bother.
+// Fact is, it doesn't matter too much if phonemes are equal, even across languages, because 1) as long as I'm using standard IPA then equal phonemes will probably be pronounced similarly enough to get by and 2) it makes transformations a *lot* easier if I don't have to namespace them.
+// Another reason I may have originally had these objects was that I had an idea of keeping their "sets" on the phoneme itself. However, I don't need that to happen. And it seems like phonemes only make sense to have sets in the specific context of a language. Outside of that context, having a set is meaningless. (This is based on the definition of phonemes in linguistics, at least as I understand it)
+// So, I feel like it would be better not to have separate Phonemes, and just use Rc<str> or Box<str> as the phoneme. The Inventory would have a Set instead of a Map. And it would simplify a bunch of the code since I could even have phonemes that didn't exist in an inventory.
 pub struct Phoneme {
   pub name: &'static str
 }

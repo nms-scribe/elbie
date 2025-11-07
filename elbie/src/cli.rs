@@ -15,7 +15,7 @@ use crate::language::Language;
 use crate::cli_functions::transform_words;
 use crate::cli_functions::TransformationOption;
 
-// TODO: Test transformations with a new goblin to hobgoblin language transformation
+// TODO: Test transformations with a new goblin to hobgoblin language transformation. One thing I'm really wondering about is whether I will need namespaces after all.
 
 // Gumdrop kind of makes showing usage difficult. The only way it works is if you have a --help flag on each command, and then only if it's discovered in `parse_args_or_exit`. And I'm not calling that because I want to be able to supply my own arguments. I would prefer to have a help command that takes an optional command name parameter anyway.
 fn show_usage<Command: Options>(program: &str, selected_command: Option<&str>) {
