@@ -168,7 +168,7 @@ pub fn run<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Args,
 
         match arguments.command {
             Command::GenerateWords(count) => generate_words(arguments.grid_style.as_ref(), &language, count),
-            Command::ValidateWords(words,option) => validate_words(&language, &words, &option),
+            Command::ValidateWords(words,option) => validate_words(&language, words.into_iter(), &option),
             Command::ShowPhonemes(table) => show_phonemes(arguments.grid_style.as_ref(), &language, table.as_ref()),
             Command::ShowSpelling(columns) => show_spelling(arguments.grid_style.as_ref(), &language, columns),
             Command::ProcessLexicon(path,ortho_index) => format_lexicon(arguments.grid_style.as_ref(), &language, &path, ortho_index),

@@ -14,6 +14,8 @@ use crate::family::Family;
 use crate::language::Language;
 use crate::cli_functions::transform_words;
 use crate::cli_functions::TransformationOption;
+use std::error::Error;
+use crate::cli_functions::read_words;
 
 // TODO: Test transformations with a new goblin to hobgoblin language transformation. One thing I'm really wondering about is whether I will need namespaces after all.
 
@@ -40,7 +42,7 @@ fn show_usage<Command: Options>(program: &str, selected_command: Option<&str>) {
 
 trait DoIt {
 
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),ElbieError>;
+    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),Box<dyn Error>>;
 }
 
 #[derive(Options)]
@@ -64,7 +66,7 @@ pub struct GenerateWords {
 
 impl DoIt for GenerateWords {
 
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),ElbieError>  {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),Box<dyn Error>>  {
         let grid_style = if self.no_spans {
             &self.format.with_no_spans()
         } else {
@@ -95,6 +97,9 @@ pub struct ValidateWords {
     /// Provides detailed explanation of valid phonemes on success.
     explain: bool,
 
+    /// Read the list of words from a line-delimited file
+    file: Option<String>,
+
     #[options(free)]
     /// Words to validate
     words: Vec<String>
@@ -103,7 +108,7 @@ pub struct ValidateWords {
 
 impl DoIt for ValidateWords {
 
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),ElbieError>  {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),Box<dyn Error>>  {
 
         let mut family = family()?;
 
@@ -111,8 +116,15 @@ impl DoIt for ValidateWords {
 
         let language = family.get_language_or_default(language.as_deref())?;
 
+        let mut words = self.words.clone();
 
-        validate_words(language, &self.words, &match (self.explain,self.trace)  {
+        if let Some(file) = &self.file {
+            for word in read_words(file)? {
+                words.push(word?);
+            }
+        }
+
+        validate_words(language, words.into_iter(), &match (self.explain,self.trace)  {
             (true, true) => ValidateOption::ExplainAndTrace,
             (true, false) => ValidateOption::Explain,
             (false, true) => ValidateOption::Trace,
@@ -146,7 +158,7 @@ pub struct ShowPhonemes {
 impl DoIt for ShowPhonemes {
 
 
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),ElbieError>  {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),Box<dyn Error>>  {
         let grid_style = if self.no_spans {
             &self.format.with_no_spans()
         } else {
@@ -187,7 +199,7 @@ pub struct ShowSpelling {
 
 impl DoIt for ShowSpelling {
 
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),ElbieError>  {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),Box<dyn Error>>  {
         let grid_style = if self.no_spans {
             &self.format.with_no_spans()
         } else {
@@ -208,7 +220,7 @@ impl DoIt for ShowSpelling {
 }
 
 #[derive(Options)]
-/// Loads a lexicon of words in CSV format for a language, validates them and prints out a formatted listing. Requires a file name to load and an orthography index to spell the main entries. Options allow controlling the output format.
+/// Loads a lexicon of words in CSV format for a language, validates them and prints out a formatted listing. Requires a file name to load and an orthography index to spell the main entries. Options allow controlling the output format. The input CSV must have a "word" column containing the phonetic transcription of the word, and a "definition" column containing arbitrary text.
 pub struct FormatLexicon {
 
 
@@ -232,7 +244,7 @@ pub struct FormatLexicon {
 
 impl DoIt for FormatLexicon {
 
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),ElbieError> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),Box<dyn Error>> {
         let grid_style = if self.no_spans {
             &self.format.with_no_spans()
         } else {
@@ -273,6 +285,9 @@ pub struct Transform {
     /// Provides detailed explanation of valid phonemes on success.
     explain: bool,
 
+    /// Read the list of words from a line-delimited file
+    file: Option<String>,
+
     #[options(free)]
     /// Words to validate
     words: Vec<String>
@@ -280,7 +295,7 @@ pub struct Transform {
 }
 
 impl DoIt for Transform {
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),ElbieError> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),Box<dyn Error>> {
 
         let mut family = family()?;
 
@@ -294,13 +309,23 @@ impl DoIt for Transform {
 
         let transformation = family.get_transformation(source_language.name(),&self.target)?;
 
-        let target_language = if self.dont_validate || !transformation.validate() {
+        let target_language = if self.dont_validate || transformation.dont_validate() {
             None
         } else {
             Some(family.get_language(&self.target)?)
         };
 
-        transform_words(&transformation,source_language,target_language,&self.words,&match (self.explain,self.trace)  {
+        let mut words = self.words.clone();
+
+        if let Some(file) = &self.file {
+            for word in read_words(file)? {
+                words.push(word?);
+            }
+        }
+
+
+
+        transform_words(&transformation,source_language,target_language,words.into_iter(),&match (self.explain,self.trace)  {
             (true, true) => TransformationOption::ExplainAndTrace,
             (true, false) => TransformationOption::Explain,
             (false, true) => TransformationOption::Trace,
@@ -321,7 +346,7 @@ pub struct ShowInformation {
 
 impl DoIt for ShowInformation {
 
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, _: Option<String>) -> Result<(),ElbieError> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, _: Option<String>) -> Result<(),Box<dyn Error>> {
 
         let family = family()?;
 
@@ -382,7 +407,7 @@ pub struct FamilyShowUsage {
 
 impl DoIt for FamilyShowUsage {
 
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, _: FamilyCreator, _: Option<String>) -> Result<(),ElbieError> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, _: FamilyCreator, _: Option<String>) -> Result<(),Box<dyn Error>> {
         let exe_name = std::env::current_exe().ok().as_deref().and_then(Path::file_name).map(OsStr::display).as_ref().map(ToString::to_string);
         let program = exe_name.as_deref().unwrap_or("elbie");
 
@@ -441,7 +466,7 @@ impl Default for FamilyCommand {
 }
 
 impl DoIt for FamilyCommand {
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),ElbieError> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),Box<dyn Error>> {
 
         match self {
             Self::Generate(command) => command.doit(family,language),
@@ -490,7 +515,7 @@ pub struct LanguageShowUsage {
 
 impl DoIt for LanguageShowUsage {
 
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, _: FamilyCreator, _: Option<String>) -> Result<(),ElbieError> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, _: FamilyCreator, _: Option<String>) -> Result<(),Box<dyn Error>> {
         let exe_name = std::env::current_exe().ok().as_deref().and_then(Path::file_name).map(OsStr::display).as_ref().map(ToString::to_string);
         let program = exe_name.as_deref().unwrap_or("elbie");
 
@@ -541,7 +566,7 @@ impl Default for LanguageCommand {
 }
 
 impl DoIt for LanguageCommand {
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),ElbieError> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),Box<dyn Error>> {
         match self {
             Self::Generate(command) => command.doit(family,language),
             Self::Validate(command) => command.doit(family,language),

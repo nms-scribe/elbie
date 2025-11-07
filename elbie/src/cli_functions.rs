@@ -10,6 +10,10 @@ use crate::validation::ValidationTraceCallback;
 use crate::word::Word;
 use crate::transformation::Transformation;
 use crate::transformation::TransformationTraceCallback;
+use std::io;
+use std::fs::File;
+use std::path::Path;
+use std::io::BufRead as _;
 
 pub(crate) enum ValidateOption {
   Simple,
@@ -86,7 +90,7 @@ pub(crate) fn validate_word(language: &Language, word: &Word, explain: bool, tra
     }
 }
 
-pub(crate) fn validate_words(language: &Language, words: &Vec<String>, option: &ValidateOption) {
+pub(crate) fn validate_words<Words: Iterator<Item = String>>(language: &Language, words: Words, option: &ValidateOption) {
     let mut invalid_found = false;
     let trace_cb: Option<&ValidationTraceCallback> = if matches!(option,ValidateOption::Trace | ValidateOption::ExplainAndTrace) {
       Some(&|level,message| {
@@ -190,7 +194,7 @@ pub(crate) fn format_lexicon(grid_style: Option<&GridStyle>, language: &Language
 
 
 
-pub(crate) fn transform_words(transformation: &Transformation, from: &Language, validator: Option<&Language>, words: &Vec<String>, option: &TransformationOption) {
+pub(crate) fn transform_words<Words: Iterator<Item = String>>(transformation: &Transformation, from: &Language, validator: Option<&Language>, words: Words, option: &TransformationOption) {
     let mut invalid_found = false;
 
 
@@ -215,14 +219,14 @@ pub(crate) fn transform_words(transformation: &Transformation, from: &Language, 
     for word in words {
         match from.read_word(&word) {
             Ok(word) => {
-                match transformation.transform(word, transformation_trace_cb) {
-                    Ok(word) => {
+                match transformation.transform(&word, transformation_trace_cb) {
+                    Ok(transformed) => {
                         if let Some(validator) = validator {
-                            if !validate_word(validator, &word, matches!(option,TransformationOption::Explain | TransformationOption::ExplainAndTrace), validation_trace_cb) {
+                            if !validate_word(validator, &transformed, matches!(option,TransformationOption::Explain | TransformationOption::ExplainAndTrace), validation_trace_cb) {
                                 invalid_found = true;
                             }
                         }
-                        println!("{word}");
+                        println!("{word} 🡺 {transformed}");
                     },
                     Err(err) => {
                         invalid_found = true;
@@ -241,4 +245,15 @@ pub(crate) fn transform_words(transformation: &Transformation, from: &Language, 
     }
 
 
+}
+
+
+pub(crate) fn read_words<P>(filename: P) -> Result<impl Iterator<Item = Result<String,io::Error>>, io::Error>
+where P: AsRef<Path>, {
+    let file = File::open(filename)?;
+    Ok(io::BufReader::new(file).lines().map(|r| {
+        r.map(|line| {
+            line.trim().trim_matches('/').to_owned()
+        })
+    }))
 }

@@ -12,7 +12,7 @@ use crate::word::Word;
 
 
 pub(crate) enum TransformationTraceMessage {
-  MatchedRule(&'static str,Word),
+  MatchedRule(&'static str,Word,Word),
   UnmatchedRule(&'static str)
 }
 
@@ -20,7 +20,7 @@ impl Display for TransformationTraceMessage {
 
   fn fmt(&self, f: &mut Formatter) -> Result<(),fmt::Error> {
     match self {
-      Self::MatchedRule(name,word) => write!(f,"Matched '{name}': {word}"),
+      Self::MatchedRule(name,from,to) => write!(f,"Matched '{name}': {from} 🡺 {to}"),
       Self::UnmatchedRule(name) => write!(f,"Did not match '{name}'"),
     }
 
@@ -108,6 +108,15 @@ impl RuleState<'_> {
         }
     }
 
+    /// If the iterator is not at the beginning of the word, returns a match of 0 length, otherwise returns a MatchFailed error.
+    pub const fn not_initial(&mut self) -> Result<usize,RuleStateError> {
+        if self.peek_initial() {
+            Err(RuleStateError::MatchFailed)
+        } else {
+            Ok(0)
+        }
+    }
+
     /// Returns true if the iterator is at the end of the word (there are no tokens when peeking). The position is not changed.
     pub fn peek_final(&mut self) -> bool {
         self.phonemes.peek().is_none()
@@ -119,6 +128,15 @@ impl RuleState<'_> {
             Ok(0)
         } else {
             Err(RuleStateError::MatchFailed)
+        }
+    }
+
+    /// If the iterator is not at the end of the word, returns a match of 0 length. Otherwise, returns a MatchFailed error.
+    pub fn not_final(&mut self) -> Result<usize,RuleStateError> {
+        if self.peek_final() {
+            Err(RuleStateError::MatchFailed)
+        } else {
+            Ok(0)
         }
     }
 
@@ -350,12 +368,12 @@ impl Rule {
 
         // the splices are now sorted, and unique, so I should be able to iterate through the word again and copy things in somehow...
         let mut new_phonemes = Vec::new();
-        let mut old_phonemes = word.into_phonemes().into_iter().enumerate().peekable();
+        let mut old_phonemes = word.phonemes().into_iter().enumerate().peekable();
         let mut transformed = false;
         for next_splice in splices {
             // push through all the phonemes before the next splice and just push them through.
             while let Some((_,phoneme)) = old_phonemes.next_if(|(i,_)| i < &next_splice.start_index) {
-                new_phonemes.push(phoneme);
+                new_phonemes.push(phoneme.clone());
             }
             // skip the phonemes covered by the splice
             for _ in 0..next_splice.length {
@@ -366,13 +384,13 @@ impl Rule {
             transformed = true;
         }
         // push the remaining phonemes, after the last splice, onto the new phonemes.
-        new_phonemes.extend(old_phonemes.map(|(_,p)| p));
+        new_phonemes.extend(old_phonemes.map(|(_,p)| p.clone()));
 
         let transformed_word = Word::from(new_phonemes);
 
         if let Some(trace) = trace {
             trace(if transformed {
-                TransformationTraceMessage::MatchedRule(self.name, transformed_word.clone())
+                TransformationTraceMessage::MatchedRule(self.name, word, transformed_word.clone())
             } else {
                 TransformationTraceMessage::UnmatchedRule(self.name)
             });
@@ -388,7 +406,7 @@ impl Rule {
 pub struct Transformation {
     inventory: Inventory,
     rules: Vec<Rule>,
-    validate: bool,
+    dont_validate: bool,
 }
 
 impl Transformation {
@@ -400,18 +418,18 @@ impl Transformation {
         let mut result = Self {
             inventory,
             rules,
-            validate: true
+            dont_validate: false
         };
         result.add_language(source);
         result
     }
 
-    pub fn set_validate(&mut self, value: bool) {
-        self.validate = value;
+    pub fn set_dont_validate(&mut self, value: bool) {
+        self.dont_validate = value;
     }
 
-    pub fn validate(&self) -> bool {
-        self.validate
+    pub fn dont_validate(&self) -> bool {
+        self.dont_validate
     }
 
     pub fn add_language(&mut self, source: &Language) {
@@ -429,8 +447,8 @@ impl Transformation {
 
     /// Applies transformation rules in order, and returns the final word if successful.
     /// The word has not been validated for any specific language, so this should still be done before reporting the result to the user.
-    pub(crate) fn transform(&self, word: Word, trace: Option<&TransformationTraceCallback>) -> Result<Word,ElbieError> {
-        let mut transformed = word;
+    pub(crate) fn transform(&self, word: &Word, trace: Option<&TransformationTraceCallback>) -> Result<Word,ElbieError> {
+        let mut transformed = word.clone();
         for rule in &self.rules {
             transformed = rule.transform(self, transformed, trace)?
         }

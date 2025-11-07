@@ -19,9 +19,6 @@ impl Word {
       &self.phonemes
   }
 
-  pub(crate) fn into_phonemes(self) -> Vec<Rc<Phoneme>> {
-      self.phonemes
-  }
 
   pub(crate) fn push(&mut self,phoneme: Rc<Phoneme>) {
     self.phonemes.push(phoneme)
