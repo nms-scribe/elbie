@@ -9,6 +9,8 @@ use rand::rngs::ThreadRng;
 use crate::bag::Bag;
 use crate::errors::ElbieError;
 
+pub mod ipa;
+
 pub const PHONEME: &str = "phoneme";
 pub const EMPTY: &str = "empty";
 
