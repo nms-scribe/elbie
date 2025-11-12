@@ -167,7 +167,7 @@ pub mod consonants {
 
     UNICODE -- NAME: LATIN SMALL LETTER SCRIPT G; RANGE: IPA Extensions; NUMBER: 0261
     */
-    pub const OPENTAIL_G: &str = "ɡ";
+    pub const G: &str = "ɡ";
 
     /**
     VOICELESS UVULAR PLOSIVE
@@ -863,7 +863,7 @@ pub mod non_pulmonics {
     /// Concatenates `APOSTROPHE` after another literal/constant to create a static string.
     macro_rules! apostrophe {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::non_pulmonics::APOSTROPHE)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::non_pulmonics::APOSTROPHE)
         };
     }
 
@@ -1339,7 +1339,7 @@ pub mod diacritics {
     /// Concatenates `BOTTOM_TIE_BAR` between two other literals/constants to create a static string.
     macro_rules! bottom_tie_bar {
         ($left: expr, $right: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::BOTTOM_TIE_BAR,$right)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::BOTTOM_TIE_BAR,$right)
         };
     }
 
@@ -1360,7 +1360,7 @@ pub mod diacritics {
     /// Concatenates `TOP_TIE_BAR` between two other literals/constants to create a static string.
     macro_rules! top_tie_bar {
         ($left: expr, $right: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::TOP_TIE_BAR,$right)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::TOP_TIE_BAR,$right)
         };
     }
 
@@ -1381,7 +1381,7 @@ pub mod diacritics {
     /// Concatenates `UNDER_RING` after another literal/constant to create a static string.
     macro_rules! under_ring {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::UNDER_RING)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::UNDER_RING)
         };
     }
 
@@ -1402,7 +1402,7 @@ pub mod diacritics {
     /// Concatenates `SUB_UMLAUT` after another literal/constant to create a static string.
     macro_rules! sub_umlaut {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUB_UMLAUT)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUB_UMLAUT)
         };
     }
 
@@ -1423,7 +1423,7 @@ pub mod diacritics {
     /// Concatenates `SUB_BRIDGE` after another literal/constant to create a static string.
     macro_rules! sub_bridge {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUB_BRIDGE)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUB_BRIDGE)
         };
     }
 
@@ -1444,7 +1444,7 @@ pub mod diacritics {
     /// Concatenates `SUB_WEDGE` after another literal/constant to create a static string.
     macro_rules! sub_wedge {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUB_WEDGE)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUB_WEDGE)
         };
     }
 
@@ -1465,7 +1465,7 @@ pub mod diacritics {
     /// Concatenates `SUB_TILDE` after another literal/constant to create a static string.
     macro_rules! sub_tilde {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUB_TILDE)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUB_TILDE)
         };
     }
 
@@ -1486,7 +1486,7 @@ pub mod diacritics {
     /// Concatenates `INV_SUB_BRIDGE` after another literal/constant to create a static string.
     macro_rules! inv_sub_bridge {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::INV_SUB_BRIDGE)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::INV_SUB_BRIDGE)
         };
     }
 
@@ -1507,7 +1507,7 @@ pub mod diacritics {
     /// Concatenates `SUP_H` after another literal/constant to create a static string.
     macro_rules! sup_h {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_H)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_H)
         };
     }
 
@@ -1528,7 +1528,7 @@ pub mod diacritics {
     /// Concatenates `SUB_SEAGULL` after another literal/constant to create a static string.
     macro_rules! sub_seagull {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUB_SEAGULL)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUB_SEAGULL)
         };
     }
 
@@ -1549,7 +1549,7 @@ pub mod diacritics {
     /// Concatenates `SUB_SQUARE` after another literal/constant to create a static string.
     macro_rules! sub_square {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUB_SQUARE)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUB_SQUARE)
         };
     }
 
@@ -1570,7 +1570,7 @@ pub mod diacritics {
     /// Concatenates `SUB_RIGHT_HALF_RING` after another literal/constant to create a static string.
     macro_rules! sub_right_half_ring {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUB_RIGHT_HALF_RING)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUB_RIGHT_HALF_RING)
         };
     }
 
@@ -1591,7 +1591,7 @@ pub mod diacritics {
     /// Concatenates `SUP_W` after another literal/constant to create a static string.
     macro_rules! sup_w {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_W)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_W)
         };
     }
 
@@ -1612,7 +1612,7 @@ pub mod diacritics {
     /// Concatenates `SUP_TILDE` after another literal/constant to create a static string.
     macro_rules! sup_tilde {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_TILDE)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_TILDE)
         };
     }
 
@@ -1633,7 +1633,7 @@ pub mod diacritics {
     /// Concatenates `SUB_LEFT_HALF_RING` after another literal/constant to create a static string.
     macro_rules! sub_left_half_ring {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUB_LEFT_HALF_RING)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUB_LEFT_HALF_RING)
         };
     }
 
@@ -1654,7 +1654,7 @@ pub mod diacritics {
     /// Concatenates `SUP_J` after another literal/constant to create a static string.
     macro_rules! sup_j {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_J)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_J)
         };
     }
 
@@ -1688,7 +1688,7 @@ pub mod diacritics {
     /// Concatenates `SUB_PLUS` after another literal/constant to create a static string.
     macro_rules! sub_plus {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUB_PLUS)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUB_PLUS)
         };
     }
 
@@ -1709,7 +1709,7 @@ pub mod diacritics {
     /// Concatenates `SUP_GAMMA` after another literal/constant to create a static string.
     macro_rules! sup_gamma {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_GAMMA)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_GAMMA)
         };
     }
 
@@ -1730,7 +1730,7 @@ pub mod diacritics {
     /// Concatenates `SUP_L` after another literal/constant to create a static string.
     macro_rules! sup_l {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_L)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_L)
         };
     }
 
@@ -1751,7 +1751,7 @@ pub mod diacritics {
     /// Concatenates `UNDER_BAR` after another literal/constant to create a static string.
     macro_rules! under_bar {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::UNDER_BAR)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::UNDER_BAR)
         };
     }
 
@@ -1772,7 +1772,7 @@ pub mod diacritics {
     /// Concatenates `SUP_REV_GLOTTAL_STOP` after another literal/constant to create a static string.
     macro_rules! sup_rev_glottal_stop {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_REV_GLOTTAL_STOP)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_REV_GLOTTAL_STOP)
         };
     }
 
@@ -1793,7 +1793,7 @@ pub mod diacritics {
     /// Concatenates `CORNER` after another literal/constant to create a static string.
     macro_rules! corner {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::CORNER)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::CORNER)
         };
     }
 
@@ -1814,7 +1814,7 @@ pub mod diacritics {
     /// Concatenates `UMLAUT` after another literal/constant to create a static string.
     macro_rules! umlaut {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::UMLAUT)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::UMLAUT)
         };
     }
 
@@ -1835,7 +1835,7 @@ pub mod diacritics {
     /// Concatenates `SUPERIMPOSED_TILDE` after another literal/constant to create a static string.
     macro_rules! superimposed_tilde {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUPERIMPOSED_TILDE)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUPERIMPOSED_TILDE)
         };
     }
 
@@ -1856,7 +1856,7 @@ pub mod diacritics {
     /// Concatenates `OVER_CROSS` after another literal/constant to create a static string.
     macro_rules! over_cross {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::OVER_CROSS)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::OVER_CROSS)
         };
     }
 
@@ -1877,7 +1877,7 @@ pub mod diacritics {
     /// Concatenates `RAISING_SIGN` after another literal/constant to create a static string.
     macro_rules! raising_sign {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::RAISING_SIGN)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::RAISING_SIGN)
         };
     }
 
@@ -1898,7 +1898,7 @@ pub mod diacritics {
     /// Concatenates `SYLLABICITY_MARK` after another literal/constant to create a static string.
     macro_rules! syllabicity_mark {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SYLLABICITY_MARK)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SYLLABICITY_MARK)
         };
     }
 
@@ -1919,7 +1919,7 @@ pub mod diacritics {
     /// Concatenates `LOWERING_SIGN` after another literal/constant to create a static string.
     macro_rules! lowering_sign {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::LOWERING_SIGN)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::LOWERING_SIGN)
         };
     }
 
@@ -1940,7 +1940,7 @@ pub mod diacritics {
     /// Concatenates `SUB_ARCH` after another literal/constant to create a static string.
     macro_rules! sub_arch {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUB_ARCH)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUB_ARCH)
         };
     }
 
@@ -1961,7 +1961,7 @@ pub mod diacritics {
     /// Concatenates `ADVANCING_SIGN` after another literal/constant to create a static string.
     macro_rules! advancing_sign {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::ADVANCING_SIGN)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::ADVANCING_SIGN)
         };
     }
 
@@ -1982,7 +1982,7 @@ pub mod diacritics {
     /// Concatenates `RIGHT_HOOK` after another literal/constant to create a static string.
     macro_rules! right_hook {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::RIGHT_HOOK)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::RIGHT_HOOK)
         };
     }
 
@@ -2003,7 +2003,7 @@ pub mod diacritics {
     /// Concatenates `RETRACTING_SIGN` after another literal/constant to create a static string.
     macro_rules! retracting_sign {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::RETRACTING_SIGN)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::RETRACTING_SIGN)
         };
     }
 
@@ -2022,7 +2022,7 @@ pub mod diacritics {
     /// Concatenates `SYLLABICITY_MARK_ABOVE` after another literal/constant to create a static string.
     macro_rules! syllabicity_mark_above {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SYLLABICITY_MARK_ABOVE)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SYLLABICITY_MARK_ABOVE)
         };
     }
 
@@ -2041,7 +2041,7 @@ pub mod diacritics {
     /// Concatenates `SUP_ARCH` after another literal/constant to create a static string.
     macro_rules! sup_arch {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_ARCH)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_ARCH)
         };
     }
 
@@ -2060,7 +2060,7 @@ pub mod diacritics {
     /// Concatenates `OVER_RING` after another literal/constant to create a static string.
     macro_rules! over_ring {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::OVER_RING)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::OVER_RING)
         };
     }
 
@@ -2079,7 +2079,7 @@ pub mod diacritics {
     /// Concatenates `SUP_BRIDGE` after another literal/constant to create a static string.
     macro_rules! sup_bridge {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_BRIDGE)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_BRIDGE)
         };
     }
 
@@ -2098,7 +2098,7 @@ pub mod diacritics {
     /// Concatenates `SUP_PLUS` after another literal/constant to create a static string.
     macro_rules! sup_plus {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_PLUS)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_PLUS)
         };
     }
 
@@ -2117,7 +2117,7 @@ pub mod diacritics {
     /// Concatenates `SUP_RIGHT_HALF_RING` after another literal/constant to create a static string.
     macro_rules! sup_right_half_ring {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_RIGHT_HALF_RING)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_RIGHT_HALF_RING)
         };
     }
 
@@ -2136,7 +2136,7 @@ pub mod diacritics {
     /// Concatenates `SUP_LEFT_HALF_RING` after another literal/constant to create a static string.
     macro_rules! sup_left_half_ring {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_LEFT_HALF_RING)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::diacritics::SUP_LEFT_HALF_RING)
         };
     }
 
@@ -2164,7 +2164,7 @@ pub mod suprasegmentals {
     /// Concatenates `VERTICAL_STROKE_SUPERIOR` before another literal/constant to create a static string.
     macro_rules! vertical_stroke_superior {
         ($right: expr) => {
-            constcat::concat!($crate::phoneme::ipa::suprasegmentals::VERTICAL_STROKE_SUPERIOR,$right)
+            $crate::constcat::concat!($crate::phoneme::ipa::suprasegmentals::VERTICAL_STROKE_SUPERIOR,$right)
         };
     }
 
@@ -2185,7 +2185,7 @@ pub mod suprasegmentals {
     /// Concatenates `VERTICAL_STROKE_INFERIOR` before another literal/constant to create a static string.
     macro_rules! vertical_stroke_inferior {
         ($right: expr) => {
-            constcat::concat!($crate::phoneme::ipa::suprasegmentals::VERTICAL_STROKE_INFERIOR,$right)
+            $crate::constcat::concat!($crate::phoneme::ipa::suprasegmentals::VERTICAL_STROKE_INFERIOR,$right)
         };
     }
 
@@ -2206,7 +2206,7 @@ pub mod suprasegmentals {
     /// Concatenates `LENGTH_MARK` after another literal/constant to create a static string.
     macro_rules! length_mark {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::suprasegmentals::LENGTH_MARK)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::suprasegmentals::LENGTH_MARK)
         };
     }
 
@@ -2227,7 +2227,7 @@ pub mod suprasegmentals {
     /// Concatenates `HALF_LENGTH_MARK` after another literal/constant to create a static string.
     macro_rules! half_length_mark {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::suprasegmentals::HALF_LENGTH_MARK)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::suprasegmentals::HALF_LENGTH_MARK)
         };
     }
 
@@ -2248,7 +2248,7 @@ pub mod suprasegmentals {
     /// Concatenates `BREVE` after another literal/constant to create a static string.
     macro_rules! breve {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::suprasegmentals::BREVE)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::suprasegmentals::BREVE)
         };
     }
 
@@ -2322,7 +2322,7 @@ pub mod tones {
     /// Concatenates `DOUBLE_ACUTE_ACCENT_OVER` after another literal/constant to create a static string.
     macro_rules! double_acute_accent_over {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::tones::DOUBLE_ACUTE_ACCENT_OVER)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::tones::DOUBLE_ACUTE_ACCENT_OVER)
         };
     }
 
@@ -2341,7 +2341,7 @@ pub mod tones {
     /// Concatenates `EXTRA_HIGH_TONE_LETTER` after another literal/constant to create a static string.
     macro_rules! extra_high_tone_letter {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::tones::EXTRA_HIGH_TONE_LETTER)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::tones::EXTRA_HIGH_TONE_LETTER)
         };
     }
 
@@ -2362,7 +2362,7 @@ pub mod tones {
     /// Concatenates `WEDGE` after another literal/constant to create a static string.
     macro_rules! wedge {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::tones::WEDGE)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::tones::WEDGE)
         };
     }
     pub const HÁČEK: &str = WEDGE;
@@ -2382,7 +2382,7 @@ pub mod tones {
     /// Concatenates `RISING_TONE_LETTER` after another literal/constant to create a static string.
     macro_rules! rising_tone_letter {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::tones::RISING_TONE_LETTER)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::tones::RISING_TONE_LETTER)
         };
     }
 
@@ -2403,7 +2403,7 @@ pub mod tones {
     /// Concatenates `ACUTE_ACCENT_OVER` after another literal/constant to create a static string.
     macro_rules! acute_accent_over {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::tones::ACUTE_ACCENT_OVER)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::tones::ACUTE_ACCENT_OVER)
         };
     }
 
@@ -2422,7 +2422,7 @@ pub mod tones {
     /// Concatenates `HIGH_TONE_LETTER` after another literal/constant to create a static string.
     macro_rules! high_tone_letter {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::tones::HIGH_TONE_LETTER)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::tones::HIGH_TONE_LETTER)
         };
     }
 
@@ -2443,7 +2443,7 @@ pub mod tones {
     /// Concatenates `CIRCUMFLEX` after another literal/constant to create a static string.
     macro_rules! circumflex {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::tones::CIRCUMFLEX)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::tones::CIRCUMFLEX)
         };
     }
 
@@ -2462,7 +2462,7 @@ pub mod tones {
     /// Concatenates `FAILING_TONE_LETTER` after another literal/constant to create a static string.
     macro_rules! failing_tone_letter {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::tones::FAILING_TONE_LETTER)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::tones::FAILING_TONE_LETTER)
         };
     }
 
@@ -2483,7 +2483,7 @@ pub mod tones {
     /// Concatenates `MACRON` after another literal/constant to create a static string.
     macro_rules! macron {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::tones::MACRON)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::tones::MACRON)
         };
     }
 
@@ -2502,7 +2502,7 @@ pub mod tones {
     /// Concatenates `MID_TONE_LETTER` after another literal/constant to create a static string.
     macro_rules! mid_tone_letter {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::tones::MID_TONE_LETTER)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::tones::MID_TONE_LETTER)
         };
     }
 
@@ -2523,7 +2523,7 @@ pub mod tones {
     /// Concatenates `MACRON_ACUTE_ACCENT` after another literal/constant to create a static string.
     macro_rules! macron_acute_accent {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::tones::MACRON_ACUTE_ACCENT)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::tones::MACRON_ACUTE_ACCENT)
         };
     }
 
@@ -2542,7 +2542,7 @@ pub mod tones {
     /// Concatenates `HIGH_RISING_TONE_LETTER` after another literal/constant to create a static string.
     macro_rules! high_rising_tone_letter {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::tones::HIGH_RISING_TONE_LETTER)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::tones::HIGH_RISING_TONE_LETTER)
         };
     }
 
@@ -2563,7 +2563,7 @@ pub mod tones {
     /// Concatenates `GRAVE_ACCENT_OVER` after another literal/constant to create a static string.
     macro_rules! grave_accent_over {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::tones::GRAVE_ACCENT_OVER)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::tones::GRAVE_ACCENT_OVER)
         };
     }
 
@@ -2582,7 +2582,7 @@ pub mod tones {
     /// Concatenates `LOW_TONE_LETTER` after another literal/constant to create a static string.
     macro_rules! low_tone_letter {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::tones::LOW_TONE_LETTER)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::tones::LOW_TONE_LETTER)
         };
     }
 
@@ -2603,7 +2603,7 @@ pub mod tones {
     /// Concatenates `GRAVE_ACCENT_MACRON` after another literal/constant to create a static string.
     macro_rules! grave_accent_macron {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::tones::GRAVE_ACCENT_MACRON)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::tones::GRAVE_ACCENT_MACRON)
         };
     }
 
@@ -2622,7 +2622,7 @@ pub mod tones {
     /// Concatenates `LOW_RISING_TONE_LETTER` after another literal/constant to create a static string.
     macro_rules! low_rising_tone_letter {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::tones::LOW_RISING_TONE_LETTER)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::tones::LOW_RISING_TONE_LETTER)
         };
     }
 
@@ -2643,7 +2643,7 @@ pub mod tones {
     /// Concatenates `DOUBLE_GRAVE_ACCENT_OVER` after another literal/constant to create a static string.
     macro_rules! double_grave_accent_over {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::tones::DOUBLE_GRAVE_ACCENT_OVER)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::tones::DOUBLE_GRAVE_ACCENT_OVER)
         };
     }
 
@@ -2662,7 +2662,7 @@ pub mod tones {
     /// Concatenates `EXTRA_LOW_TONE_LETTER` after another literal/constant to create a static string.
     macro_rules! extra_low_tone_letter {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::tones::EXTRA_LOW_TONE_LETTER)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::tones::EXTRA_LOW_TONE_LETTER)
         };
     }
 
@@ -2683,7 +2683,7 @@ pub mod tones {
     /// Concatenates `GRAVE_ACUTE_GRAVE_ACCENT` after another literal/constant to create a static string.
     macro_rules! grave_acute_grave_accent {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::tones::GRAVE_ACUTE_GRAVE_ACCENT)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::tones::GRAVE_ACUTE_GRAVE_ACCENT)
         };
     }
 
@@ -2702,7 +2702,7 @@ pub mod tones {
     /// Concatenates `RISING_FALLING_TONE_LETTER` after another literal/constant to create a static string.
     macro_rules! rising_falling_tone_letter {
         ($left: expr) => {
-            constcat::concat!($left,$crate::phoneme::ipa::tones::RISING_FALLING_TONE_LETTER)
+            $crate::constcat::concat!($left,$crate::phoneme::ipa::tones::RISING_FALLING_TONE_LETTER)
         };
     }
 

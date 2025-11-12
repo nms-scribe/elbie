@@ -734,7 +734,7 @@ impl SymbolCombining {
             (false, false) => (),
         }
         println!(") => {{");
-        print!("{i:indent$}{i:8}constcat::concat!(");
+        print!("{i:indent$}{i:8}$crate::constcat::concat!(");
         if before {
             print!("$left,");
         }
@@ -795,6 +795,13 @@ impl<Kind> Symbol<Kind> {
         let result = result.strip_prefix("Lower-case ").unwrap_or(result);
         // spelling fix:
         let result = result.replace("BuIl's eye", "Bull's eye");
+        // renaming some of them
+        let result = if result == "Opentail G" {
+            // this is actually a different character, but the normal 'g' isn't used anywhere, so I'm going to just consider this G.
+            "g".to_string()
+        } else {
+            result
+        };
 
         // makes replaces easier:
         let result = result.to_lowercase();

@@ -13,6 +13,8 @@ html-builder = "0.5.1"
 json = "0.12.4"
 prettytable = { version = "0.10.0", default-features = false } # I don't need another version of csv installed
 gumdrop = "0.8.1"
+constcat = "=0.6.1"
+
 
 # NMS: Added these for my own purposes
 
