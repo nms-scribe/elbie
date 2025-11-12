@@ -1,14 +1,15 @@
 use elbie::language::Language;
 use elbie::phoneme::Phoneme;
 use std::rc::Rc;
-use std::iter;
+use core::iter;
 use crate::phonemes;
 use elbie::phoneme::InventoryLoader as _;
-use std::slice::Iter;
+use core::slice::Iter;
 use elbie::phoneme::PHONEME;
 use elbie::phonotactics::EnvironmentBranch;
 use elbie::phonotactics::EnvironmentChoice;
 use elbie::phoneme_table::TableOption;
+use elbie::errors::ElbieError;
 
 // language name
 pub(crate) const GOBLIN: &str = "goblin";
@@ -93,7 +94,7 @@ result.push('n');
     }
 }
 
-pub(crate) fn create_goblin_language() -> Result<Language,elbie::errors::ElbieError> {
+pub(crate) fn create_goblin_language() -> Result<Language,ElbieError> {
     let mut language = Language::new(GOBLIN,INITIAL_ONSET_PHONEME,ONSET,vec!["Transcription"]);
 
     _ = language.add_phoneme(phonemes::M,&[CONSONANT,LABIAL,BILABIAL,NASAL,UNASPIRATED,VOICED])?;
@@ -233,6 +234,7 @@ pub(crate) mod to_hobgoblin {
     use elbie::phoneme::InventoryLoader as _;
     use crate::phonemes;
     use crate::goblin;
+    use elbie::family::Family;
 
     const SCHWA: &str = "ə";
     const PHI: &str = "ɸ";
@@ -258,8 +260,10 @@ pub(crate) mod to_hobgoblin {
     const SYLLABIFIED: &str = "syllabified";
 
 
+    pub(crate) fn create_goblin_to_hobgoblin(family: &mut Family) -> Result<Transformation,ElbieError> {
 
-    pub(crate) fn create_goblin_to_hobgoblin(family: &mut elbie::family::Family) -> Result<Transformation,ElbieError> {
+        const TEMPORARY: &str = "temporary";
+
         family.load_language(GOBLIN)?;
         let goblin = family.get_language(GOBLIN)?;
 
@@ -268,7 +272,6 @@ pub(crate) mod to_hobgoblin {
         transformation.set_dont_validate(true);
 
         // TODO: Some of these belong in HOBGOBLIN
-        const TEMPORARY: &str = "temporary";
         let mut temporary = Inventory::default();
         _ = temporary.add_phoneme(SCHWA,&[goblin::VOWEL,goblin::OPENMID])?;
         // temporarily created from aspirated /v/, then breaks and disappears
@@ -316,10 +319,10 @@ pub(crate) mod to_hobgoblin {
             _ = rule.opt_repl(PFA, &[phonemes::P])? ||
             rule.opt_repl(TSA, &[phonemes::T,phonemes::ESH])? ||
             rule.opt_repl(KXA, &[phonemes::K,phonemes::ESH])? ||
-            return Ok(false);
+            rule.fail()?;
 
             // only before front vowels...
-            _ = rule.is(goblin::FRONT)?;
+            rule.is(goblin::FRONT)?;
 
             Ok(true)
 
@@ -327,11 +330,11 @@ pub(crate) mod to_hobgoblin {
 
         transformation.add_rule("palatalize and break reverse affricates", |rule| {
 
-            _ = rule.is(goblin::FRONT)?;
+            rule.is(goblin::FRONT)?;
 
             _ = rule.opt_repl(phonemes::EHK, &[phonemes::ESH,phonemes::K])? ||
             rule.opt_repl(phonemes::EHG, &[EZH,phonemes::G])? ||
-            return Ok(false);
+            rule.fail()?;
 
             Ok(true)
 
@@ -345,10 +348,10 @@ pub(crate) mod to_hobgoblin {
             rule.opt_repl(phonemes::ESHT, &[phonemes::ESH,phonemes::T])? ||
             rule.opt_repl(phonemes::EHK, &[phonemes::X,phonemes::K])? ||
             rule.opt_repl(phonemes::EHG, &[phonemes::AGH,phonemes::G])? ||
-            return Ok(false);
+            rule.fail()?;
 
             // Only if not final
-            _ = rule.not_final()?;
+            rule.not_final()?;
 
             Ok(true)
 
@@ -357,7 +360,7 @@ pub(crate) mod to_hobgoblin {
 
         transformation.add_rule("consonant softening", |rule| {
             // some consonants soften between vowels.
-            _ = rule.is(goblin::VOWEL)?;
+            rule.is(goblin::VOWEL)?;
 
             // voiced plosives become fricative
             _ = (rule.opt_repl(phonemes::B, &[BHI])?) ||
@@ -372,9 +375,9 @@ pub(crate) mod to_hobgoblin {
             // the tap becomes an approximant
             (rule.opt_repl(phonemes::AGGA, &[GYA])?) ||
             // other approximants do not change, causing some merging...
-            return Ok(false);
+            rule.fail()?;
 
-            _ = rule.is(goblin::VOWEL)?;
+            rule.is(goblin::VOWEL)?;
 
             Ok(true)
         });
@@ -388,7 +391,7 @@ pub(crate) mod to_hobgoblin {
 
             _ = rule.opt_repl(goblin::OPEN, &[])? ||
             rule.opt_repl(goblin::OPENMID, &[])? ||
-            return Ok(false);
+            rule.fail()?;
 
             _ = rule.opt_repl(phonemes::L, &[L_SYL])? ||
             rule.opt_repl(phonemes::R, &[R_SYL])? ||
@@ -400,7 +403,7 @@ pub(crate) mod to_hobgoblin {
             rule.opt_repl(phonemes::M, &[M_SYL])? ||
             rule.opt_repl(phonemes::ENG, &[ENG_SYL])? ||
             rule.opt_repl(phonemes::NYE, &[NYE_SYL])? ||
-            return Ok(false);
+            rule.fail()?;
 
             Ok(true)
 
@@ -408,7 +411,7 @@ pub(crate) mod to_hobgoblin {
 
         transformation.add_rule("syllabification (2)", |rule| {
             // Second, syllabified consonants that appear after a vowel are desyllabified
-            _ = rule.is(goblin::VOWEL)?;
+            rule.is(goblin::VOWEL)?;
 
             _ = rule.opt_repl(L_SYL, &[phonemes::L])? ||
             rule.opt_repl(R_SYL, &[phonemes::R])? ||
@@ -419,7 +422,7 @@ pub(crate) mod to_hobgoblin {
             rule.opt_repl(M_SYL, &[phonemes::M])? ||
             rule.opt_repl(ENG_SYL, &[phonemes::ENG])? ||
             rule.opt_repl(NYE_SYL, &[phonemes::NYE])? ||
-            return Ok(false);
+            rule.fail()?;
 
             Ok(true)
 
@@ -436,7 +439,7 @@ pub(crate) mod to_hobgoblin {
             rule.opt_repl(M_SYL, &[phonemes::M])? ||
             rule.opt_repl(ENG_SYL, &[phonemes::ENG])? ||
             rule.opt_repl(NYE_SYL, &[phonemes::NYE])? ||
-            return Ok(false);
+            rule.fail()?;
 
             rule.is(goblin::VOWEL)?;
 
@@ -452,7 +455,7 @@ pub(crate) mod to_hobgoblin {
             _ = rule.opt_repl(J_SYL, &[phonemes::EE])? ||
             rule.opt_repl(VWA_SYL, &[phonemes::OO])? ||
             rule.opt_repl(GYA_SYL, &[phonemes::A])? ||
-            return Ok(false);
+            rule.fail()?;
 
             Ok(true)
 
@@ -460,7 +463,7 @@ pub(crate) mod to_hobgoblin {
 
         transformation.add_rule("voiceless r loss",|rule| {
             // at this point the voiceless r is completely lost
-            _ = rule.repl(phonemes::AHR, &[phonemes::R])?;
+            rule.repl(phonemes::AHR, &[phonemes::R])?;
 
             Ok(true)
         });
@@ -474,9 +477,9 @@ pub(crate) mod to_hobgoblin {
             rule.opt_repl(M_SYL,&[M_SYL, phonemes::M])? ||
             rule.opt_repl(ENG_SYL,&[ENG_SYL, phonemes::ENG])? ||
             rule.opt_repl(NYE_SYL,&[NYE_SYL, phonemes::NYE])? ||
-            return Ok(false);
+            rule.fail()?;
 
-            _ = rule.is(SYLLABIFIED)?;
+            rule.is(SYLLABIFIED)?;
 
             Ok(true)
 
@@ -502,7 +505,7 @@ pub(crate) mod to_hobgoblin {
                 rule.repl(goblin::FRICATIVE, &[])?;
                 Ok(true)
             })? ||
-            return Ok(false);
+            rule.fail()?;
 
 
             Ok(true)
@@ -524,7 +527,7 @@ pub(crate) mod to_hobgoblin {
                 rule.repl(goblin::BACK,&[])?;
                 Ok(true)
             })? ||
-            return Ok(false);
+            rule.fail()?;
 
             Ok(true)
 

@@ -40,6 +40,7 @@ use crate::phoneme_table_builder::TableEntry;
 use crate::phonotactics::EnvironmentBranch;
 use crate::phoneme::Phoneme;
 use std::collections::HashMap;
+use core::iter;
 
 
 
@@ -130,12 +131,12 @@ impl Language {
     }
 
     pub fn add_phoneme_with_spelling(&mut self, phoneme: &'static str, orthography: &[&'static str], classes: &[&'static str]) -> Result<Rc<Phoneme>,ElbieError> {
-      let behaviors = orthography.into_iter().copied().map(SpellingBehavior::Text).collect();
+      let behaviors = orthography.iter().copied().map(SpellingBehavior::Text).collect();
       self.add_phoneme_with_spelling_behavior(phoneme, behaviors, classes)
     }
 
     pub fn add_phoneme_with_spelling_fn(&mut self, phoneme: &'static str, callbacks: &[SpellingCallback], classes: &[&'static str]) -> Result<Rc<Phoneme>,ElbieError> {
-      let behaviors = callbacks.into_iter().copied().map(|f| SpellingBehavior::Callback(f)).collect();
+      let behaviors = callbacks.iter().copied().map(|f| SpellingBehavior::Callback(f)).collect();
       self.add_phoneme_with_spelling_behavior(phoneme, behaviors, classes)
     }
 
@@ -579,7 +580,7 @@ impl Language {
         let word = record.get(word_field).ok_or_else(|| format!("No word found at entry {row}"))?;
         let word = self.read_word(word).map_err(|e| format!("Error parsing word {row}: {e}"))?;
         let spelling = (0..self.orthographies.len()).map(|i| self.spell_word(&word, i)).collect();
-        let entry: LexiconEntry = LexiconEntry::new(
+        let entry = LexiconEntry::new(
             word,
             spelling,
             record.get(definition_field).ok_or_else(|| format!("No category found at row {row}"))?.to_owned(),
@@ -600,7 +601,7 @@ impl Language {
 impl InventoryLoader for Language {
 
     fn add_phoneme(&mut self, phoneme: &'static str, sets: &[&'static str]) -> Result<Rc<Phoneme>,ElbieError> {
-        self.add_phoneme_to_inventory(phoneme,sets,PhonemeBehavior::new((0..self.orthographies.len()).map(|_| SpellingBehavior::default()).collect()))
+        self.add_phoneme_to_inventory(phoneme,sets,PhonemeBehavior::new(iter::repeat_with(SpellingBehavior::default).take(self.orthographies.len()).collect()))
     }
 
     fn add_difference(&mut self, name: &'static str, base_set: &'static str, exclude_sets: &[&'static str]) -> Result<(),ElbieError> {

@@ -188,7 +188,7 @@ impl RuleState<'_> {
             splices: Vec::new()
         };
         match inner.seq(sequence) {
-            Ok(_) => {
+            Ok(()) => {
                 self.phonemes = inner.phonemes;
                 self.word_index = inner.word_index;
                 self.splices.extend(inner.splices);
@@ -287,6 +287,11 @@ impl RuleState<'_> {
         Ok(matched)
     }
 
+    /// Returns a MatchFailed error. When running a choice of options, you can use `rule.opt(..)? || rule.opt(..)? || rule.fail()?` in the sequence to automatically fail. While you could also return Ok(false), that will trigger clippy's `diverging_sub_expression` lint. So this is just a convenience function to make the expression look neater.
+    pub const fn fail(&self) -> Result<bool,RuleStateError> {
+        Err(RuleStateError::MatchFailed)
+    }
+
 
 }
 
@@ -368,7 +373,7 @@ impl Rule {
 
         // the splices are now sorted, and unique, so I should be able to iterate through the word again and copy things in somehow...
         let mut new_phonemes = Vec::new();
-        let mut old_phonemes = word.phonemes().into_iter().enumerate().peekable();
+        let mut old_phonemes = word.phonemes().iter().enumerate().peekable();
         let mut transformed = false;
         for next_splice in splices {
             // push through all the phonemes before the next splice and just push them through.
@@ -424,11 +429,12 @@ impl Transformation {
         result
     }
 
-    pub fn set_dont_validate(&mut self, value: bool) {
+    pub const fn set_dont_validate(&mut self, value: bool) {
         self.dont_validate = value;
     }
 
-    pub fn dont_validate(&self) -> bool {
+    #[must_use]
+    pub const fn dont_validate(&self) -> bool {
         self.dont_validate
     }
 

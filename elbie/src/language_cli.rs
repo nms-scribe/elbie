@@ -9,6 +9,7 @@ use crate::cli_functions::format_lexicon;
 use crate::cli_functions::ValidateOption;
 use std::path::Path;
 use std::ffi::OsStr;
+use std::env;
 
 
 pub(crate) enum Command {
@@ -121,7 +122,7 @@ pub(crate) fn parse_args<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(ar
 }
 
 pub(crate) fn show_usage(program: &str) {
-    println!("usage: {} [options] [command]",program);
+    println!("usage: {program} [options] [command]");
     println!("default command: --generate 1");
     println!("options:");
     println!("   --format=<plain | terminal | markdown | html | json | csv>");
@@ -173,8 +174,8 @@ pub fn run<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Args,
             Command::ShowSpelling(columns) => show_spelling(arguments.grid_style.as_ref(), &language, columns),
             Command::ProcessLexicon(path,ortho_index) => format_lexicon(arguments.grid_style.as_ref(), &language, &path, ortho_index),
             Command::ShowUsage => {
-                let exe_name = std::env::current_exe().ok().as_deref().and_then(Path::file_name).map(OsStr::display).as_ref().map(ToString::to_string);
-                let program = exe_name.as_deref().unwrap_or(language.name());
+                let exe_name = env::current_exe().ok().as_deref().and_then(Path::file_name).map(OsStr::display).as_ref().map(ToString::to_string);
+                let program = exe_name.as_deref().unwrap_or_else(|| language.name());
                 show_usage(program)
             },
         }

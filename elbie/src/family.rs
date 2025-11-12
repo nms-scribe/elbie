@@ -43,7 +43,7 @@ impl Family {
         }
     }
 
-    pub fn transformation<Creator: FnOnce(&mut Family) -> Result<Transformation,ElbieError> + 'static>(&mut self, from: &'static str, to: &'static str, creator: Creator) -> Result<(),ElbieError> {
+    pub fn transformation<Creator: FnOnce(&mut Self) -> Result<Transformation,ElbieError> + 'static>(&mut self, from: &'static str, to: &'static str, creator: Creator) -> Result<(),ElbieError> {
         match self.delayed_transformations.insert((from.to_owned(),to.to_owned()), Box::new(creator)) {
             Some(_) => Err(ElbieError::TransformationAlreadyAdded(from.to_owned(),to.to_owned())),
             None => Ok(()),

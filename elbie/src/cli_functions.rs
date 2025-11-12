@@ -65,7 +65,7 @@ pub(crate) fn generate_words(grid_style: Option<&GridStyle>, language: &Language
 
 
 pub(crate) fn validate_word(language: &Language, word: &Word, explain: bool, trace_cb: Option<&ValidationTraceCallback>) -> bool {
-    match language.check_word(&word,trace_cb) {
+    match language.check_word(word,trace_cb) {
         Err(err) => {
           if trace_cb.is_some() {
             println!("!!!! invalid word (see trace)");
@@ -82,7 +82,7 @@ pub(crate) fn validate_word(language: &Language, word: &Word, explain: bool, tra
           }
 
           for orthography in 0..language.orthographies().len() {
-            print!("{} ",language.spell_word(&word,orthography));
+            print!("{} ",language.spell_word(word,orthography));
           }
           println!("{word}");
           true
@@ -181,7 +181,7 @@ pub(crate) fn format_lexicon(grid_style: Option<&GridStyle>, language: &Language
 
   match language.load_lexicon(path,ortho_index) {
     Ok(lexicon) => {
-        let result = lexicon.into_string(&grid_style);
+        let result = lexicon.into_string(grid_style);
         println!("{result}")
 
     },

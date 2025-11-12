@@ -12,7 +12,7 @@ use prettytable::format::TableFormat as PrettyTableFormat;
 use prettytable::Table as PrettyTable;
 use prettytable::Row as PrettyRow;
 use prettytable::Cell as PrettyCell;
-use std::str::FromStr;
+use core::str::FromStr;
 
 
 /*
@@ -210,11 +210,11 @@ impl FromStr for GridStyle {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_ref() {
-            "plain" => Ok(GridStyle::Plain),
-            "terminal" => Ok(GridStyle::Terminal { spans: true }),
-            "markdown" => Ok(GridStyle::Markdown),
-            "html" => Ok(GridStyle::HTML { spans: true }),
-            "json" => Ok(GridStyle::JSON),
+            "plain" => Ok(Self::Plain),
+            "terminal" => Ok(Self::Terminal { spans: true }),
+            "markdown" => Ok(Self::Markdown),
+            "html" => Ok(Self::HTML { spans: true }),
+            "json" => Ok(Self::JSON),
             name => Err(format!("Unknown grid style '{name}'."))
         }
     }
@@ -223,7 +223,7 @@ impl FromStr for GridStyle {
 impl GridStyle {
 
 
-    pub(crate) fn with_no_spans(&self) -> Self {
+    pub(crate) const fn with_no_spans(&self) -> Self {
         match self {
             Self::Plain => Self::Plain,
             Self::Terminal { spans: _  } => Self::Terminal { spans: false },

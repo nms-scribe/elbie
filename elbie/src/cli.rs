@@ -1,3 +1,4 @@
+#![expect(clippy::empty_structs_with_brackets,reason="The 'Options' derive seems to create some empty structs with brackets, and I can't control that.")]
 use crate::errors::ElbieError;
 use crate::grid::GridStyle;
 use crate::cli_functions::generate_words;
@@ -14,8 +15,9 @@ use crate::family::Family;
 use crate::language::Language;
 use crate::cli_functions::transform_words;
 use crate::cli_functions::TransformationOption;
-use std::error::Error;
+use core::error::Error;
 use crate::cli_functions::read_words;
+use std::env;
 
 // TODO: Need some switch options for the rules. Also, could I have reference entities so I can go like rule.opt.switch? rule.opt.is, etc... Makes it much easier to repeat functions.
 
@@ -79,7 +81,7 @@ impl DoIt for GenerateWords {
 
         let language = family.get_language_or_default(language.as_deref())?;
 
-        generate_words(Some(&grid_style), &language, self.count);
+        generate_words(Some(grid_style), language, self.count);
 
         Ok(())
     }
@@ -171,7 +173,7 @@ impl DoIt for ShowPhonemes {
 
         let language = family.get_language_or_default(language.as_deref())?;
 
-        show_phonemes(Some(&grid_style), &language, self.table.as_ref());
+        show_phonemes(Some(grid_style), language, self.table.as_ref());
 
         Ok(())
     }
@@ -213,7 +215,7 @@ impl DoIt for ShowSpelling {
         let language = family.get_language_or_default(language.as_deref())?;
 
         // TODO: These things should now be able to throw errors, maybe?
-        show_spelling(Some(&grid_style), &language, self.columns);
+        show_spelling(Some(grid_style), language, self.columns);
 
         Ok(())
     }
@@ -300,7 +302,7 @@ impl DoIt for Transform {
         let mut family = family()?;
 
 
-        let source_language = language.or_else(|| family.default_language_name().map(ToOwned::to_owned)).ok_or_else(|| ElbieError::NoDefaultLanguage)?;
+        let source_language = language.or_else(|| family.default_language_name().map(ToOwned::to_owned)).ok_or(ElbieError::NoDefaultLanguage)?;
 
         // in theory the transformation should take care of loading any languages it needs to get phonemes from. If it doesn't, they'll get an error pretty quickly.
         family.load_transformation(&source_language, &self.target)?;
@@ -325,7 +327,7 @@ impl DoIt for Transform {
 
 
 
-        transform_words(&transformation,source_language,target_language,words.into_iter(),&match (self.explain,self.trace)  {
+        transform_words(transformation,source_language,target_language,words.into_iter(),&match (self.explain,self.trace)  {
             (true, true) => TransformationOption::ExplainAndTrace,
             (true, false) => TransformationOption::Explain,
             (false, true) => TransformationOption::Trace,
@@ -341,6 +343,7 @@ impl DoIt for Transform {
 
 #[derive(Options)]
 /// Print the languages and transformations available in the tool.
+#[expect(clippy::empty_structs_with_brackets,reason="Options won't derive a unit struct")]
 pub struct ShowInformation {
 }
 
@@ -408,21 +411,20 @@ pub struct FamilyShowUsage {
 impl DoIt for FamilyShowUsage {
 
     fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, _: FamilyCreator, _: Option<String>) -> Result<(),Box<dyn Error>> {
-        let exe_name = std::env::current_exe().ok().as_deref().and_then(Path::file_name).map(OsStr::display).as_ref().map(ToString::to_string);
+        let exe_name = env::current_exe().ok().as_deref().and_then(Path::file_name).map(OsStr::display).as_ref().map(ToString::to_string);
         let program = exe_name.as_deref().unwrap_or("elbie");
 
         let selected_command = self.command.as_deref();
         if let Some(command) = selected_command {
             match command {
-                "generate" => show_usage::<GenerateWords>(program, Some(&command)),
-                "validate" => show_usage::<ValidateWords>(program, Some(&command)),
-                "phonemes" => show_usage::<ShowPhonemes>(program, Some(&command)),
-                "spelling" => show_usage::<ShowSpelling>(program, Some(&command)),
-                "lexicon" => show_usage::<FormatLexicon>(program, Some(&command)),
-                "transform" => show_usage::<Transform>(program, Some(&command)),
-                "information" => show_usage::<ShowInformation>(program, Some(&command)),
-                "help" => show_usage::<FamilyShowUsage>(program, Some(&command)),
-                "default" => show_usage::<ShowInformation>(program, Some(&command)),
+                "generate" => show_usage::<GenerateWords>(program, Some(command)),
+                "validate" => show_usage::<ValidateWords>(program, Some(command)),
+                "phonemes" => show_usage::<ShowPhonemes>(program, Some(command)),
+                "spelling" => show_usage::<ShowSpelling>(program, Some(command)),
+                "lexicon" => show_usage::<FormatLexicon>(program, Some(command)),
+                "transform" => show_usage::<Transform>(program, Some(command)),
+                "information" => show_usage::<ShowInformation>(program, Some(command)),
+                "help" => show_usage::<Self>(program, Some(command)),
                 command => {
                     eprintln!("Unknown command '{command}'");
                     eprintln!();
@@ -432,7 +434,7 @@ impl DoIt for FamilyShowUsage {
             }
         } else {
             show_usage::<FamilyArguments>(program, None);
-        };
+        }
 
         Ok(())
     }
@@ -516,18 +518,18 @@ pub struct LanguageShowUsage {
 impl DoIt for LanguageShowUsage {
 
     fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, _: FamilyCreator, _: Option<String>) -> Result<(),Box<dyn Error>> {
-        let exe_name = std::env::current_exe().ok().as_deref().and_then(Path::file_name).map(OsStr::display).as_ref().map(ToString::to_string);
+        let exe_name = env::current_exe().ok().as_deref().and_then(Path::file_name).map(OsStr::display).as_ref().map(ToString::to_string);
         let program = exe_name.as_deref().unwrap_or("elbie");
 
         let selected_command = self.command.as_deref();
         if let Some(command) = selected_command {
             match command {
-                "generate" => show_usage::<GenerateWords>(program, Some(&command)),
-                "validate" => show_usage::<ValidateWords>(program, Some(&command)),
-                "phonemes" => show_usage::<ShowPhonemes>(program, Some(&command)),
-                "spelling" => show_usage::<ShowSpelling>(program, Some(&command)),
-                "lexicon" => show_usage::<FormatLexicon>(program, Some(&command)),
-                "help" => show_usage::<LanguageShowUsage>(program, Some(&command)),
+                "generate" => show_usage::<GenerateWords>(program, Some(command)),
+                "validate" => show_usage::<ValidateWords>(program, Some(command)),
+                "phonemes" => show_usage::<ShowPhonemes>(program, Some(command)),
+                "spelling" => show_usage::<ShowSpelling>(program, Some(command)),
+                "lexicon" => show_usage::<FormatLexicon>(program, Some(command)),
+                "help" => show_usage::<Self>(program, Some(command)),
                 command => {
                     eprintln!("Unknown command '{command}'");
                     eprintln!();
@@ -537,7 +539,7 @@ impl DoIt for LanguageShowUsage {
             }
         } else {
             show_usage::<LanguageArguments>(program, None);
-        };
+        }
 
         Ok(())
     }

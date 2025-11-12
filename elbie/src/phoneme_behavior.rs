@@ -17,7 +17,7 @@ impl PhonemeBehavior {
       &self.spelling
   }
 
-  pub(crate) fn spelling_len(&self) -> usize {
+  pub(crate) const fn spelling_len(&self) -> usize {
       self.spelling.len()
   }
 
