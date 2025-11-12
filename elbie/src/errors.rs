@@ -6,7 +6,6 @@ use crate::phoneme_table::TableOption;
 use std::rc::Rc;
 
 #[derive(Debug,Clone,Error)]
-// TODO: This should just be ElbieError instead.
 pub enum ElbieError {
     #[error("Set {0} has no phonemes.")]
     SetIsEmpty(&'static str),

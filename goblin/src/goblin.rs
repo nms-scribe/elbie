@@ -317,10 +317,10 @@ pub(crate) mod to_hobgoblin {
         let goblin = family.get_language(GOBLIN)?;
 
         let mut transformation = Transformation::from(goblin);
-        // TODO: The language doesn't really exist yet, so don't validate it.
+        // The language doesn't really exist yet, so don't validate it.
         transformation.set_dont_validate(true);
 
-        // TODO: Some of these belong in HOBGOBLIN
+        // FUTURE: Some of these belong in HOBGOBLIN
         let mut temporary = Inventory::default();
         _ = temporary.add_phoneme(SCHWA,&[VOWEL,OPEN_MID])?;
         // temporarily created from aspirated /v/, then breaks and disappears

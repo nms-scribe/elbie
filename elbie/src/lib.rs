@@ -3,7 +3,7 @@
 Elbie = LB, Language Builder, and is a bunch of tools for building a constructed language.
 */
 
-// TODO: I could allow translations in IPA ASCII formats with this crate: https://github.com/tirimid/ipa-translate
+// TODO: I could allow translations in IPA ASCII formats with this crate: https://crates.io/crates/ipa-translate
 
 /*
 FUTURE: Implementing syllable breaks, stress, etc, Simple Solution:
