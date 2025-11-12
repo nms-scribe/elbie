@@ -2,5 +2,7 @@
 resolver = "3"
 members = [
   "elbie",
-  "goblin"
-]
+  "goblin"]
+
+# ipa is just a development tool, not intended as a final product
+exclude = [ "ipa" ]
