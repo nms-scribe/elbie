@@ -178,6 +178,8 @@ pub mod family;
 pub mod cli;
 #[cfg(test)] mod test;
 
+pub use constcat;
+
 // Old paths: remove once I'm sure I've fixed all of my languages... Or, maybe just wait until I increase the version number.
 #[deprecated(since="0.2.2",note="Use `elbie::errors::LanguageError` instead.")]
 pub type LanguageError = errors::ElbieError;
