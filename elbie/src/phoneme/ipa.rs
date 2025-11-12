@@ -2,6 +2,14 @@
  Contains constants for various IPA symbols, macros for IPA diacrtics, as well as common 'set' names.
 */
 
+/* Some basic set names */
+pub const VOWEL: &str = "vowel";
+pub const CONSONANT: &str = "consonant";
+pub const VOICED: &str = "voiced";
+pub const UNVOICED: &str = "unvoiced";
+pub const ROUNDED: &str = "rounded";
+pub const UNROUNDED: &str = "unrounded";
+
 /* Consonant places of articulation */
 pub const BILABIAL: &str = "bilabial";
 pub const LABIODENTAL: &str = "labiodental";

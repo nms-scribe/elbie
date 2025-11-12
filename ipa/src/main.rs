@@ -23,6 +23,8 @@ use core::fmt;
 Extracts the IPA unicode symbol data from internationalphoneticassociation.org and outputs a RUST file of constants.
 
 This program is not part of the outer workspace and isn't intended for distribution except as source code. It is only meant to run once to generate a rust file. It is not intended for updating that file periodically, so it is also not a build script. In fact, I do not expect it to continue to run in the future. The data I'm retrieving, while public, is not in any standard format.
+
+**NOTE**: To update the actual file, run: `cargo run > ../elbie/src/phoneme/ipa.rs` from the root of *this* project
 */
 
 // NOTE: This is only here for testing... I can run `cargo run > src/phoneme/ipa.rs` to regenerate, and check compilation errors. If there are errors, this can be commented out.
@@ -1296,6 +1298,18 @@ impl OutputData {
         println!("/*!");
         println!(" Contains constants for various IPA symbols, macros for IPA diacrtics, as well as common 'set' names.");
         println!("*/");
+
+
+        println!();
+        println!("/* Some basic set names */");
+        println!("pub const VOWEL: &str = \"vowel\";");
+        println!("pub const CONSONANT: &str = \"consonant\";");
+        println!("pub const VOICED: &str = \"voiced\";");
+        println!("pub const UNVOICED: &str = \"unvoiced\";");
+        println!("pub const ROUNDED: &str = \"rounded\";");
+        println!("pub const UNROUNDED: &str = \"unrounded\";");
+
+
 
         println!();
         println!("/* Consonant places of articulation */");
