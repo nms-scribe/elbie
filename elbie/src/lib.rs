@@ -3,8 +3,6 @@
 Elbie = LB, Language Builder, and is a bunch of tools for building a constructed language.
 */
 
-// TODO: I could allow translations in IPA ASCII formats with this crate: https://crates.io/crates/ipa-translate
-
 /*
 FUTURE: Implementing syllable breaks, stress, etc, Simple Solution:
 - a "word" is sequence of syllables, not phonemes. A syllable is a sequence of phonemes. I don't think we need to support onset/rhyme structure, since that could be analyzed differently. In fact, some languages might not be able to analyze syllables, in which case each word would have to be one big syllable.

@@ -247,6 +247,7 @@ impl Language {
     pub(crate) fn read_word(&self,input: &str) -> Result<Word,ElbieError> {
         // not an efficient algorithm, but it works...
         let mut phonemes: Vec<Rc<Phoneme>> = self.inventory.phonemes().values().cloned().collect();
+        // sort the phonemes so that longer phonemes come first. This should avoid longer graphemes from matching the shorter graphemes accidentally. For example, say there were phonemes "aw" and "a". If "aw" is sorted first for the match, then if it's found in the word it won't be mistaken for an "a" followed by a "w".
         phonemes.sort_by(sort_phonemes_by_length_descending);
 
         let mut word: Vec<Rc<Phoneme>> = vec![];
@@ -583,7 +584,7 @@ impl Language {
         let entry = LexiconEntry::new(
             word,
             spelling,
-            record.get(definition_field).ok_or_else(|| format!("No category found at row {row}"))?.to_owned(),
+            record.get(definition_field).ok_or_else(|| format!("No definition found at row {row}"))?.to_owned(),
         );
 
         result.push(entry);
