@@ -97,7 +97,7 @@ pub struct ValidateWords {
     /// Provides detailed explanation of valid phonemes on success.
     explain: bool,
 
-    /// Read the list of words from a line-delimited file
+    /// Read the list of words from a CSV with a "word" field, or just one field
     file: Option<String>,
 
     #[options(free)]
@@ -120,7 +120,7 @@ impl DoIt for ValidateWords {
 
         if let Some(file) = &self.file {
             for word in read_words(file)? {
-                words.push(word?);
+                words.push(word);
             }
         }
 
@@ -285,7 +285,7 @@ pub struct Transform {
     /// Provides detailed explanation of valid phonemes on success.
     explain: bool,
 
-    /// Read the list of words from a line-delimited file
+    /// Read the list of words from a CSV with a "word" field, or just one field
     file: Option<String>,
 
     #[options(free)]
@@ -319,7 +319,7 @@ impl DoIt for Transform {
 
         if let Some(file) = &self.file {
             for word in read_words(file)? {
-                words.push(word?);
+                words.push(word);
             }
         }
 

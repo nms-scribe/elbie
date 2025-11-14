@@ -10,10 +10,9 @@ use crate::validation::ValidationTraceCallback;
 use crate::word::Word;
 use crate::transformation::Transformation;
 use crate::transformation::TransformationTraceCallback;
-use std::io;
-use std::fs::File;
 use std::path::Path;
-use std::io::BufRead as _;
+use csv::Reader;
+use std::error::Error;
 
 pub(crate) enum ValidateOption {
   Simple,
@@ -248,12 +247,19 @@ pub(crate) fn transform_words<Words: Iterator<Item = String>>(transformation: &T
 }
 
 
-pub(crate) fn read_words<P>(filename: P) -> Result<impl Iterator<Item = Result<String,io::Error>>, io::Error>
+pub(crate) fn read_words<P>(path: P) -> Result<Vec<String>,Box<dyn Error>>
 where P: AsRef<Path>, {
-    let file = File::open(filename)?;
-    Ok(io::BufReader::new(file).lines().map(|r| {
-        r.map(|line| {
-            line.trim().trim_matches('/').to_owned()
-        })
-    }))
+
+    let mut reader = Reader::from_path(path)?;
+    let headers = reader.headers()?;
+    let word_field = if headers.len() == 1 {
+        0
+    } else {
+        headers.iter().position(|a| a.to_lowercase() == "word").ok_or_else(|| "No 'word' field found.".to_owned())?
+    };
+
+    reader.into_records().enumerate().map(|(row,record)| {
+        let record = record.map_err(|e| format!("Error reading record {row}: {e}"))?;
+        Ok(record.get(word_field).map(|s| s.trim_matches('/')).map(ToOwned::to_owned).ok_or_else(|| format!("No word found at entry {row}"))?)
+    }).collect() // .trim_matches('/')
 }
