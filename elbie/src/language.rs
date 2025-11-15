@@ -275,8 +275,9 @@ impl Language {
                             word: &mut Enumerate<Iter<Rc<Phoneme>>>, idx: usize, phoneme: &Rc<Phoneme>,
                             level: usize, validated: &[ValidWordElement], trace: Option<&ValidationTraceCallback>) -> Result<Vec<ValidWordElement>,ElbieError> {
 
+                                // TODO: Remove
         println!("validate_word {environment_name} {level}");
-        
+
         let environment = self.get_environment(environment_name)?;
         let mut validated = validated.to_vec();
 
@@ -321,6 +322,8 @@ impl Language {
         }
 
         for branch in environment {
+            println!("validate_word branch {environment_name} {}",branch.set());
+
             if self.inventory.phoneme_is(phoneme, branch.set())? {
 
                 let next_phoneme = word.next();

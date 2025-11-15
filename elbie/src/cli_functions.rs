@@ -97,7 +97,6 @@ pub(crate) fn validate_words<Words: Iterator<Item = String>>(language: &Language
     let mut invalid_found = false;
     let trace_cb: Option<&ValidationTraceCallback> = if matches!(option,ValidateOption::Trace | ValidateOption::ExplainAndTrace) {
       Some(&|level,message| {
-        /* eat message, no need to report */
         println!("{}{}",str::repeat(" ",level*2),message);
       })
     } else {
