@@ -322,7 +322,7 @@ impl Language {
         }
 
         for branch in environment {
-            println!("validate_word branch {environment_name} {}",branch.set());
+            println!("validate_word {environment_name} {level}: {}",branch.set());
 
             if self.inventory.phoneme_is(phoneme, branch.set())? {
 
