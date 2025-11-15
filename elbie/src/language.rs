@@ -342,7 +342,8 @@ impl Language {
                                   found: next_phoneme.clone(),
                                   environment: environment_name,
                                   branch_set: branch.set(),
-                                  choice_set: generate_set
+                                  choice_set: generate_set,
+                                  next_environment: continuing_environment
                               }));
                               // NOTE: I'm cloning the iterator here so that the next branch choice looks at the same next phoneme.
                               match self.validate_word(continuing_environment, &mut word.clone(), next_idx, next_phoneme, level + 1, &validated, trace) {
@@ -406,6 +407,7 @@ impl Language {
               let valid = ValidWordElement::InitialPhoneme(idx,ValidInitialPhoneme {
                 found: phoneme.clone(),
                 choice_set: self.initial_phoneme_set,
+                next_environment: self.initial_environment
               });
               if let Some(trace) = trace {
                   trace(0,ValidationTraceMessage::FoundValid(&valid));

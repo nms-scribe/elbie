@@ -11,12 +11,14 @@ pub struct ValidPhonemeElement {
     pub environment: &'static str,
     pub branch_set: &'static str,
     pub choice_set: &'static str,
+    pub next_environment: &'static str
 }
 
 #[derive(Clone)]
 pub struct ValidInitialPhoneme {
     pub found: Rc<Phoneme>,
     pub choice_set: &'static str,
+    pub next_environment: &'static str
 }
 
 
@@ -31,17 +33,19 @@ impl Display for ValidWordElement {
 
   fn fmt(&self, f: &mut Formatter) -> Result<(),fmt::Error> {
     match self {
-      Self::Done(index,environment,branch) => write!(f,"[at {index}]: end of word, environment '{environment}', branch_set '{branch}'"),
+      Self::Done(index,environment,branch) => write!(f,"[at {index}]: end of word, environment '{environment}', branch_set '{branch}'."),
       Self::InitialPhoneme(index,ValidInitialPhoneme {
           found,
-          choice_set
-      }) => write!(f,"[at {index}]: phoneme ({found} for initial phoneme, choice set '{choice_set}'"),
+          choice_set,
+          next_environment
+      }) => write!(f,"[at {index}]: phoneme ({found} for initial phoneme, choice set '{choice_set}', next environment: '{next_environment}'."),
       Self::Phoneme(index,ValidPhonemeElement {
         found,
         environment,
         branch_set,
         choice_set,
-    }) => write!(f,"[at {index}]: phoneme ({found}) for environment '{environment}', branch set '{branch_set}', choice set '{choice_set}'."),
+        next_environment
+    }) => write!(f,"[at {index}]: phoneme ({found}) for environment '{environment}', branch set '{branch_set}', choice set '{choice_set}', next environment: '{next_environment}'."),
     }
 
   }
