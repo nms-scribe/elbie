@@ -13,6 +13,7 @@ use crate::transformation::TransformationTraceCallback;
 use std::path::Path;
 use csv::Reader;
 use std::error::Error;
+use crate::errors::ElbieError;
 
 pub(crate) enum ValidateOption {
   Simple,
@@ -63,15 +64,15 @@ pub(crate) fn generate_words(grid_style: Option<&GridStyle>, language: &Language
 }
 
 
-pub(crate) fn validate_word(language: &Language, word: &Word, display: bool, explain: bool, trace_cb: Option<&ValidationTraceCallback>) -> bool {
-    match language.check_word(word,trace_cb) {
+fn validate_word(language: &Language, word: &Word, display: bool, explain: bool, trace_cb: Option<&ValidationTraceCallback>) -> Result<bool,ElbieError> {
+    match language.check_word(word,trace_cb)? {
         Err(err) => {
           if trace_cb.is_some() {
             println!("!!!! invalid word (see trace)");
           } else {
             println!("{err}");
           }
-          false
+          Ok(false)
         },
         Ok(validated) => {
           if explain {
@@ -87,7 +88,7 @@ pub(crate) fn validate_word(language: &Language, word: &Word, display: bool, exp
               println!("{word}");
           }
 
-          true
+          Ok(true)
 
         }
     }
@@ -106,8 +107,15 @@ pub(crate) fn validate_words<Words: Iterator<Item = String>>(language: &Language
     for word in words {
         match language.read_word(&word) {
             Ok(word) => {
-                if !validate_word(language, &word, true, matches!(option,ValidateOption::Explain | ValidateOption::ExplainAndTrace), trace_cb) {
-                    invalid_found = true;
+                match validate_word(language, &word, true, matches!(option,ValidateOption::Explain | ValidateOption::ExplainAndTrace), trace_cb) {
+                    Ok(true) => (),
+                    Ok(false) => {
+                        invalid_found = true;
+                    },
+                    Err(err) => {
+                        eprintln!("!!!! {err}");
+                        process::exit(1)
+                    },
                 }
             },
             Err(err) => {
@@ -224,11 +232,16 @@ pub(crate) fn transform_words<Words: Iterator<Item = String>>(transformation: &T
                 match transformation.transform(&word, transformation_trace_cb) {
                     Ok(transformed) => {
                         let valid = if let Some(validator) = validator {
-                            if !validate_word(validator, &transformed, false, matches!(option,TransformationOption::Explain | TransformationOption::ExplainAndTrace), validation_trace_cb) {
-                                invalid_found = true;
-                                false
-                            } else {
-                                true
+                            match validate_word(validator, &transformed, false, matches!(option,TransformationOption::Explain | TransformationOption::ExplainAndTrace), validation_trace_cb) {
+                                Ok(true) => true,
+                                Ok(false) => {
+                                    invalid_found = true;
+                                    false
+                                }
+                                Err(err) => {
+                                    eprintln!("!!!! {err}");
+                                    process::exit(1)
+                                },
                             }
                         } else {
                             true

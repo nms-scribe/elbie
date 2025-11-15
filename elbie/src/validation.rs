@@ -4,6 +4,7 @@ use core::fmt;
 use core::fmt::Formatter;
 use core::fmt::Display;
 use std::rc::Rc;
+use thiserror::Error;
 
 #[derive(Clone)]
 pub struct ValidPhonemeElement {
@@ -51,9 +52,24 @@ impl Display for ValidWordElement {
   }
 }
 
+#[derive(Debug,Clone,Error)]
+pub enum ValidationError {
+    #[error("[at {0}]: environment '{2}', branch set '{3}': expected choice set '{4}', found phoneme ({1}).")]
+    IncorrectPhoneme(usize, Rc<Phoneme>, &'static str, &'static str, &'static str),
+    #[error("[at {0}]: initial environment: expected choice set '{2}', found phoneme ({1}).")]
+    IncorrectInitialPhoneme(usize, Rc<Phoneme>, &'static str),
+    #[error("[at {0}]: environment '{2}', branch set '{3}': Expected end of word, found phoneme ({1})")]
+    ExpectedEndOfWord(usize, Rc<Phoneme>, &'static str, &'static str),
+    #[error("[at {0}]: environment '{1}', branch set '{2}': Expected choice set '{3}', found end of word")]
+    ExpectedPhonemeFoundEndOfWord(usize, &'static str, &'static str, &'static str),
+    #[error("[at {0}]: environment '{2}': Phoneme ({2}) does not match any branch.")]
+    NoBranchFitsPhoneme(usize, Rc<Phoneme>, &'static str)
+
+}
+
 pub enum ValidationTraceMessage<'lifetime> {
   FoundValid(&'lifetime ValidWordElement),
-  FoundError(&'lifetime ElbieError)
+  FoundError(&'lifetime ValidationError)
 }
 
 impl Display for ValidationTraceMessage<'_> {

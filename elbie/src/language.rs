@@ -43,6 +43,7 @@ use std::collections::HashMap;
 use core::iter;
 use crate::validation::ValidPhonemeElement;
 use crate::validation::ValidInitialPhoneme;
+use crate::validation::ValidationError;
 
 
 
@@ -273,7 +274,7 @@ impl Language {
 
     pub(crate) fn validate_word(&self, environment_name: &'static str,
                             word: &mut Enumerate<Iter<Rc<Phoneme>>>, idx: usize, phoneme: &Rc<Phoneme>,
-                            level: usize, validated: &[ValidWordElement], trace: Option<&ValidationTraceCallback>) -> Result<Vec<ValidWordElement>,ElbieError> {
+                            level: usize, validated: &[ValidWordElement], trace: Option<&ValidationTraceCallback>) -> Result<Result<Vec<ValidWordElement>,ValidationError>,ElbieError> {
 
                                 // TODO: Remove
         println!("validate_word {environment_name} {level}");
@@ -331,10 +332,10 @@ impl Language {
                 for choice in branch.choices().items() {
                     match (choice, next_phoneme) {
                         ((EnvironmentChoice::Done,_),Some((next_idx,next_phoneme))) => {
-                          check_error!(ElbieError::ExpectedEndOfWord(next_idx,next_phoneme.clone(),environment_name,branch.set()));
+                          check_error!(ValidationError::ExpectedEndOfWord(next_idx,next_phoneme.clone(),environment_name,branch.set()));
                         },
                         ((EnvironmentChoice::Continuing(generate_set,_,_),_),None) => {
-                          check_error!(ElbieError::ExpectedPhonemeFoundEndOfWord(idx + 1,environment_name,branch.set(),generate_set));
+                          check_error!(ValidationError::ExpectedPhonemeFoundEndOfWord(idx + 1,environment_name,branch.set(),generate_set));
                         },
                         ((EnvironmentChoice::Continuing(generate_set,continuing_environment,can_duplicate),_),Some((next_idx,next_phoneme))) => {
                             let valid_phoneme = if *can_duplicate {
@@ -352,7 +353,7 @@ impl Language {
                                   next_environment: continuing_environment
                               }));
                               // NOTE: I'm cloning the iterator here so that the next branch choice looks at the same next phoneme.
-                              match self.validate_word(continuing_environment, &mut word.clone(), next_idx, next_phoneme, level + 1, &validated, trace) {
+                              match self.validate_word(continuing_environment, &mut word.clone(), next_idx, next_phoneme, level + 1, &validated, trace)? {
                                 Err(err) => error = Some(err),
                                 Ok(sub_validated) => {
                                   validated = sub_validated;
@@ -362,7 +363,7 @@ impl Language {
                                 }
                               }
                             } else {
-                              check_error!(ElbieError::IncorrectPhoneme(next_idx,next_phoneme.clone(),environment_name,branch.set(),generate_set));
+                              check_error!(ValidationError::IncorrectPhoneme(next_idx,next_phoneme.clone(),environment_name,branch.set(),generate_set));
                             }
                         },
                         ((EnvironmentChoice::Done,_),None) => {
@@ -380,7 +381,7 @@ impl Language {
 
                   // no successful choices were found. Check if error was set, and if not, then we didn't find
                   // any choices at all, which is an error.
-                  check_error!(ElbieError::IncompleteBranches(environment_name));
+                  return Err(ElbieError::IncompleteBranches(environment_name));
 
                 }
 
@@ -392,20 +393,20 @@ impl Language {
         }
 
         if found_valid_path {
-            Ok(validated)
+            Ok(Ok(validated))
         } else {
           match error {
             None =>
               // if we got here, then there were no branches that fit the current phoneme.
-              Err(trace_error!(ElbieError::NoBranchFitsPhoneme(idx,phoneme.clone(),environment_name))),
-            Some(err) => Err(err)
+              Ok(Err(trace_error!(ValidationError::NoBranchFitsPhoneme(idx,phoneme.clone(),environment_name)))),
+            Some(err) => Ok(Err(err))
           }
         }
 
 
     }
 
-    pub(crate) fn check_word(&self,word: &Word, trace: Option<&ValidationTraceCallback>) -> Result<Vec<ValidWordElement>,ElbieError> {
+    pub(crate) fn check_word(&self,word: &Word, trace: Option<&ValidationTraceCallback>) -> Result<Result<Vec<ValidWordElement>,ValidationError>,ElbieError> {
 
         let mut word = word.phonemes().iter().enumerate();
         if let Some((idx,phoneme)) = word.next() {
@@ -420,11 +421,11 @@ impl Language {
               }
               self.validate_word(self.initial_environment, &mut word, idx, phoneme,1,&[valid],trace)
             } else {
-              let err = ElbieError::IncorrectInitialPhoneme(idx,phoneme.clone(),self.initial_phoneme_set);
+              let err = ValidationError::IncorrectInitialPhoneme(idx,phoneme.clone(),self.initial_phoneme_set);
               if let Some(trace) = trace {
                   trace(0,ValidationTraceMessage::FoundError(&err));
               }
-              Err(err)
+              Ok(Err(err))
             }
         } else {
             Err(ElbieError::EmptyWord)
