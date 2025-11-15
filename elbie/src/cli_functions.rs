@@ -113,7 +113,7 @@ pub(crate) fn validate_words<Words: Iterator<Item = String>>(language: &Language
                         invalid_found = true;
                     },
                     Err(err) => {
-                        eprintln!("!!!! {err}");
+                        eprintln!("!!!! {word} > {err}");
                         process::exit(1)
                     },
                 }
