@@ -41,6 +41,8 @@ use crate::phonotactics::EnvironmentBranch;
 use crate::phoneme::Phoneme;
 use std::collections::HashMap;
 use core::iter;
+use crate::validation::ValidPhonemeElement;
+use crate::validation::ValidInitialPhoneme;
 
 
 
@@ -323,10 +325,10 @@ impl Language {
                 for choice in branch.choices().items() {
                     match (choice, next_phoneme) {
                         ((EnvironmentChoice::Done,_),Some((next_idx,next_phoneme))) => {
-                          check_error!(ElbieError::ExpectedEndOfWord(next_idx,next_phoneme.clone(),environment_name));
+                          check_error!(ElbieError::ExpectedEndOfWord(next_idx,next_phoneme.clone(),environment_name,branch.set()));
                         },
                         ((EnvironmentChoice::Continuing(generate_set,_,_),_),None) => {
-                          check_error!(ElbieError::ExpectedPhonemeFoundEndOfWord(idx + 1,generate_set,environment_name));
+                          check_error!(ElbieError::ExpectedPhonemeFoundEndOfWord(idx + 1,environment_name,branch.set(),generate_set));
                         },
                         ((EnvironmentChoice::Continuing(generate_set,continuing_environment,can_duplicate),_),Some((next_idx,next_phoneme))) => {
                             let valid_phoneme = if *can_duplicate {
@@ -336,7 +338,12 @@ impl Language {
                             };
 
                             if valid_phoneme {
-                              trace_valid!(ValidWordElement::Phoneme(next_idx,next_phoneme.clone(),generate_set,environment_name));
+                              trace_valid!(ValidWordElement::Phoneme(next_idx,ValidPhonemeElement {
+                                  found: next_phoneme.clone(),
+                                  environment: environment_name,
+                                  branch_set: branch.set(),
+                                  choice_set: generate_set
+                              }));
                               // NOTE: I'm cloning the iterator here so that the next branch choice looks at the same next phoneme.
                               match self.validate_word(continuing_environment, &mut word.clone(), next_idx, next_phoneme, level + 1, &validated, trace) {
                                 Err(err) => error = Some(err),
@@ -348,11 +355,11 @@ impl Language {
                                 }
                               }
                             } else {
-                              check_error!(ElbieError::IncorrectPhoneme(next_idx,next_phoneme.clone(),generate_set,environment_name));
+                              check_error!(ElbieError::IncorrectPhoneme(next_idx,next_phoneme.clone(),environment_name,branch.set(),generate_set));
                             }
                         },
                         ((EnvironmentChoice::Done,_),None) => {
-                          check_valid!(ValidWordElement::Done(idx + 1,environment_name));
+                          check_valid!(ValidWordElement::Done(idx + 1,environment_name,branch.set()));
                           // break out of the loop, we found a successful branch.
                           break;
                         }
@@ -396,13 +403,16 @@ impl Language {
         let mut word = word.phonemes().iter().enumerate();
         if let Some((idx,phoneme)) = word.next() {
             if self.inventory.phoneme_is(phoneme, self.initial_phoneme_set)? {
-              let valid = ValidWordElement::Phoneme(idx,phoneme.clone(),self.initial_phoneme_set,self.initial_environment);
+              let valid = ValidWordElement::InitialPhoneme(idx,ValidInitialPhoneme {
+                found: phoneme.clone(),
+                choice_set: self.initial_phoneme_set,
+              });
               if let Some(trace) = trace {
                   trace(0,ValidationTraceMessage::FoundValid(&valid));
               }
               self.validate_word(self.initial_environment, &mut word, idx, phoneme,1,&[valid],trace)
             } else {
-              let err = ElbieError::IncorrectPhoneme(idx,phoneme.clone(),self.initial_phoneme_set,self.initial_environment);
+              let err = ElbieError::IncorrectInitialPhoneme(idx,phoneme.clone(),self.initial_phoneme_set);
               if let Some(trace) = trace {
                   trace(0,ValidationTraceMessage::FoundError(&err));
               }

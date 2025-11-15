@@ -6,17 +6,42 @@ use core::fmt::Display;
 use std::rc::Rc;
 
 #[derive(Clone)]
+pub struct ValidPhonemeElement {
+    pub found: Rc<Phoneme>,
+    pub environment: &'static str,
+    pub branch_set: &'static str,
+    pub choice_set: &'static str,
+}
+
+#[derive(Clone)]
+pub struct ValidInitialPhoneme {
+    pub found: Rc<Phoneme>,
+    pub choice_set: &'static str,
+}
+
+
+#[derive(Clone)]
 pub enum ValidWordElement {
-  Done(usize,&'static str), // environment
-  Phoneme(usize,Rc<Phoneme>,&'static str,&'static str) // found phoneme, expected set, expected environment
+  Done(usize,&'static str, &'static str), // environment, branch
+  InitialPhoneme(usize,ValidInitialPhoneme),
+  Phoneme(usize,ValidPhonemeElement) // found phoneme, expected set, expected environment
 }
 
 impl Display for ValidWordElement {
 
   fn fmt(&self, f: &mut Formatter) -> Result<(),fmt::Error> {
     match self {
-      Self::Done(index,environment) => write!(f,"[Environment {environment} at {index}]: end of word"),
-      Self::Phoneme(index,phoneme,set,environment) => write!(f,"[Environment {environment} at {index}]: phoneme ({phoneme}) from {set}."),
+      Self::Done(index,environment,branch) => write!(f,"[at {index}]: end of word, environment '{environment}', branch_set '{branch}'"),
+      Self::InitialPhoneme(index,ValidInitialPhoneme {
+          found,
+          choice_set
+      }) => write!(f,"[at {index}]: phoneme ({found} for initial phoneme, choice set '{choice_set}'"),
+      Self::Phoneme(index,ValidPhonemeElement {
+        found,
+        environment,
+        branch_set,
+        choice_set,
+    }) => write!(f,"[at {index}]: phoneme ({found}) for environment '{environment}', branch set '{branch_set}', choice set '{choice_set}'."),
     }
 
   }

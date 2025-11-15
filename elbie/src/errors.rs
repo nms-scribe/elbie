@@ -37,13 +37,15 @@ pub enum ElbieError {
     // word validation errors //
     #[error("Word is empty")]
     EmptyWord,
-    #[error("[Environment {3} at {0}]: Expected {2}, found phoneme ({1}).")]
-    IncorrectPhoneme(usize, Rc<Phoneme>, &'static str, &'static str),
-    #[error("[Environment {2} at {0}]: Expected end2 word, found phoneme ({1})")]
-    ExpectedEndOfWord(usize, Rc<Phoneme>, &'static str),
-    #[error("[Environment {2} at {0}]: Expected {2}, found end of word")]
-    ExpectedPhonemeFoundEndOfWord(usize, &'static str, &'static str),
-    #[error("[Environment {2} at {0}]: Phoneme ({2}) does not match any branch.")]
+    #[error("[at {0}]: environment '{2}', branch set '{3}': expected choice set '{4}', found phoneme ({1}).")]
+    IncorrectPhoneme(usize, Rc<Phoneme>, &'static str, &'static str, &'static str),
+    #[error("[at {0}]: initial environment: expected choice set '{2}', found phoneme ({1}).")]
+    IncorrectInitialPhoneme(usize, Rc<Phoneme>, &'static str),
+    #[error("[at {0}]: environment '{2}', branch set '{3}': Expected end of word, found phoneme ({1})")]
+    ExpectedEndOfWord(usize, Rc<Phoneme>, &'static str, &'static str),
+    #[error("[at {0}]: environment '{1}', branch set '{2}': Expected choice set '{3}', found end of word")]
+    ExpectedPhonemeFoundEndOfWord(usize, &'static str, &'static str, &'static str),
+    #[error("[at {0}]: environment '{2}': Phoneme ({2}) does not match any branch.")]
     NoBranchFitsPhoneme(usize, Rc<Phoneme>, &'static str),
 
     // word reading errors //
