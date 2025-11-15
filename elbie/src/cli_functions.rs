@@ -70,7 +70,7 @@ fn validate_word(language: &Language, word: &Word, display: bool, explain: bool,
           if trace_cb.is_some() {
             println!("!!!! invalid word (see trace)");
           } else {
-            println!("{err}");
+            println!("{word} -> {err}");
           }
           Ok(false)
         },
@@ -113,7 +113,7 @@ pub(crate) fn validate_words<Words: Iterator<Item = String>>(language: &Language
                         invalid_found = true;
                     },
                     Err(err) => {
-                        eprintln!("!!!! {word} > {err}");
+                        eprintln!("!!!! Can't validate word: {err}");
                         process::exit(1)
                     },
                 }
@@ -125,7 +125,7 @@ pub(crate) fn validate_words<Words: Iterator<Item = String>>(language: &Language
         }
     }
     if invalid_found {
-        eprint!("!!!! invalid words found");
+        eprintln!("!!!! invalid words found");
         process::exit(1);
     }
 }
@@ -240,7 +240,7 @@ pub(crate) fn transform_words<Words: Iterator<Item = String>>(transformation: &T
                                     false
                                 }
                                 Err(err) => {
-                                    eprintln!("!!!! {err}");
+                                    eprintln!("!!!! Can't validate word: {err}");
                                     process::exit(1)
                                 },
                             }
