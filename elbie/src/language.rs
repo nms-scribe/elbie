@@ -274,6 +274,9 @@ impl Language {
     pub(crate) fn validate_word(&self, environment_name: &'static str,
                             word: &mut Enumerate<Iter<Rc<Phoneme>>>, idx: usize, phoneme: &Rc<Phoneme>,
                             level: usize, validated: &[ValidWordElement], trace: Option<&ValidationTraceCallback>) -> Result<Vec<ValidWordElement>,ElbieError> {
+
+        println!("validate_word {environment_name} {level}");
+        
         let environment = self.get_environment(environment_name)?;
         let mut validated = validated.to_vec();
 
