@@ -125,7 +125,8 @@ pub(crate) fn validate_words<Words: Iterator<Item = String>>(language: &Language
         }
     }
     if invalid_found {
-      process::exit(1);
+        eprint!("!!!! invalid words found");
+        process::exit(1);
     }
 }
 
