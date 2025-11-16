@@ -1,4 +1,3 @@
-use crate::errors::ElbieError;
 use crate::phoneme::Phoneme;
 use core::fmt;
 use core::fmt::Formatter;

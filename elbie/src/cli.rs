@@ -86,7 +86,7 @@ impl DoIt for GenerateWords {
 }
 
 #[derive(Options)]
-/// Validate a list of words for a language, verifying that it would be possible to generate them. Pass a list of words to process at the end of the command. Options allow getting more detail about the validation.
+/// Validate a list of words for a language, verifying that it would be possible to generate them. Pass a list of words to process at the end of the command. Options allow getting more detail about the validation. When validating from a file, the file should be in CSV format, with a header indicating field names. If there is more than one field, the one named "word" will be used.
 pub struct ValidateWords {
 
     #[options(no_short)]
@@ -97,8 +97,8 @@ pub struct ValidateWords {
     /// Provides detailed explanation of valid phonemes on success.
     explain: bool,
 
-    /// Read the list of words from a CSV with a "word" field, or just one field
-    file: Option<String>,
+    /// Read the list of words from CSV files, can be specified multiple times
+    file: Vec<String>,
 
     #[options(free)]
     /// Words to validate
@@ -118,7 +118,7 @@ impl DoIt for ValidateWords {
 
         let mut words = self.words.clone();
 
-        if let Some(file) = &self.file {
+        for file in &self.file {
             for word in read_words(file)? {
                 words.push(word);
             }
@@ -267,6 +267,7 @@ impl DoIt for FormatLexicon {
 }
 
 #[derive(Options)]
+/// Transforms words from a source language to another. Options allow for control of validating the words after transformation. When transforming from a file, the file should be in CSV format, with a header indicating field names. If there is more than one field, the one named "word" will be used.
 pub struct Transform {
 
     #[options(required)]
@@ -285,8 +286,8 @@ pub struct Transform {
     /// Provides detailed explanation of valid phonemes on success.
     explain: bool,
 
-    /// Read the list of words from a CSV with a "word" field, or just one field
-    file: Option<String>,
+    /// Read the list of words from CSV files, can be specified multiple times
+    file: Vec<String>,
 
     #[options(free)]
     /// Words to validate
@@ -317,7 +318,7 @@ impl DoIt for Transform {
 
         let mut words = self.words.clone();
 
-        if let Some(file) = &self.file {
+        for file in &self.file {
             for word in read_words(file)? {
                 words.push(word);
             }

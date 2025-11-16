@@ -1,9 +1,7 @@
 use thiserror::Error;
 use crate::phoneme_table::HeaderDef;
 use crate::phoneme_table::Axis;
-use crate::phoneme::Phoneme;
 use crate::phoneme_table::TableOption;
-use std::rc::Rc;
 
 #[derive(Debug,Clone,Error)]
 pub enum ElbieError {
