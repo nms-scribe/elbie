@@ -4,6 +4,7 @@ use core::fmt::Formatter;
 use core::fmt::Display;
 use std::rc::Rc;
 use thiserror::Error;
+use crate::word::Word;
 
 #[derive(Clone)]
 pub struct ValidPhonemeElement {
@@ -67,6 +68,7 @@ pub enum ValidationError {
 }
 
 pub enum ValidationTraceMessage<'lifetime> {
+  StartTrace(&'lifetime Word),
   FoundValid(&'lifetime ValidWordElement),
   FoundError(&'lifetime ValidationError)
 }
@@ -75,6 +77,7 @@ impl Display for ValidationTraceMessage<'_> {
 
   fn fmt(&self, f: &mut Formatter) -> Result<(),fmt::Error> {
     match self {
+      Self::StartTrace(word) => write!(f,"Tracing: {word}"),
       Self::FoundValid(valid) => write!(f,"Found valid: {valid}"),
       Self::FoundError(err) => write!(f,"!!!Found error: {err}"),
     }

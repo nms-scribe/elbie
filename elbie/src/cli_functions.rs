@@ -15,6 +15,11 @@ use csv::Reader;
 use core::error::Error;
 use crate::errors::ElbieError;
 use crate::lexicon::LexiconStyle;
+use std::collections::HashMap;
+use crate::validation::ValidationError;
+use crate::grid::ColumnHeader;
+use core::iter;
+use core::mem;
 
 pub(crate) enum ValidateOption {
   Simple,
@@ -65,52 +70,58 @@ pub(crate) fn generate_words(grid_style: Option<&Format>, language: &Language, c
 }
 
 
-fn validate_word(language: &Language, word: &Word, display: bool, explain: bool, trace_cb: Option<&ValidationTraceCallback>) -> Result<bool,ElbieError> {
+fn validate_word(language: &Language, word: &Word, explain: bool, trace_cb: Option<&ValidationTraceCallback>) -> Result<Result<(),ValidationError>,ElbieError> {
     match language.check_word(word,trace_cb)? {
         Err(err) => {
-          if trace_cb.is_some() {
-            println!("!!!! invalid word (see trace)");
-          } else {
-            println!("{word} -> {err}");
-          }
-          Ok(false)
+          Ok(Err(err))
         },
         Ok(validated) => {
           if explain {
+            eprintln!("Explain: {word}");
             for valid in validated {
-              println!("{valid}")
+              eprintln!("{valid}")
             }
           }
 
-          if display {
-              for orthography in 0..language.orthographies().len() {
-                print!("{} ",language.spell_word(word,orthography));
-              }
-              println!("{word}");
-          }
-
-          Ok(true)
+          Ok(Ok(()))
 
         }
     }
 }
 
-pub(crate) fn validate_words<Words: Iterator<Item = String>>(language: &Language, words: Words, option: &ValidateOption) {
+pub(crate) fn validate_words(language: &Language, mut words: WordsData, option: &ValidateOption, output_format: &Format) {
+
+    const VALIDATED_ATTR: &str = "Validated";
+
     let mut invalid_found = false;
     let trace_cb: Option<&ValidationTraceCallback> = if matches!(option,ValidateOption::Trace | ValidateOption::ExplainAndTrace) {
       Some(&|level,message| {
-        println!("{}{}",str::repeat(" ",level*2),message);
+        eprintln!("{}{}",str::repeat(" ",level*2),message);
       })
     } else {
       None
     };
 
-    for word in words {
-        match language.read_word(&word) {
+    for orthography in language.orthographies() {
+        words.add_attribute((*orthography).to_owned());
+    }
+    words.add_attribute(VALIDATED_ATTR.to_owned());
+
+
+    for entry in &mut words.entries {
+        match language.read_word(&entry.word) {
             Ok(word) => {
-                match validate_word(language, &word, true, matches!(option,ValidateOption::Explain | ValidateOption::ExplainAndTrace), trace_cb) {
-                    Ok(true) => (),
-                    Ok(false) => {
+                // Make sure word is in phonemic format
+                entry.replace_word(None, word.to_string());
+                match validate_word(language, &word, matches!(option,ValidateOption::Explain | ValidateOption::ExplainAndTrace), trace_cb) {
+                    Ok(Ok(())) => {
+                        entry.set_attribute(VALIDATED_ATTR.to_owned(),"Valid".to_owned());
+                        for (i,orthography) in language.orthographies().iter().enumerate() {
+                            entry.set_attribute((*orthography).to_owned(), language.spell_word(&word, i));
+                        }
+                    },
+                    Ok(Err(error)) => {
+                        entry.set_attribute(VALIDATED_ATTR.to_owned(),format!("{error}"));
                         invalid_found = true;
                     },
                     Err(err) => {
@@ -125,6 +136,9 @@ pub(crate) fn validate_words<Words: Iterator<Item = String>>(language: &Language
             }
         }
     }
+
+    words.print_to_stdout(output_format);
+
     if invalid_found {
         eprintln!("!!!! invalid words found");
         process::exit(1);
@@ -203,14 +217,17 @@ pub(crate) fn format_lexicon(format: &Format, style: &LexiconStyle, language: &L
 
 
 
-pub(crate) fn transform_words<Words: Iterator<Item = String>>(transformation: &Transformation, from: &Language, validator: Option<&Language>, words: Words, option: &TransformationOption) {
-    let mut invalid_found = false;
+pub(crate) fn transform_words(transformation: &Transformation, from: &Language, validator: Option<&Language>, mut words: WordsData, option: &TransformationOption, output_format: &Format) {
 
+    const ORIGINAL_WORD_ATTR: &str = "Original";
+    const VALIDATED_ATTR: &str = "Validated";
+
+    let mut invalid_found = false;
 
     let validation_trace_cb: Option<&ValidationTraceCallback> = if matches!(option,TransformationOption::Trace | TransformationOption::ExplainAndTrace) {
       Some(&|level,message| {
         /* eat message, no need to report */
-        println!("{}{}",str::repeat(" ",level*2),message);
+        eprintln!("{}{}",str::repeat(" ",level*2),message);
       })
     } else {
         None
@@ -218,37 +235,41 @@ pub(crate) fn transform_words<Words: Iterator<Item = String>>(transformation: &T
 
     let transformation_trace_cb: Option<&TransformationTraceCallback> = if matches!(option,TransformationOption::Trace | TransformationOption::ExplainAndTrace) {
         Some(&|message| {
-            println!("{message}")
+            eprintln!("{message}")
         })
     } else {
         None
     };
 
+    words.add_attribute(ORIGINAL_WORD_ATTR.to_owned());
+    if validator.is_some() {
+        words.add_attribute(VALIDATED_ATTR.to_owned());
+    }
 
-    for word in words {
-        match from.read_word(&word) {
+
+    for entry in &mut words.entries {
+        match from.read_word(&entry.word) {
             Ok(word) => {
+                // make sure the original word is in phonebic format
+                entry.replace_word(None,word.to_string());
                 match transformation.transform(&word, transformation_trace_cb) {
                     Ok(transformed) => {
-                        let valid = if let Some(validator) = validator {
-                            match validate_word(validator, &transformed, false, matches!(option,TransformationOption::Explain | TransformationOption::ExplainAndTrace), validation_trace_cb) {
-                                Ok(true) => true,
-                                Ok(false) => {
+                        entry.replace_word(Some(ORIGINAL_WORD_ATTR.to_owned()),transformed.to_string());
+                        if let Some(validator) = validator {
+                            match validate_word(validator, &transformed, matches!(option,TransformationOption::Explain | TransformationOption::ExplainAndTrace), validation_trace_cb) {
+                                Ok(Ok(())) => {
+                                    entry.set_attribute(VALIDATED_ATTR.to_owned(), "Valid".to_owned());
+                                },
+                                Ok(Err(err)) => {
+                                    entry.set_attribute(VALIDATED_ATTR.to_owned(), format!("{err}"));
                                     invalid_found = true;
-                                    false
                                 }
                                 Err(err) => {
                                     eprintln!("!!!! Can't validate word: {err}");
                                     process::exit(1)
                                 },
                             }
-                        } else {
-                            true
-                        };
-                        if !valid {
-                            print!("* ");
                         }
-                        println!("{word} 🡺 {transformed}");
                     },
                     Err(err) => {
                         invalid_found = true;
@@ -258,12 +279,15 @@ pub(crate) fn transform_words<Words: Iterator<Item = String>>(transformation: &T
             },
             Err(err) => {
                 invalid_found = true;
-                eprintln!("* {word} !!!! can't read word: {err}")
+                eprintln!("* {} !!!! can't read word: {err}",entry.word)
             },
         }
     }
+
+    words.print_to_stdout(output_format);
+
     if invalid_found {
-        eprintln!("* Invalid words found");
+        eprintln!("Invalid words found");
         process::exit(1)
     }
 
@@ -271,61 +295,134 @@ pub(crate) fn transform_words<Words: Iterator<Item = String>>(transformation: &T
 }
 
 pub(crate) struct WordData {
-    pub word: String,
-    pub attributes: Vec<String>
+    word: String,
+    attributes: HashMap<String,String>
 }
 
-pub(crate) struct WordsData {
-    pub attribute_names: Vec<String>,
-    pub entries: Vec<WordData>
-}
+impl WordData {
 
-pub(crate) fn read_words<P>(path: P) -> Result<WordsData,Box<dyn Error>>
-where P: AsRef<Path>, {
-
-    let mut reader = Reader::from_path(path)?;
-    let headers = reader.headers()?;
-    let mut attribute_names = Vec::new();
-    let word_field = if headers.len() == 1 {
-        0
-    } else {
-        let mut word_field = None;
-        for (i,header) in headers.iter().enumerate() {
-            if header.to_lowercase() == "word" {
-                word_field = Some(i)
-            } else {
-                attribute_names.push(header.to_owned());
-            }
-        }
-        if let Some(word_field) = word_field {
-            word_field
-        } else {
-            return Err("No 'word field found.".into())
-        }
-    };
-
-    let mut entries = Vec::new();
-
-    for (row,record) in reader.into_records().enumerate() {
-        let record = record.map_err(|e| format!("Error reading record {row}: {e}"))?;
-        let mut word = None;
-        let mut attributes = Vec::new();
-        for (i,field) in record.iter().enumerate() {
-            if i == word_field {
-                word = Some(field.trim_matches('/').to_owned())
-            } else {
-                attributes.push(field.to_owned());
-            }
-        }
-        let word = word.ok_or_else(|| "Missing word field in {row}")?;
-        entries.push(WordData {
+    fn new(word: String) -> Self {
+        Self {
             word,
-            attributes,
-        });
+            attributes: HashMap::new()
+        }
     }
 
-    Ok(WordsData {
-        attribute_names,
-        entries,
-    })
+    fn set_attribute(&mut self, attr_name: String, value: String) {
+        _ = self.attributes.insert(attr_name, value)
+    }
+
+    fn replace_word(&mut self, original_attr_name: Option<String>, new_value: String) {
+        let original_word = mem::replace(&mut self.word, new_value);
+        if let Some(original_attr_name) = original_attr_name {
+            self.set_attribute(original_attr_name, original_word);
+        }
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct WordsData {
+    attribute_names: Vec<String>,
+    entries: Vec<WordData>
+}
+
+impl WordsData {
+
+
+
+    pub(crate) fn read<P>(path: P) -> Result<Self,Box<dyn Error>>
+    where P: AsRef<Path>, {
+
+        let mut reader = Reader::from_path(path)?;
+        let headers = reader.headers()?.into_iter().map(ToOwned::to_owned).collect::<Vec<_>>();
+        let mut attribute_names = Vec::new();
+        let word_field = if headers.len() == 1 {
+            0
+        } else {
+            let mut word_field = None;
+            for (i,header) in headers.iter().enumerate() {
+                if header.to_lowercase() == "word" {
+                    word_field = Some(i)
+                } else {
+                    attribute_names.push((*header).clone());
+                }
+            }
+            if let Some(word_field) = word_field {
+                word_field
+            } else {
+                return Err("No 'word field found.".into())
+            }
+        };
+
+        let mut entries = Vec::new();
+
+        for (row,record) in reader.into_records().enumerate() {
+            let record = record.map_err(|e| format!("Error reading record {row}: {e}"))?;
+            let mut word = None;
+            let mut attributes = HashMap::new();
+            for (i,(field,attr_name)) in record.iter().zip(&headers).enumerate() {
+                if i == word_field {
+                    word = Some(field.trim_matches('/').to_owned())
+                } else {
+                    _ = attributes.insert(attr_name.clone(),field.to_owned());
+                }
+            }
+            let word = word.ok_or_else(|| format!("Missing word field in {row}"))?;
+            entries.push(WordData {
+                word,
+                attributes,
+            });
+        }
+
+        Ok(Self {
+            attribute_names,
+            entries,
+        })
+    }
+
+
+    pub(crate) fn add_words(&mut self, words: &[String]) {
+        for word in words {
+            self.entries.push(WordData::new(word.clone()));
+        }
+    }
+
+    pub(crate) fn add_attribute(&mut self, name: String) {
+        if !self.attribute_names.contains(&name) {
+            self.attribute_names.push(name);
+        }
+    }
+
+    pub(crate) fn combine_with(&mut self, words: Self) {
+        for attr_name in words.attribute_names {
+            self.add_attribute(attr_name);
+        }
+        for entry in words.entries {
+            self.entries.push(entry);
+        }
+    }
+
+    pub(crate) fn print_to_stdout(self, format: &Format) {
+        let mut grid = Grid::new(TableClass::ElbieWords, "Result".to_owned());
+
+        for entry in self.entries {
+            let mut row = GridRow::new(TRBodyClass::BodyRow);
+            row.push_cell(Cell::content(entry.word, None));
+            for attr_name in &self.attribute_names {
+                row.push_cell(Cell::content(
+                    entry.attributes.get(attr_name).cloned().unwrap_or_else(String::new),
+                    None
+                ));
+            }
+            grid.push_body_row(row);
+        }
+
+        grid.set_headers(iter::once(ColumnHeader::new("Word".to_owned(), 1)).chain(self.attribute_names.into_iter().map(|a| {
+            ColumnHeader::new(a,1)
+        })).collect());
+
+        let output = grid.into_output(format);
+        output.print_to_stdout();
+
+    }
 }

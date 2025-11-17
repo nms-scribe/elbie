@@ -406,6 +406,9 @@ impl Language {
 
     pub(crate) fn check_word(&self,word: &Word, trace: Option<&ValidationTraceCallback>) -> Result<Result<Vec<ValidWordElement>,ValidationError>,ElbieError> {
 
+        if let Some(trace) = trace {
+            trace(0,ValidationTraceMessage::StartTrace(word))
+        }
         let mut word = word.phonemes().iter().enumerate();
         if let Some((idx,phoneme)) = word.next() {
             if self.inventory.phoneme_is(phoneme, self.initial_phoneme_set)? {

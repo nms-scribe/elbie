@@ -16,9 +16,9 @@ use crate::language::Language;
 use crate::cli_functions::transform_words;
 use crate::cli_functions::TransformationOption;
 use core::error::Error;
-use crate::cli_functions::read_words;
 use std::env;
 use crate::lexicon::LexiconStyle;
+use crate::cli_functions::WordsData;
 
 // Gumdrop kind of makes showing usage difficult. The only way it works is if you have a --help flag on each command, and then only if it's discovered in `parse_args_or_exit`. And I'm not calling that because I want to be able to supply my own arguments. I would prefer to have a help command that takes an optional command name parameter anyway.
 fn show_usage<Command: Options>(program: &str, selected_command: Option<&str>) {
@@ -98,6 +98,12 @@ pub struct ValidateWords {
     /// Provides detailed explanation of valid phonemes on success.
     explain: bool,
 
+    #[options(default="plain")]
+    #[options(no_short)]
+    /// Changes the format of grid output. Values include "plain", "terminal", "markdown", "html", "json", and "csv".
+    format: Format,
+
+
     /// Read the list of words from CSV files, can be specified multiple times
     file: Vec<String>,
 
@@ -117,20 +123,23 @@ impl DoIt for ValidateWords {
 
         let language = family.get_language_or_default(language.as_deref())?;
 
-        let mut words = self.words.clone();
+        let mut word_data = WordsData::default();
+
+        word_data.add_words(&self.words);
 
         for file in &self.file {
-            for entry in read_words(file)?.entries {
-                words.push(entry.word);
-            }
+            let data = WordsData::read(file)?;
+            word_data.combine_with(data);
         }
 
-        validate_words(language, words.into_iter(), &match (self.explain,self.trace)  {
+
+        validate_words(language, word_data, &match (self.explain,self.trace)  {
             (true, true) => ValidateOption::ExplainAndTrace,
             (true, false) => ValidateOption::Explain,
             (false, true) => ValidateOption::Trace,
             (false, false) => ValidateOption::Simple,
-        });
+        },
+        &self.format);
 
         Ok(())
     }
@@ -292,6 +301,11 @@ pub struct Transform {
     /// Provides detailed explanation of valid phonemes on success.
     explain: bool,
 
+    #[options(default="plain")]
+    #[options(no_short)]
+    /// Changes the format of grid output. Values include "plain", "terminal", "markdown", "html", "json", and "csv".
+    format: Format,
+
     /// Read the list of words from CSV files, can be specified multiple times
     file: Vec<String>,
 
@@ -322,22 +336,23 @@ impl DoIt for Transform {
             Some(family.get_language(&self.target)?)
         };
 
-        let mut words = self.words.clone();
+        let mut word_data = WordsData::default();
+
+        word_data.add_words(&self.words);
 
         for file in &self.file {
-            for entry in read_words(file)?.entries {
-                words.push(entry.word);
-            }
+            let data = WordsData::read(file)?;
+            word_data.combine_with(data);
         }
 
 
-
-        transform_words(transformation,source_language,target_language,words.into_iter(),&match (self.explain,self.trace)  {
+        transform_words(transformation,source_language,target_language,word_data,&match (self.explain,self.trace)  {
             (true, true) => TransformationOption::ExplainAndTrace,
             (true, false) => TransformationOption::Explain,
             (false, true) => TransformationOption::Trace,
             (false, false) => TransformationOption::Simple,
-        });
+        },
+        &self.format);
 
         Ok(())
 

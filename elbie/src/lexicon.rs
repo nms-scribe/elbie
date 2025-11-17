@@ -1,4 +1,4 @@
-use core::fmt::Write;
+use core::fmt::Write as _;
 use crate::word::Word;
 use crate::format::Format;
 use crate::grid::Grid;
@@ -9,7 +9,7 @@ use crate::grid::TRBodyClass;
 use crate::grid::Cell;
 use crate::grid::TableOutput;
 use html_builder::Html5 as _;
-use std::str::FromStr;
+use core::str::FromStr;
 
 
 pub(crate) enum LexiconStyle {
@@ -58,7 +58,7 @@ pub(crate) struct LexiconTable {
 
 impl LexiconTable {
 
-    pub(crate) fn new(orthographies: Vec<&'static str>, primary_orthography_idx: usize) -> Self {
+    pub(crate) fn new(orthographies: &[&'static str], primary_orthography_idx: usize) -> Self {
         let mut grid = Grid::new(TableClass::ElbieLexicon, "Lexicon".to_owned());
 
         let mut primary_orthography = None;
@@ -102,7 +102,7 @@ impl LexiconTable {
         let primary_spelling = primary_spelling.expect("Primary orthography index was out of bounds");
 
         let mut fields = GridRow::new(TRBodyClass::BodyRow);
-        fields.push_cell(Cell::content((*primary_spelling).to_owned(),None));
+        fields.push_cell(Cell::content((*primary_spelling).clone(),None));
         fields.push_cell(Cell::content(entry.word.to_string(),None));
         for spelling in &other_spellings {
             fields.push_cell(Cell::content((*spelling).to_owned(),None));
@@ -268,7 +268,7 @@ impl LexiconList {
     }
 
     fn into_table(self, style: &Format) -> TableOutput {
-        let mut table = LexiconTable::new(self.orthographies, self.primary_orthography);
+        let mut table = LexiconTable::new(&self.orthographies, self.primary_orthography);
 
         for entry in self.entries {
             table.push_entry(entry);
@@ -321,7 +321,7 @@ impl Lexicon {
 
     pub(crate) fn new(style: &LexiconStyle, orthographies: Vec<&'static str>, primary_orthography_idx: usize) -> Self {
         match style {
-            LexiconStyle::Table => Self::Table(LexiconTable::new(orthographies, primary_orthography_idx)),
+            LexiconStyle::Table => Self::Table(LexiconTable::new(&orthographies, primary_orthography_idx)),
             LexiconStyle::List => Self::List(LexiconList::new(orthographies, primary_orthography_idx)),
         }
 
@@ -329,17 +329,17 @@ impl Lexicon {
 
     pub(crate) fn push_entry(&mut self, entry: LexiconEntry) {
         match self {
-            Lexicon::List(lexicon_list) => lexicon_list.push_entry(entry),
-            Lexicon::Table(lexicon_table) => lexicon_table.push_entry(entry),
+            Self::List(lexicon_list) => lexicon_list.push_entry(entry),
+            Self::Table(lexicon_table) => lexicon_table.push_entry(entry),
         }
     }
 
     pub(crate) fn print_to_stdout(self, style: &Format) {
         match self {
-            Lexicon::List(lexicon_list) => {
+            Self::List(lexicon_list) => {
                 lexicon_list.print_to_stdout(style);
             },
-            Lexicon::Table(lexicon_table) => {
+            Self::Table(lexicon_table) => {
                 let output = lexicon_table.into_output(style);
                 output.print_to_stdout();
             },

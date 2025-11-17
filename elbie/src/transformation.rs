@@ -12,6 +12,7 @@ use crate::word::Word;
 
 
 pub(crate) enum TransformationTraceMessage {
+  StartTransformation(Word),
   MatchedRule(&'static str,Word,Word),
   UnmatchedRule(&'static str)
 }
@@ -20,6 +21,7 @@ impl Display for TransformationTraceMessage {
 
   fn fmt(&self, f: &mut Formatter) -> Result<(),fmt::Error> {
     match self {
+      Self::StartTransformation(word) => write!(f,"Tracing Transformation: '{word}'"),
       Self::MatchedRule(name,from,to) => write!(f,"Matched '{name}': {from} 🡺 {to}"),
       Self::UnmatchedRule(name) => write!(f,"Did not match '{name}'"),
     }
@@ -454,6 +456,9 @@ impl Transformation {
     /// Applies transformation rules in order, and returns the final word if successful.
     /// The word has not been validated for any specific language, so this should still be done before reporting the result to the user.
     pub(crate) fn transform(&self, word: &Word, trace: Option<&TransformationTraceCallback>) -> Result<Word,ElbieError> {
+        if let Some(trace) = trace {
+            trace(TransformationTraceMessage::StartTransformation(word.clone()))
+        }
         let mut transformed = word.clone();
         for rule in &self.rules {
             transformed = rule.transform(self, transformed, trace)?
