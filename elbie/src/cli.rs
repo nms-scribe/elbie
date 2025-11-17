@@ -18,7 +18,7 @@ use crate::cli_functions::TransformationOption;
 use core::error::Error;
 use std::env;
 use crate::lexicon::LexiconStyle;
-use crate::cli_functions::WordsData;
+use crate::word_table::WordTable;
 
 // Gumdrop kind of makes showing usage difficult. The only way it works is if you have a --help flag on each command, and then only if it's discovered in `parse_args_or_exit`. And I'm not calling that because I want to be able to supply my own arguments. I would prefer to have a help command that takes an optional command name parameter anyway.
 fn show_usage<Command: Options>(program: &str, selected_command: Option<&str>) {
@@ -104,7 +104,7 @@ pub struct ValidateWords {
     format: Format,
 
 
-    /// Read the list of words from CSV files, can be specified multiple times
+    /// Read the list of words from CSV files, can be specified multiple times to merge multiple files.
     file: Vec<String>,
 
     #[options(free)]
@@ -123,12 +123,12 @@ impl DoIt for ValidateWords {
 
         let language = family.get_language_or_default(language.as_deref())?;
 
-        let mut word_data = WordsData::default();
+        let mut word_data = WordTable::default();
 
         word_data.add_words(&self.words);
 
         for file in &self.file {
-            let data = WordsData::read(file)?;
+            let data = WordTable::read(file)?;
             word_data.combine_with(data);
         }
 
@@ -235,8 +235,8 @@ pub struct FormatLexicon {
 
 
     #[options(required)]
-    /// File to load lexicon from (CSV format).
-    file: String,
+    /// Read the list of words from CSV files, can be specified multiple times to merge multiple files.
+    file: Vec<String>,
 
     #[options(required)]
     /// Orthography index (0-based) to use for generating main entries.
@@ -272,7 +272,21 @@ impl DoIt for FormatLexicon {
 
         let language = family.get_language_or_default(language.as_deref())?;
 
-        format_lexicon(grid_style, &self.style, language, &self.file, self.spelling);
+        let mut word_data = None::<WordTable>;
+
+        for file in &self.file {
+            let data = WordTable::read(file)?;
+            if let Some(word_data) = &mut word_data {
+                word_data.combine_with(data);
+            } else {
+                word_data = Some(data)
+            }
+        }
+
+        let word_data = word_data.ok_or("Please specify at least one file to load.")?;
+
+
+        format_lexicon(grid_style, &self.style, language, word_data, self.spelling);
 
         Ok(())
 
@@ -306,7 +320,7 @@ pub struct Transform {
     /// Changes the format of grid output. Values include "plain", "terminal", "markdown", "html", "json", and "csv".
     format: Format,
 
-    /// Read the list of words from CSV files, can be specified multiple times
+    /// Read the list of words from CSV files, can be specified multiple times to merge multiple files.
     file: Vec<String>,
 
     #[options(free)]
@@ -336,12 +350,12 @@ impl DoIt for Transform {
             Some(family.get_language(&self.target)?)
         };
 
-        let mut word_data = WordsData::default();
+        let mut word_data = WordTable::default();
 
         word_data.add_words(&self.words);
 
         for file in &self.file {
-            let data = WordsData::read(file)?;
+            let data = WordTable::read(file)?;
             word_data.combine_with(data);
         }
 

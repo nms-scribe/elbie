@@ -26,7 +26,6 @@ use crate::validation::ValidationTraceCallback;
 use crate::validation::ValidWordElement;
 use core::iter::Enumerate;
 use crate::phonotactics::EnvironmentChoice;
-use csv::Reader;
 use rand::prelude::ThreadRng;
 use crate::phoneme_table_builder::TableBuilder;
 use crate::word::Word;
@@ -45,6 +44,7 @@ use crate::validation::ValidInitialPhoneme;
 use crate::validation::ValidationError;
 use crate::lexicon::Lexicon;
 use crate::lexicon::LexiconStyle;
+use crate::word_table::WordTable;
 
 
 
@@ -586,25 +586,21 @@ impl Language {
 
     }
 
-    pub(crate) fn load_lexicon(&self, path: &str, primary_orthography: usize, style: &LexiconStyle) -> Result<Lexicon,Box<dyn Error>> {
+    pub(crate) fn load_lexicon(&self, words: WordTable, primary_orthography: usize, style: &LexiconStyle) -> Result<Lexicon,Box<dyn Error>> {
 
 
-      let mut reader = Reader::from_path(path)?;
-      let headers = reader.headers()?;
-      let word_field = headers.iter().position(|a| a.to_lowercase() == "word").ok_or_else(|| "No 'word' field found.".to_owned())?;
-      let definition_field = headers.iter().position(|a| a.to_lowercase() == "definition").ok_or_else(|| "No 'definition' field found.".to_owned())?;
+      let definition_field = words.find_attribute(|a| a.to_lowercase() == "definition").ok_or_else(|| "No 'definition' field found.".to_owned())?;
 
       let mut result = Lexicon::new(style,self.orthographies.clone(), primary_orthography);
 
-      for (row,record) in reader.into_records().enumerate() {
-        let record = record.map_err(|e| format!("Error reading record {row}: {e}"))?;
-        let word = record.get(word_field).ok_or_else(|| format!("No word found at entry {row}"))?;
+      for (row,entry) in words.entries().enumerate() {
+        let word = &entry.word();
         let word = self.read_word(word).map_err(|e| format!("Error parsing word {row}: {e}"))?;
         let spelling = (0..self.orthographies.len()).map(|i| self.spell_word(&word, i)).collect();
         let entry = LexiconEntry::new(
             word,
             spelling,
-            record.get(definition_field).ok_or_else(|| format!("No definition found at row {row}"))?.to_owned(),
+            entry.get_attribute(definition_field).ok_or_else(|| format!("No definition found at row {row}"))?.to_owned(),
         );
 
         result.push_entry(entry);
