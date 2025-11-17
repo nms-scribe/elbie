@@ -174,6 +174,8 @@ impl LexiconWriter for MarkdownLexiconWriter {
             write!(output,"; {orthography}: *{spelling}*").expect("Could not write to Markdown");
         }
         writeln!(output,"): {definition}").expect("Could not write to Markdown");
+        // Markdown needs another line between the paragraphs.
+        writeln!(output).expect("Could not write to Markdown");
     }
 
 }
