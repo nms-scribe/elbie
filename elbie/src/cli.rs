@@ -119,8 +119,8 @@ impl DoIt for ValidateWords {
         let mut words = self.words.clone();
 
         for file in &self.file {
-            for word in read_words(file)? {
-                words.push(word);
+            for entry in read_words(file)?.entries {
+                words.push(entry.word);
             }
         }
 
@@ -319,8 +319,8 @@ impl DoIt for Transform {
         let mut words = self.words.clone();
 
         for file in &self.file {
-            for word in read_words(file)? {
-                words.push(word);
+            for entry in read_words(file)?.entries {
+                words.push(entry.word);
             }
         }
 

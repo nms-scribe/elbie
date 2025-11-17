@@ -272,20 +272,62 @@ pub(crate) fn transform_words<Words: Iterator<Item = String>>(transformation: &T
 
 }
 
+pub(crate) struct WordData {
+    pub word: String,
+    pub attributes: Vec<String>
+}
 
-pub(crate) fn read_words<P>(path: P) -> Result<Vec<String>,Box<dyn Error>>
+pub(crate) struct WordsData {
+    pub attribute_names: Vec<String>,
+    pub entries: Vec<WordData>
+}
+
+pub(crate) fn read_words<P>(path: P) -> Result<WordsData,Box<dyn Error>>
 where P: AsRef<Path>, {
 
     let mut reader = Reader::from_path(path)?;
     let headers = reader.headers()?;
+    let mut attribute_names = Vec::new();
     let word_field = if headers.len() == 1 {
         0
     } else {
-        headers.iter().position(|a| a.to_lowercase() == "word").ok_or_else(|| "No 'word' field found.".to_owned())?
+        let mut word_field = None;
+        for (i,header) in headers.iter().enumerate() {
+            if header.to_lowercase() == "word" {
+                word_field = Some(i)
+            } else {
+                attribute_names.push(header.to_owned());
+            }
+        }
+        if let Some(word_field) = word_field {
+            word_field
+        } else {
+            return Err("No 'word field found.".into())
+        }
     };
 
-    reader.into_records().enumerate().map(|(row,record)| {
+    let mut entries = Vec::new();
+
+    for (row,record) in reader.into_records().enumerate() {
         let record = record.map_err(|e| format!("Error reading record {row}: {e}"))?;
-        Ok(record.get(word_field).map(|s| s.trim_matches('/')).map(ToOwned::to_owned).ok_or_else(|| format!("No word found at entry {row}"))?)
-    }).collect() // .trim_matches('/')
+        let mut word = None;
+        let mut attributes = Vec::new();
+        for (i,field) in record.iter().enumerate() {
+            if i == word_field {
+                word = Some(field.trim_matches('/').to_owned())
+            } else {
+                attributes.push(field.to_owned());
+            }
+        }
+        let word = word.ok_or_else(|| "Missing word field in {row}")?;
+        entries.push(WordData {
+            word,
+            attributes,
+        });
+    }
+
+    Ok(WordsData {
+        attribute_names,
+        entries,
+    })
 }
