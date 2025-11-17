@@ -220,7 +220,7 @@ pub(crate) fn format_lexicon(format: &Format, style: &LexiconStyle, language: &L
 pub(crate) fn transform_words(transformation: &Transformation, from: &Language, validator: Option<&Language>, mut words: WordsData, option: &TransformationOption, output_format: &Format) {
 
     const ORIGINAL_WORD_ATTR: &str = "Original";
-    const VALIDATED_ATTR: &str = "Validated";
+    const ERROR_ATTR: &str = "Error";
 
     let mut invalid_found = false;
 
@@ -242,52 +242,63 @@ pub(crate) fn transform_words(transformation: &Transformation, from: &Language, 
     };
 
     words.add_attribute(ORIGINAL_WORD_ATTR.to_owned());
-    if validator.is_some() {
-        words.add_attribute(VALIDATED_ATTR.to_owned());
-    }
+    words.add_attribute(ERROR_ATTR.to_owned());
 
 
     for entry in &mut words.entries {
-        match from.read_word(&entry.word) {
+        let error = match from.read_word(&entry.word) {
             Ok(word) => {
-                // make sure the original word is in phonebic format
+                // make sure the original word is in phonemic format
                 entry.replace_word(None,word.to_string());
                 match transformation.transform(&word, transformation_trace_cb) {
                     Ok(transformed) => {
+                        // replace the word but keep it in a separate attribute.
                         entry.replace_word(Some(ORIGINAL_WORD_ATTR.to_owned()),transformed.to_string());
                         if let Some(validator) = validator {
                             match validate_word(validator, &transformed, matches!(option,TransformationOption::Explain | TransformationOption::ExplainAndTrace), validation_trace_cb) {
                                 Ok(Ok(())) => {
-                                    entry.set_attribute(VALIDATED_ATTR.to_owned(), "Valid".to_owned());
+                                    // don't mark as "Valid", just leave the Error field blank
+                                    None
                                 },
                                 Ok(Err(err)) => {
-                                    entry.set_attribute(VALIDATED_ATTR.to_owned(), format!("{err}"));
-                                    invalid_found = true;
+                                    Some(format!("Invalid Result: {err}"))
                                 }
                                 Err(err) => {
                                     eprintln!("!!!! Can't validate word: {err}");
                                     process::exit(1)
                                 },
                             }
+                        } else {
+                            None
                         }
                     },
                     Err(err) => {
-                        invalid_found = true;
-                        eprintln!("* {word} -> !!!! transformation error: {err}")
+                        // replace with blank.
+                        entry.replace_word(Some(ORIGINAL_WORD_ATTR.to_owned()), String::new());
+                        Some(format!("Can't Transform: {err}"))
                     },
                 }
             },
             Err(err) => {
-                invalid_found = true;
-                eprintln!("* {} !!!! can't read word: {err}",entry.word)
+                entry.replace_word(Some(ORIGINAL_WORD_ATTR.to_owned()), String::new());
+                Some(format!("Can't read word: {err}"))
             },
+        };
+
+        if let Some(error) = error {
+            entry.set_attribute(ERROR_ATTR.to_owned(), error);
+            invalid_found = true;
         }
+    }
+
+    if !invalid_found {
+        words.remove_attribute(ERROR_ATTR);
     }
 
     words.print_to_stdout(output_format);
 
     if invalid_found {
-        eprintln!("Invalid words found");
+        eprintln!("Error happened while transforming (see Error column)");
         process::exit(1)
     }
 
@@ -391,6 +402,12 @@ impl WordsData {
         if !self.attribute_names.contains(&name) {
             self.attribute_names.push(name);
         }
+    }
+
+    pub(crate) fn remove_attribute(&mut self, name: &str) {
+        self.attribute_names.retain(|n| {
+            n != name
+        });
     }
 
     pub(crate) fn combine_with(&mut self, words: Self) {
