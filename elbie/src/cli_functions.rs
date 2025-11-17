@@ -213,7 +213,6 @@ pub(crate) fn format_lexicon(format: &Format, style: &LexiconStyle, language: &L
 
 pub(crate) fn transform_words(transformation: &Transformation, from: &Language, validator: Option<&Language>, mut words: WordTable, option: &TransformationOption, output_format: &Format) {
 
-    const ORIGINAL_WORD_ATTR: &str = "Original";
     const ERROR_ATTR: &str = "Error";
 
     let mut invalid_found = false;
@@ -235,7 +234,9 @@ pub(crate) fn transform_words(transformation: &Transformation, from: &Language, 
         None
     };
 
-    words.add_attribute(ORIGINAL_WORD_ATTR.to_owned());
+    let original_word_attr = from.name();
+
+    words.add_attribute(original_word_attr.to_owned());
     words.add_attribute(ERROR_ATTR.to_owned());
 
 
@@ -247,7 +248,7 @@ pub(crate) fn transform_words(transformation: &Transformation, from: &Language, 
                 match transformation.transform(&word, transformation_trace_cb) {
                     Ok(transformed) => {
                         // replace the word but keep it in a separate attribute.
-                        entry.replace_word(Some(ORIGINAL_WORD_ATTR.to_owned()),transformed.to_string());
+                        entry.replace_word(Some(original_word_attr.to_owned()),transformed.to_string());
                         if let Some(validator) = validator {
                             match validate_word(validator, &transformed, matches!(option,TransformationOption::Explain | TransformationOption::ExplainAndTrace), validation_trace_cb) {
                                 Ok(Ok(())) => {
@@ -268,13 +269,13 @@ pub(crate) fn transform_words(transformation: &Transformation, from: &Language, 
                     },
                     Err(err) => {
                         // replace with blank.
-                        entry.replace_word(Some(ORIGINAL_WORD_ATTR.to_owned()), String::new());
+                        entry.replace_word(Some(original_word_attr.to_owned()), String::new());
                         Some(format!("Can't Transform: {err}"))
                     },
                 }
             },
             Err(err) => {
-                entry.replace_word(Some(ORIGINAL_WORD_ATTR.to_owned()), String::new());
+                entry.replace_word(Some(original_word_attr.to_owned()), String::new());
                 Some(format!("Can't read word: {err}"))
             },
         };
