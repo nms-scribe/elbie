@@ -1,6 +1,6 @@
 #![expect(clippy::empty_structs_with_brackets,reason="The 'Options' derive seems to create some empty structs with brackets, and I can't control that.")]
 use crate::errors::ElbieError;
-use crate::grid::GridStyle;
+use crate::format::Format;
 use crate::cli_functions::generate_words;
 use crate::cli_functions::validate_words;
 use crate::cli_functions::show_phonemes;
@@ -18,6 +18,7 @@ use crate::cli_functions::TransformationOption;
 use core::error::Error;
 use crate::cli_functions::read_words;
 use std::env;
+use crate::lexicon::LexiconStyle;
 
 // Gumdrop kind of makes showing usage difficult. The only way it works is if you have a --help flag on each command, and then only if it's discovered in `parse_args_or_exit`. And I'm not calling that because I want to be able to supply my own arguments. I would prefer to have a help command that takes an optional command name parameter anyway.
 fn show_usage<Command: Options>(program: &str, selected_command: Option<&str>) {
@@ -55,8 +56,8 @@ pub struct GenerateWords {
 
     #[options(default="plain")]
     #[options(no_short)]
-    /// Changes the format of grid output.
-    format: GridStyle,
+    /// Changes the format of grid output. Values include "plain", "terminal", "markdown", "html", "json", and "csv".
+    format: Format,
 
     #[options(no_short)]
     /// Turns off column and row spanning in headers of grid output.
@@ -146,8 +147,8 @@ pub struct ShowPhonemes {
 
     #[options(default="terminal")]
     #[options(no_short)]
-    /// Changes the format of grid output.
-    format: GridStyle,
+    /// Changes the format of grid output. Values include "plain", "terminal", "markdown", "html", "json", and "csv".
+    format: Format,
 
     #[options(no_short)]
     /// Turns off column and row spanning in headers of grid output.
@@ -188,8 +189,8 @@ pub struct ShowSpelling {
 
     #[options(default="terminal")]
     #[options(no_short)]
-    /// Changes the format of grid output.
-    format: GridStyle,
+    /// Changes the format of grid output. Values include "plain", "terminal", "markdown", "html", "json", and "csv".
+    format: Format,
 
     #[options(no_short)]
     /// Turns off column and row spanning in headers of grid output.
@@ -220,7 +221,7 @@ impl DoIt for ShowSpelling {
 }
 
 #[derive(Options)]
-/// Loads a lexicon of words in CSV format for a language, validates them and prints out a formatted listing. Requires a file name to load and an orthography index to spell the main entries. Options allow controlling the output format. The input CSV must have a "word" column containing the phonetic transcription of the word, and a "definition" column containing arbitrary text.
+/// Loads a lexicon of words in CSV format for a language, validates them and prints out a formatted listing. Requires a file name to load and an orthography index to spell the main entries. Options allow controlling the output format and style. The format specifies the markup format for the output. The style specifies whether a list or a table is required. The input CSV must have a "word" column containing the phonetic transcription of the word, and a "definition" column containing arbitrary text.
 pub struct FormatLexicon {
 
 
@@ -232,10 +233,15 @@ pub struct FormatLexicon {
     /// Orthography index (0-based) to use for generating main entries.
     spelling: usize,
 
-    /// Changes the format of grid output.
+    /// Changes the format of output. Values include "plain", "terminal", "markdown", "html", "json", and "csv". "plain" and "terminal" have the same output when `--style` is "list".
     #[options(default="plain")]
     #[options(no_short)]
-    format: GridStyle,
+    format: Format,
+
+    /// Changes the style of the output. Values are "table" or "list". This has no effect on CSV or JSON format.
+    #[options(default="list")]
+    #[options(no_short)]
+    style: LexiconStyle,
 
     #[options(no_short)]
     /// Turns off column and row spanning in headers of grid output.
@@ -257,7 +263,7 @@ impl DoIt for FormatLexicon {
 
         let language = family.get_language_or_default(language.as_deref())?;
 
-        format_lexicon(Some(grid_style), language, &self.file, self.spelling);
+        format_lexicon(grid_style, &self.style, language, &self.file, self.spelling);
 
         Ok(())
 

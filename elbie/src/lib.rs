@@ -155,8 +155,8 @@ such as phoneme tables, lexicon words, etc.
 */
 
 pub mod phoneme_table;
+mod format;
 mod grid;
-mod table_writer;
 mod lexicon;
 pub mod errors;
 mod bag;

@@ -1,6 +1,6 @@
 use crate::errors::ElbieError;
 use crate::language::Language;
-use crate::grid::GridStyle;
+use crate::format::Format;
 use crate::cli_functions::generate_words;
 use crate::cli_functions::validate_words;
 use crate::cli_functions::show_phonemes;
@@ -10,6 +10,7 @@ use crate::cli_functions::ValidateOption;
 use std::path::Path;
 use std::ffi::OsStr;
 use std::env;
+use crate::lexicon::LexiconStyle;
 
 
 pub(crate) enum Command {
@@ -22,7 +23,7 @@ pub(crate) enum Command {
 }
 
 pub(crate) struct Arguments {
-    grid_style: Option<GridStyle>,
+    grid_style: Option<Format>,
     comment: Option<String>,
     command: Command
 }
@@ -55,19 +56,19 @@ pub(crate) fn parse_args<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(ar
 
   while let Some(arg) = args.next() {
     match arg.as_ref() {
-      "--format=plain" => set_grid_style!(GridStyle::Plain),
-      "--format=terminal" => set_grid_style!(GridStyle::Terminal{ spans: spanning }),
-      "--format=markdown" => set_grid_style!(GridStyle::Markdown),
-      "--format=html" => set_grid_style!(GridStyle::HTML { spans: spanning }),
-      "--format=json" => set_grid_style!(GridStyle::JSON),
+      "--format=plain" => set_grid_style!(Format::Plain),
+      "--format=terminal" => set_grid_style!(Format::Terminal{ spans: spanning }),
+      "--format=markdown" => set_grid_style!(Format::Markdown),
+      "--format=html" => set_grid_style!(Format::HTML { spans: spanning }),
+      "--format=json" => set_grid_style!(Format::JSON),
       "--no-spans" => if let Some(style) = &mut grid_style {
           match style {
-            GridStyle::Plain |
-            GridStyle::JSON |
-            GridStyle::Markdown |
-            GridStyle::CSV => (),
-            GridStyle::Terminal { spans } |
-            GridStyle::HTML { spans } => if *spans {
+            Format::Plain |
+            Format::JSON |
+            Format::Markdown |
+            Format::CSV => (),
+            Format::Terminal { spans } |
+            Format::HTML { spans } => if *spans {
                 *spans = false
             } else {
                 panic!("--no-spans specified twice")
@@ -173,7 +174,7 @@ pub fn run<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Args,
             Command::ValidateWords(words,option) => validate_words(&language, words.into_iter(), &option),
             Command::ShowPhonemes(table) => show_phonemes(arguments.grid_style.as_ref(), &language, table.as_ref()),
             Command::ShowSpelling(columns) => show_spelling(arguments.grid_style.as_ref(), &language, columns),
-            Command::ProcessLexicon(path,ortho_index) => format_lexicon(arguments.grid_style.as_ref(), &language, &path, ortho_index),
+            Command::ProcessLexicon(path,ortho_index) => format_lexicon(arguments.grid_style.as_ref().unwrap_or(&Format::Plain), &LexiconStyle::List, &language, &path, ortho_index),
             Command::ShowUsage => {
                 let exe_name = env::current_exe().ok().as_deref().and_then(Path::file_name).map(OsStr::display).as_ref().map(ToString::to_string);
                 let program = exe_name.as_deref().unwrap_or_else(|| language.name());

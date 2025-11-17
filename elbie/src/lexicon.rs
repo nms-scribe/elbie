@@ -1,10 +1,33 @@
 use core::fmt::Write;
 use crate::word::Word;
-use crate::grid::GridStyle;
-use crate::table_writer::TableWriter;
-use crate::table_writer::HTMLTableWriter;
-use crate::table_writer::JSONTableWriter;
-use crate::table_writer::CSVTableWriter;
+use crate::format::Format;
+use crate::grid::Grid;
+use crate::grid::TableClass;
+use crate::grid::ColumnHeader;
+use crate::grid::GridRow;
+use crate::grid::TRBodyClass;
+use crate::grid::Cell;
+use crate::grid::TableOutput;
+use html_builder::Html5 as _;
+use std::str::FromStr;
+
+
+pub(crate) enum LexiconStyle {
+    Table,
+    List
+}
+
+impl FromStr for LexiconStyle {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_ref() {
+            "table" => Ok(Self::Table),
+            "list" => Ok(Self::List),
+            name => Err(format!("Unknown lexicon style '{name}'."))
+        }
+    }
+}
 
 
 pub(crate) struct LexiconEntry {
@@ -28,120 +51,171 @@ impl LexiconEntry {
 }
 
 
-trait LexiconWriter<'output,Output: Write> {
-
-    fn initialize(main_orthography: &'static str, orthographies: Vec<&'static str>, output: &'output mut Output) -> Self;
-
-    fn write_entry(&mut self, main_spelling: &str, other_spellings: &[&str], word: &Word, definition: &str);
-
-    fn finalize(self);
-
+pub(crate) struct LexiconTable {
+    grid: Grid,
+    primary_orthography_idx: usize
 }
 
-struct LexiconTableWriter<Writer> {
-    orthographies: Vec<&'static str>,
-    writer: Writer
-}
+impl LexiconTable {
 
-impl<'output,Output: Write, Writer: TableWriter<'output,Output>> LexiconWriter<'output,Output> for LexiconTableWriter<Writer> {
+    pub(crate) fn new(orthographies: Vec<&'static str>, primary_orthography_idx: usize) -> Self {
+        let mut grid = Grid::new(TableClass::ElbieLexicon, "Lexicon".to_owned());
 
-    fn initialize(main_orthography: &'static str, orthographies: Vec<&'static str>, output: &'output mut Output) -> Self {
-        let mut fields = Vec::new();
-        fields.push(main_orthography.to_owned());
-        fields.push("word".to_owned());
-        for orthography in &orthographies {
-            fields.push((*orthography).to_owned());
+        let mut primary_orthography = None;
+        let mut other_orthographies = Vec::new();
+        for (i,orthography) in orthographies.iter().enumerate() {
+            if i == primary_orthography_idx {
+                primary_orthography = Some(orthography)
+            } else {
+                other_orthographies.push(*orthography);
+            }
         }
-        fields.push("definition".to_owned());
+        let primary_orthography = primary_orthography.expect("Primary orthography index was out of bounds");
 
-        let writer = Writer::initialize(fields, output);
+        let mut headers = Vec::new();
+        headers.push(ColumnHeader::new((*primary_orthography).to_owned(),1));
+        headers.push(ColumnHeader::new("Word".to_owned(),1));
+        for orthography in &other_orthographies {
+            headers.push(ColumnHeader::new((*orthography).to_owned(),1));
+        }
+        headers.push(ColumnHeader::new("Definition".to_owned(),1));
+
+        grid.set_headers(headers);
 
         Self {
-            orthographies,
-            writer
+            grid,
+            primary_orthography_idx
         }
     }
 
-    fn write_entry(&mut self, main_spelling: &str, other_spellings: &[&str], word: &Word, definition: &str) {
-        let mut record = Vec::new();
-        record.push(main_spelling.to_owned());
-        let word = word.to_string();
-        record.push(word);
-        for spelling in other_spellings.iter().take(self.orthographies.len()) {
-            record.push((*spelling).to_owned());
+    pub(crate) fn push_entry(&mut self, entry: LexiconEntry) {
+
+        let mut primary_spelling = None;
+        let mut other_spellings = Vec::new();
+        for (i,spelling) in entry.spelling.iter().enumerate() {
+            if i == self.primary_orthography_idx {
+                primary_spelling = Some(spelling)
+            } else {
+                other_spellings.push(spelling);
+            }
         }
-        record.push(definition.to_owned());
-        self.writer.write_record(record);
+        let primary_spelling = primary_spelling.expect("Primary orthography index was out of bounds");
+
+        let mut fields = GridRow::new(TRBodyClass::BodyRow);
+        fields.push_cell(Cell::content((*primary_spelling).to_owned(),None));
+        fields.push_cell(Cell::content(entry.word.to_string(),None));
+        for spelling in &other_spellings {
+            fields.push_cell(Cell::content((*spelling).to_owned(),None));
+        }
+        fields.push_cell(Cell::content(entry.definition,None));
+
+        self.grid.push_body_row(fields);
+
+
     }
 
-    fn finalize(self) {
-        self.writer.finalize();
+    /// # Panics
+    /// panics if the `self.primary_orthography' is not a valid index in the supplied orthographies.
+    #[must_use]
+    pub(crate) fn into_output(self, style: &Format) -> TableOutput {
+
+        self.grid.into_output(style)
+
     }
 }
 
-struct PlainLexiconWriter<'output,Output: Write> {
-    orthographies: Vec<&'static str>,
-    output: &'output mut Output
+
+
+trait LexiconWriter {
+
+    fn initialize(main_orthography: &'static str, orthographies: Vec<&'static str>) -> Self;
+
+    fn write_entry(&mut self, main_spelling: &str, other_spellings: &[&str], word: &Word, definition: &str, output: &mut String);
+
 }
 
-impl<'output,Output: Write> LexiconWriter<'output,Output> for PlainLexiconWriter<'output,Output> {
 
-    fn initialize(_: &'static str, orthographies: Vec<&'static str>, output: &'output mut Output) -> Self {
+struct PlainLexiconWriter {
+    orthographies: Vec<&'static str>
+}
+
+impl LexiconWriter for PlainLexiconWriter {
+
+    fn initialize(_: &'static str, orthographies: Vec<&'static str>) -> Self {
         Self {
-            orthographies,
-            output
+            orthographies
         }
     }
 
-    fn write_entry(&mut self, main_spelling: &str, other_spellings: &[&str], word: &Word, definition: &str) {
-        write!(self.output,"{main_spelling} ({word}").expect("Could not write orthography");
+    fn write_entry(&mut self, main_spelling: &str, other_spellings: &[&str], word: &Word, definition: &str, output: &mut String) {
+        write!(output,"{main_spelling} ({word}").expect("Could not write to Plain Text");
         for (orthography,spelling) in self.orthographies.iter().zip(other_spellings) {
-            write!(self.output,"; {orthography}: {spelling}").expect("Could not write orthography");
+            write!(output,"; {orthography}: {spelling}").expect("Could not write to Plain Text");
         }
-        writeln!(self.output,"): {definition}").expect("Could not write orthography");
+        writeln!(output,"): {definition}").expect("Could not write to Plain Text");
     }
-
-    fn finalize(self) {
-    }
-
-
 
 }
 
-struct MarkdownLexiconWriter<'output,Output: Write> {
-    orthographies: Vec<&'static str>,
-    output: &'output mut Output
+struct MarkdownLexiconWriter {
+    orthographies: Vec<&'static str>
 }
 
-impl<'output,Output: Write> LexiconWriter<'output,Output> for MarkdownLexiconWriter<'output,Output> {
-    fn initialize(_: &'static str, orthographies: Vec<&'static str>, output: &'output mut Output) -> Self {
+impl LexiconWriter for MarkdownLexiconWriter {
+    fn initialize(_: &'static str, orthographies: Vec<&'static str>) -> Self {
         Self {
-            orthographies,
-            output
+            orthographies
         }
     }
 
-    fn write_entry(&mut self, main_spelling: &str, other_spellings: &[&str], word: &Word, definition: &str) {
-        write!(self.output,"**{main_spelling}**. ({word}").expect("Could not write orthography");
+    fn write_entry(&mut self, main_spelling: &str, other_spellings: &[&str], word: &Word, definition: &str, output: &mut String) {
+        write!(output,"**{main_spelling}**. ({word}").expect("Could not write to Markdown");
         for (orthography,spelling) in self.orthographies.iter().zip(other_spellings) {
-            write!(self.output,"; {orthography}: *{spelling}*").expect("Could not write orthography");
+            write!(output,"; {orthography}: *{spelling}*").expect("Could not write to Markdown");
         }
-        writeln!(self.output,"): {definition}").expect("Could not write orthography");
+        writeln!(output,"): {definition}").expect("Could not write to Markdown");
     }
 
-    fn finalize(self) {
+}
+
+struct HTMLLexiconWriter {
+    orthographies: Vec<&'static str>
+}
+
+
+impl LexiconWriter for HTMLLexiconWriter {
+    fn initialize(_: &'static str, orthographies: Vec<&'static str>) -> Self {
+        Self {
+            orthographies
+        }
     }
+
+    fn write_entry(&mut self, main_spelling: &str, other_spellings: &[&str], word: &Word, definition: &str, output: &mut String) {
+        let mut buffer = html_builder::Buffer::new();
+        let mut p = buffer.p();
+        write!(p.strong(),"{main_spelling}").expect("Could not write to HTML");
+        write!(p,". ({word}").expect("Could not write to HTML");
+        for (orthography,spelling) in self.orthographies.iter().zip(other_spellings) {
+            write!(p,"; {orthography}: ").expect("Could not write to HTML");
+            write!(p.em(),"{spelling}").expect("Could not write to HTML");
+        }
+        write!(p,"): {definition}").expect("Could not write orthography");
+        write!(output,"{}",buffer.finish()).expect("Could not write to HTML");
+    }
+
 
 
 }
 
-pub(crate) struct Lexicon {
+
+
+pub(crate) struct LexiconList {
     primary_orthography: usize,
     orthographies: Vec<&'static str>,
     entries: Vec<LexiconEntry>
 }
 
-impl Lexicon {
+impl LexiconList {
 
     pub(crate) const fn new(orthographies: Vec<&'static str>, primary_orthography: usize) -> Self {
         Self {
@@ -151,7 +225,7 @@ impl Lexicon {
         }
     }
 
-    pub(crate) fn push(&mut self, entry: LexiconEntry) {
+    pub(crate) fn push_entry(&mut self, entry: LexiconEntry) {
         if entry.spelling.len() != self.orthographies.len() {
             panic!("LexiconEntry does not have the same number of spellings as the lexicon")
         }
@@ -159,7 +233,7 @@ impl Lexicon {
     }
 
 
-    fn into_output<'output,Output: Write, Writer: LexiconWriter<'output,Output>>(self, result: &'output mut Output) {
+    fn into_string<Writer: LexiconWriter>(self, result: &mut String) {
 
         let mut main_orthography = "";
         let mut other_orthographies = Vec::new();
@@ -171,7 +245,7 @@ impl Lexicon {
                 other_orthographies.push(*orthography);
             }
         }
-        let mut writer = Writer::initialize(main_orthography, other_orthographies, result);
+        let mut writer = Writer::initialize(main_orthography, other_orthographies);
 
         for entry in self.entries {
 
@@ -187,32 +261,90 @@ impl Lexicon {
 
             assert_ne!(main_spelling.len(),0,"Missing spelling for orthography {} in {}",self.primary_orthography,entry.word);
 
-            writer.write_entry(main_spelling, &other_spellings, &entry.word, &entry.definition);
+            writer.write_entry(main_spelling, &other_spellings, &entry.word, &entry.definition, result);
 
         }
 
-        writer.finalize();
     }
 
-    /// # Panics
-    /// panics if the `self.primary_orthography' is not a valid index in the supplied orthographies.
-    #[must_use]
-    pub(crate) fn into_string(self, style: &GridStyle) -> String {
+    fn into_table(self, style: &Format) -> TableOutput {
+        let mut table = LexiconTable::new(self.orthographies, self.primary_orthography);
 
-        let mut result = String::new();
+        for entry in self.entries {
+            table.push_entry(entry);
+
+        }
+
+        table.into_output(style)
+    }
+
+    pub(crate) fn print_to_stdout(self, style: &Format) {
+
 
         match style {
             // NOTE: The Plain, Terminal, and Markdown lexicons should be in paragraph format, so I'm not using a TableWriter for those.
             // (The HTML output can be styled to look like paragraph format if you really want it that way)
-            GridStyle::Plain |
-            GridStyle::Terminal { .. } => self.into_output::<_,PlainLexiconWriter<_>>(&mut result),
-            GridStyle::Markdown => self.into_output::<_,MarkdownLexiconWriter<_>>(&mut result),
-            GridStyle::HTML { .. } => self.into_output::<_,LexiconTableWriter<HTMLTableWriter<_>>>(&mut result),
-            GridStyle::JSON => self.into_output::<_,LexiconTableWriter<JSONTableWriter<_>>>(&mut result),
-            GridStyle::CSV => self.into_output::<_,LexiconTableWriter<CSVTableWriter<_>>>(&mut result),
+            Format::Plain |
+            Format::Terminal { .. } => {
+                let mut result = String::new();
+                self.into_string::<PlainLexiconWriter>(&mut result);
+                print!("{result}")
+            },
+            Format::Markdown => {
+                let mut result = String::new();
+                self.into_string::<MarkdownLexiconWriter>(&mut result);
+                print!("{result}")
+            },
+            Format::HTML { .. } => {
+                let mut result = String::new();
+                self.into_string::<HTMLLexiconWriter>(&mut result);
+                print!("{result}")
+            },
+            Format::JSON |
+            Format::CSV => {
+                self.into_table(style).print_to_stdout();
+            }
         }
 
-        result
 
     }
+}
+
+
+
+pub(crate) enum Lexicon {
+    List(LexiconList),
+    Table(LexiconTable)
+}
+
+impl Lexicon {
+
+    pub(crate) fn new(style: &LexiconStyle, orthographies: Vec<&'static str>, primary_orthography_idx: usize) -> Self {
+        match style {
+            LexiconStyle::Table => Self::Table(LexiconTable::new(orthographies, primary_orthography_idx)),
+            LexiconStyle::List => Self::List(LexiconList::new(orthographies, primary_orthography_idx)),
+        }
+
+    }
+
+    pub(crate) fn push_entry(&mut self, entry: LexiconEntry) {
+        match self {
+            Lexicon::List(lexicon_list) => lexicon_list.push_entry(entry),
+            Lexicon::Table(lexicon_table) => lexicon_table.push_entry(entry),
+        }
+    }
+
+    pub(crate) fn print_to_stdout(self, style: &Format) {
+        match self {
+            Lexicon::List(lexicon_list) => {
+                lexicon_list.print_to_stdout(style);
+            },
+            Lexicon::Table(lexicon_table) => {
+                let output = lexicon_table.into_output(style);
+                output.print_to_stdout();
+            },
+        }
+    }
+
+
 }

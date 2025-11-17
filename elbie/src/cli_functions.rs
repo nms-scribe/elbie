@@ -1,4 +1,4 @@
-use crate::grid::GridStyle;
+use crate::format::Format;
 use crate::language::Language;
 use crate::grid::Grid;
 use crate::grid::TableClass;
@@ -14,6 +14,7 @@ use std::path::Path;
 use csv::Reader;
 use core::error::Error;
 use crate::errors::ElbieError;
+use crate::lexicon::LexiconStyle;
 
 pub(crate) enum ValidateOption {
   Simple,
@@ -31,7 +32,7 @@ pub(crate) enum TransformationOption {
 }
 
 
-pub(crate) fn generate_words(grid_style: Option<&GridStyle>, language: &Language, count: usize) {
+pub(crate) fn generate_words(grid_style: Option<&Format>, language: &Language, count: usize) {
     let mut grid = Grid::new(TableClass::ElbieWords, format!("Generated {count} words for {}",language.name()));
 
     // FUTURE: Should I have a header?
@@ -60,7 +61,7 @@ pub(crate) fn generate_words(grid_style: Option<&GridStyle>, language: &Language
 
         grid.push_body_row(row);
     }
-    grid.into_output(grid_style.unwrap_or(&GridStyle::Plain)).print_to_stdout();
+    grid.into_output(grid_style.unwrap_or(&Format::Plain)).print_to_stdout();
 }
 
 
@@ -131,8 +132,8 @@ pub(crate) fn validate_words<Words: Iterator<Item = String>>(language: &Language
 }
 
 
-pub(crate) fn show_phonemes(grid_style: Option<&GridStyle>, language: &Language, table: Option<&String>) {
-    let style = grid_style.unwrap_or(&GridStyle::Terminal{ spans: true });
+pub(crate) fn show_phonemes(grid_style: Option<&Format>, language: &Language, table: Option<&String>) {
+    let style = grid_style.unwrap_or(&Format::Terminal{ spans: true });
     let result = match table {
         Some(table) => match language.build_phoneme_table(table) {
             Ok(Some(grid)) => {
@@ -169,10 +170,10 @@ pub(crate) fn show_phonemes(grid_style: Option<&GridStyle>, language: &Language,
 
 
 
-pub(crate) fn show_spelling(grid_style: Option<&GridStyle>, language: &Language, columns: usize) {
+pub(crate) fn show_spelling(grid_style: Option<&Format>, language: &Language, columns: usize) {
     match language.display_spelling(columns) {
         Ok(grid) => {
-            grid.into_output(grid_style.unwrap_or(&GridStyle::Terminal { spans: false })).print_to_stdout();
+            grid.into_output(grid_style.unwrap_or(&Format::Terminal { spans: false })).print_to_stdout();
         },
         Err(err) => {
             eprintln!("!!! Couldn't display spelling: {err}");
@@ -183,17 +184,14 @@ pub(crate) fn show_spelling(grid_style: Option<&GridStyle>, language: &Language,
 
 
 
-pub(crate) fn format_lexicon(grid_style: Option<&GridStyle>, language: &Language, path: &str, ortho_index: usize) {
+pub(crate) fn format_lexicon(format: &Format, style: &LexiconStyle, language: &Language, path: &str, ortho_index: usize) {
   if ortho_index >= language.orthographies().len() {
         panic!("Language only has {} orthographies.",language.orthographies().len())
   }
 
-  let grid_style = grid_style.unwrap_or(&GridStyle::Plain);
-
-  match language.load_lexicon(path,ortho_index) {
+  match language.load_lexicon(path,ortho_index,style) {
     Ok(lexicon) => {
-        let result = lexicon.into_string(grid_style);
-        print!("{result}")
+        lexicon.print_to_stdout(format);
 
     },
     Err(err) => {

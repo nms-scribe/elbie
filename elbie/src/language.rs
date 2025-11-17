@@ -19,7 +19,6 @@ use crate::phoneme_table::TableDef;
 use core::error::Error;
 use core::cmp::Ordering;
 use std::rc::Rc;
-use crate::lexicon::Lexicon;
 use crate::grid::TRBodyClass;
 use crate::grid::TableClass;
 use crate::validation::ValidationTraceMessage;
@@ -44,6 +43,8 @@ use core::iter;
 use crate::validation::ValidPhonemeElement;
 use crate::validation::ValidInitialPhoneme;
 use crate::validation::ValidationError;
+use crate::lexicon::Lexicon;
+use crate::lexicon::LexiconStyle;
 
 
 
@@ -582,7 +583,7 @@ impl Language {
 
     }
 
-    pub(crate) fn load_lexicon(&self, path: &str, primary_orthography: usize) -> Result<Lexicon,Box<dyn Error>> {
+    pub(crate) fn load_lexicon(&self, path: &str, primary_orthography: usize, style: &LexiconStyle) -> Result<Lexicon,Box<dyn Error>> {
 
 
       let mut reader = Reader::from_path(path)?;
@@ -590,7 +591,7 @@ impl Language {
       let word_field = headers.iter().position(|a| a.to_lowercase() == "word").ok_or_else(|| "No 'word' field found.".to_owned())?;
       let definition_field = headers.iter().position(|a| a.to_lowercase() == "definition").ok_or_else(|| "No 'definition' field found.".to_owned())?;
 
-      let mut result = Lexicon::new(self.orthographies.clone(), primary_orthography);
+      let mut result = Lexicon::new(style,self.orthographies.clone(), primary_orthography);
 
       for (row,record) in reader.into_records().enumerate() {
         let record = record.map_err(|e| format!("Error reading record {row}: {e}"))?;
@@ -603,7 +604,7 @@ impl Language {
             record.get(definition_field).ok_or_else(|| format!("No definition found at row {row}"))?.to_owned(),
         );
 
-        result.push(entry);
+        result.push_entry(entry);
 
       }
 

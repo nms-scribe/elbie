@@ -12,8 +12,8 @@ use prettytable::format::TableFormat as PrettyTableFormat;
 use prettytable::Table as PrettyTable;
 use prettytable::Row as PrettyRow;
 use prettytable::Cell as PrettyCell;
-use core::str::FromStr;
 use std::io;
+use crate::format::Format;
 
 /*
 NOTE: On my decision for text output tables:
@@ -55,7 +55,8 @@ FUTURE: I could potentially pre-process the rows in the same way that I do for m
 pub(crate) enum TableClass {
     ElbiePhonemes,
     ElbieWords,
-    ElbieOrthography
+    ElbieOrthography,
+    ElbieLexicon
 }
 
 impl Display for TableClass {
@@ -64,6 +65,7 @@ impl Display for TableClass {
             Self::ElbiePhonemes => write!(f,"elbie phonemes"),
             Self::ElbieWords => write!(f,"elbie generated-words"),
             Self::ElbieOrthography => write!(f,"elbie orthography"),
+            Self::ElbieLexicon => write!(f,"elbie lexicon"),
         }
     }
 }
@@ -194,47 +196,6 @@ impl TextStyle {
         }
     }
 
-}
-
-// FUTURE: How about a CSV style? I've already got a CSV reader. NOTE: The prettytable plugin has CSV output available, but it doesn't quote the strings, so don't use that.
-pub(crate) enum GridStyle {
-    Plain,
-    Terminal{ spans: bool },
-    Markdown,
-    HTML{ spans: bool },
-    JSON,
-    CSV
-}
-
-impl FromStr for GridStyle {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_ref() {
-            "plain" => Ok(Self::Plain),
-            "terminal" => Ok(Self::Terminal { spans: true }),
-            "markdown" => Ok(Self::Markdown),
-            "html" => Ok(Self::HTML { spans: true }),
-            "json" => Ok(Self::JSON),
-            "csv" => Ok(Self::CSV),
-            name => Err(format!("Unknown grid style '{name}'."))
-        }
-    }
-}
-
-impl GridStyle {
-
-
-    pub(crate) const fn with_no_spans(&self) -> Self {
-        match self {
-            Self::Plain => Self::Plain,
-            Self::Terminal { spans: _  } => Self::Terminal { spans: false },
-            Self::Markdown => Self::Markdown,
-            Self::HTML { spans: _  } => Self::HTML { spans: false },
-            Self::JSON => Self::JSON,
-            Self::CSV => Self::CSV
-        }
-    }
 }
 
 pub(crate) enum TableOutput {
@@ -655,7 +616,7 @@ impl Grid {
 
 
     #[must_use]
-    pub(crate) fn into_html(mut self,with_span: bool) -> html_builder::Buffer {
+    fn into_html(mut self,with_span: bool) -> html_builder::Buffer {
 
         // need to know this for creating "corner" cell in the top-left
         let row_header_offset = self.body.first().map_or(0, |first| {
@@ -722,7 +683,7 @@ impl Grid {
     }
 
     #[must_use]
-    pub(crate) fn into_json(self) -> json::JsonValue {
+    fn into_json(self) -> json::JsonValue {
 
 
         let result = json::object!{
@@ -803,7 +764,7 @@ impl Grid {
     }
 
     #[must_use]
-    pub(crate) fn into_csv(self) -> Vec<csv::StringRecord> {
+    fn into_csv(self) -> Vec<csv::StringRecord> {
 
         let row_header_offset = self.body.first().map_or(0, |first| {
             first.headers.len()
@@ -1112,7 +1073,7 @@ impl Grid {
     }*/
 
     #[must_use]
-    pub(crate) fn into_pretty(self, with_spans: bool, text_style: &TextStyle, format: PrettyTableFormat) -> PrettyTable {
+    fn into_pretty(self, with_spans: bool, text_style: &TextStyle, format: PrettyTableFormat) -> PrettyTable {
 
         let row_header_offset = self.body.first().map_or(0, |first| {
             first.headers.len()
@@ -1180,31 +1141,32 @@ impl Grid {
     }
 
     #[must_use]
-    pub(crate) fn into_output(self, style: &GridStyle) -> TableOutput {
+    pub(crate) fn into_output(self, style: &Format) -> TableOutput {
 
         match style {
-            GridStyle::Plain => {
+            Format::Plain => {
                 // yes span the plain style, it makes it look much cleaner.
                 let me = self.blend_column_groups();
                 let me = me.blend_row_groups();
                 let table = me.into_pretty(true,&TextStyle::Plain, *FORMAT_CLEAN);
                 TableOutput::Pretty(table)
             },
-            GridStyle::Markdown => {
+            Format::Markdown => {
                 let me = self.blend_column_groups();
                 let me = me.blend_row_groups();
                 let table = me.into_pretty(false,&TextStyle::Markdown, Self::pretty_table_markdown());
                 TableOutput::Pretty(table)
             },
-            GridStyle::Terminal { spans } => {
+            Format::Terminal { spans } => {
                 let me = self.blend_column_groups();
                 let me = me.blend_row_groups();
                 let table = me.into_pretty(*spans,&TextStyle::Terminal, *FORMAT_BOX_CHARS);
                 TableOutput::Pretty(table)
             },
-            GridStyle::HTML { spans } => TableOutput::HTML(self.into_html(*spans)),
-            GridStyle::JSON => TableOutput::JSON(self.into_json()),
-            GridStyle::CSV => TableOutput::CSV(self.into_csv())
+            Format::HTML { spans } => TableOutput::HTML(self.into_html(*spans)),
+            Format::JSON => TableOutput::JSON(self.into_json()),
+            // NOTE: While PrettyTable has a CSV output available, I've already got a more configurable CSV crate loaded.
+            Format::CSV => TableOutput::CSV(self.into_csv())
         }
     }
 
