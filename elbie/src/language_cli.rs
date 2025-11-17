@@ -64,7 +64,8 @@ pub(crate) fn parse_args<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(ar
           match style {
             GridStyle::Plain |
             GridStyle::JSON |
-            GridStyle::Markdown => (),
+            GridStyle::Markdown |
+            GridStyle::CSV => (),
             GridStyle::Terminal { spans } |
             GridStyle::HTML { spans } => if *spans {
                 *spans = false

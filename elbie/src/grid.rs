@@ -13,7 +13,7 @@ use prettytable::Table as PrettyTable;
 use prettytable::Row as PrettyRow;
 use prettytable::Cell as PrettyCell;
 use core::str::FromStr;
-
+use std::io;
 
 /*
 NOTE: On my decision for text output tables:
@@ -202,7 +202,8 @@ pub(crate) enum GridStyle {
     Terminal{ spans: bool },
     Markdown,
     HTML{ spans: bool },
-    JSON
+    JSON,
+    CSV
 }
 
 impl FromStr for GridStyle {
@@ -215,6 +216,7 @@ impl FromStr for GridStyle {
             "markdown" => Ok(Self::Markdown),
             "html" => Ok(Self::HTML { spans: true }),
             "json" => Ok(Self::JSON),
+            "csv" => Ok(Self::CSV),
             name => Err(format!("Unknown grid style '{name}'."))
         }
     }
@@ -230,6 +232,7 @@ impl GridStyle {
             Self::Markdown => Self::Markdown,
             Self::HTML { spans: _  } => Self::HTML { spans: false },
             Self::JSON => Self::JSON,
+            Self::CSV => Self::CSV
         }
     }
 }
@@ -239,7 +242,7 @@ pub(crate) enum TableOutput {
     // NOTE: PrettyTable has a 'write_html' function, but it uses style attributes and I can't control the class attributes
     HTML(html_builder::Buffer),
     JSON(json::JsonValue),
-    //Text(String)
+    CSV(Vec<csv::StringRecord>)
 }
 
 impl TableOutput {
@@ -259,7 +262,15 @@ impl TableOutput {
             Self::Pretty(table) => table.printstd(),
             Self::HTML(buffer) => println!("{}",buffer.finish()),
             Self::JSON(json_value) => println!("{}",json_value.pretty(2)),
-            //Self::Text(text) => println!("{text}")
+            Self::CSV(records) => {
+                let mut builder = csv::WriterBuilder::new();
+                _ = builder.quote_style(csv::QuoteStyle::Always);
+                let mut writer = builder.from_writer(io::stdout());
+
+                for record in records {
+                    writer.write_record(&record).expect("Could not write CSV to stdout");
+                }
+            }
         }
     }
 }
@@ -791,6 +802,79 @@ impl Grid {
 
     }
 
+    #[must_use]
+    pub(crate) fn into_csv(self) -> Vec<csv::StringRecord> {
+
+        let row_header_offset = self.body.first().map_or(0, |first| {
+            first.headers.len()
+        });
+
+
+        let mut output = Vec::new();
+
+        if let Some((head,subhead)) = self.heads {
+
+            let mut head_record = csv::StringRecord::new();
+            // need a corner square
+            for _ in 0..row_header_offset {
+                head_record.push_field("");
+            }
+
+            for header in head {
+                head_record.push_field(&header.text);
+                for _ in 1..header.colspan.get() {
+                    head_record.push_field("");
+                }
+            }
+
+            output.push(head_record);
+
+
+            if let Some(subhead) = subhead {
+
+                let mut subhead_record = csv::StringRecord::new();
+
+                for _ in 0..row_header_offset {
+                    subhead_record.push_field("");
+                }
+
+                for header in subhead {
+                    subhead_record.push_field(&header.text);
+                }
+
+                output.push(subhead_record);
+
+            }
+        }
+
+        for row in self.body {
+
+            let mut record = csv::StringRecord::new();
+            if let Some((header,subheader)) = row.headers {
+
+                match header {
+                    RowHeader::RowHeader { text, rowspan: _ } => record.push_field(&text),
+                    RowHeader::RowHeaderSpan => record.push_field(""),
+                }
+
+                if let Some(subheader) = subheader {
+                    record.push_field(&subheader.text);
+                }
+
+            }
+
+            for cell in row.cells {
+                record.push_field(&cell.text);
+            }
+
+            output.push(record);
+
+        };
+
+        output
+
+    }
+
     fn blend_column_groups(self) -> Self {
 
 
@@ -1119,7 +1203,8 @@ impl Grid {
                 TableOutput::Pretty(table)
             },
             GridStyle::HTML { spans } => TableOutput::HTML(self.into_html(*spans)),
-            GridStyle::JSON => TableOutput::JSON(self.into_json())
+            GridStyle::JSON => TableOutput::JSON(self.into_json()),
+            GridStyle::CSV => TableOutput::CSV(self.into_csv())
         }
     }
 

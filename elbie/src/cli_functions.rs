@@ -12,7 +12,7 @@ use crate::transformation::Transformation;
 use crate::transformation::TransformationTraceCallback;
 use std::path::Path;
 use csv::Reader;
-use std::error::Error;
+use core::error::Error;
 use crate::errors::ElbieError;
 
 pub(crate) enum ValidateOption {
@@ -140,7 +140,7 @@ pub(crate) fn show_phonemes(grid_style: Option<&GridStyle>, language: &Language,
                 Ok(())
             },
             Ok(None) => {
-                eprintln!("No phoneme table named {table}. Try singular?");
+                eprintln!("No phoneme table named {table}. Try singular or lower-case?");
                 Ok(())
             }
             Err(err) => Err(err),
@@ -193,7 +193,7 @@ pub(crate) fn format_lexicon(grid_style: Option<&GridStyle>, language: &Language
   match language.load_lexicon(path,ortho_index) {
     Ok(lexicon) => {
         let result = lexicon.into_string(grid_style);
-        println!("{result}")
+        print!("{result}")
 
     },
     Err(err) => {

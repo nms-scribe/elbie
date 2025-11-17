@@ -1,8 +1,10 @@
 use core::fmt::Write;
 use crate::word::Word;
 use crate::grid::GridStyle;
-use html_builder::Html5 as _;
-use json::object::Object as JSONObject;
+use crate::table_writer::TableWriter;
+use crate::table_writer::HTMLTableWriter;
+use crate::table_writer::JSONTableWriter;
+use crate::table_writer::CSVTableWriter;
 
 
 pub(crate) struct LexiconEntry {
@@ -20,6 +22,114 @@ impl LexiconEntry {
             definition
         }
 
+    }
+
+
+}
+
+
+trait LexiconWriter<'output,Output: Write> {
+
+    fn initialize(main_orthography: &'static str, orthographies: Vec<&'static str>, output: &'output mut Output) -> Self;
+
+    fn write_entry(&mut self, main_spelling: &str, other_spellings: &[&str], word: &Word, definition: &str);
+
+    fn finalize(self);
+
+}
+
+struct LexiconTableWriter<Writer> {
+    orthographies: Vec<&'static str>,
+    writer: Writer
+}
+
+impl<'output,Output: Write, Writer: TableWriter<'output,Output>> LexiconWriter<'output,Output> for LexiconTableWriter<Writer> {
+
+    fn initialize(main_orthography: &'static str, orthographies: Vec<&'static str>, output: &'output mut Output) -> Self {
+        let mut fields = Vec::new();
+        fields.push(main_orthography.to_owned());
+        fields.push("word".to_owned());
+        for orthography in &orthographies {
+            fields.push((*orthography).to_owned());
+        }
+        fields.push("definition".to_owned());
+
+        let writer = Writer::initialize(fields, output);
+
+        Self {
+            orthographies,
+            writer
+        }
+    }
+
+    fn write_entry(&mut self, main_spelling: &str, other_spellings: &[&str], word: &Word, definition: &str) {
+        let mut record = Vec::new();
+        record.push(main_spelling.to_owned());
+        let word = word.to_string();
+        record.push(word);
+        for spelling in other_spellings.iter().take(self.orthographies.len()) {
+            record.push((*spelling).to_owned());
+        }
+        record.push(definition.to_owned());
+        self.writer.write_record(record);
+    }
+
+    fn finalize(self) {
+        self.writer.finalize();
+    }
+}
+
+struct PlainLexiconWriter<'output,Output: Write> {
+    orthographies: Vec<&'static str>,
+    output: &'output mut Output
+}
+
+impl<'output,Output: Write> LexiconWriter<'output,Output> for PlainLexiconWriter<'output,Output> {
+
+    fn initialize(_: &'static str, orthographies: Vec<&'static str>, output: &'output mut Output) -> Self {
+        Self {
+            orthographies,
+            output
+        }
+    }
+
+    fn write_entry(&mut self, main_spelling: &str, other_spellings: &[&str], word: &Word, definition: &str) {
+        write!(self.output,"{main_spelling} ({word}").expect("Could not write orthography");
+        for (orthography,spelling) in self.orthographies.iter().zip(other_spellings) {
+            write!(self.output,"; {orthography}: {spelling}").expect("Could not write orthography");
+        }
+        writeln!(self.output,"): {definition}").expect("Could not write orthography");
+    }
+
+    fn finalize(self) {
+    }
+
+
+
+}
+
+struct MarkdownLexiconWriter<'output,Output: Write> {
+    orthographies: Vec<&'static str>,
+    output: &'output mut Output
+}
+
+impl<'output,Output: Write> LexiconWriter<'output,Output> for MarkdownLexiconWriter<'output,Output> {
+    fn initialize(_: &'static str, orthographies: Vec<&'static str>, output: &'output mut Output) -> Self {
+        Self {
+            orthographies,
+            output
+        }
+    }
+
+    fn write_entry(&mut self, main_spelling: &str, other_spellings: &[&str], word: &Word, definition: &str) {
+        write!(self.output,"**{main_spelling}**. ({word}").expect("Could not write orthography");
+        for (orthography,spelling) in self.orthographies.iter().zip(other_spellings) {
+            write!(self.output,"; {orthography}: *{spelling}*").expect("Could not write orthography");
+        }
+        writeln!(self.output,"): {definition}").expect("Could not write orthography");
+    }
+
+    fn finalize(self) {
     }
 
 
@@ -48,52 +158,40 @@ impl Lexicon {
         self.entries.push(entry);
     }
 
-    pub(crate) fn format_entry<Output: Write>(style: &GridStyle, main_spelling: &str, other_spellings: Vec<(&str,&str)>, word: &Word, definition: &str, output: &mut Output) {
-        match style {
-            GridStyle::Plain |
-            GridStyle::Terminal { .. } => {
-                write!(output,"{main_spelling} ({word}").expect("Could not write orthography");
-                for (orthography,spelling) in other_spellings {
-                    write!(output,"; {orthography}: {spelling}").expect("Could not write orthography");
-                }
-                writeln!(output,"): {definition}").expect("Could not write orthography");
-            }
-            GridStyle::Markdown => {
-                write!(output,"**{main_spelling}**. ({word}").expect("Could not write orthography");
-                for (orthography,spelling) in other_spellings {
-                    write!(output,"; {orthography}: *{spelling}*").expect("Could not write orthography");
-                }
-                writeln!(output,"): {definition}").expect("Could not write orthography");
-            },
-            GridStyle::HTML { .. } => {
-                // TODO: Test this make sure it's working
-                let mut buffer = html_builder::Buffer::new();
-                let mut p = buffer.p();
-                write!(p.b(),"{main_spelling}").expect("Could not write to html node");
-                write!(p," ({word}").expect("Could not write to html node");
-                for (orthography,spelling) in other_spellings {
-                    write!(p,"; {orthography}").expect("Could not write to html node");
-                    write!(p.i(),"{spelling}").expect("Could not write to html node");
-                }
-                write!(p,"): {definition}").expect("Could not write to html node");
-                write!(output,"{}",buffer.finish()).expect("Could not write html");
-            },
-            GridStyle::JSON => {
-                let mut spellings = JSONObject::new();
-                for (orthography,spelling) in other_spellings {
-                    spellings.insert(orthography, spelling.into());
-                }
-                let object = json::object!{
-                    "entry": main_spelling,
-                    "word": word.to_string(),
-                    "other_spellings": spellings,
-                    "definition": definition
-                };
-                writeln!(output,"{object:#}").expect("Could not write json")
 
+    fn into_output<'output,Output: Write, Writer: LexiconWriter<'output,Output>>(self, result: &'output mut Output) {
+
+        let mut main_orthography = "";
+        let mut other_orthographies = Vec::new();
+
+        for (i,orthography) in self.orthographies.iter().enumerate() {
+            if i == self.primary_orthography {
+                main_orthography = orthography
+            } else {
+                other_orthographies.push(*orthography);
             }
         }
+        let mut writer = Writer::initialize(main_orthography, other_orthographies, result);
 
+        for entry in self.entries {
+
+            let mut main_spelling = "";
+            let mut other_spellings = Vec::new();
+            for (i,spelling) in entry.spelling.iter().enumerate() {
+              if i == self.primary_orthography {
+                main_spelling = spelling;
+              } else {
+                other_spellings.push(spelling.as_str())
+              }
+            }
+
+            assert_ne!(main_spelling.len(),0,"Missing spelling for orthography {} in {}",self.primary_orthography,entry.word);
+
+            writer.write_entry(main_spelling, &other_spellings, &entry.word, &entry.definition);
+
+        }
+
+        writer.finalize();
     }
 
     /// # Panics
@@ -103,33 +201,18 @@ impl Lexicon {
 
         let mut result = String::new();
 
-        let mut after_first = false;
-
-        for entry in self.entries {
-
-            if after_first {
-                result.push('\n');
-            } else {
-                after_first = true;
-            }
-
-
-            let mut main_spelling = "";
-            let mut other_spellings = Vec::new();
-            for (i,(spelling,orthography)) in entry.spelling.iter().zip(&self.orthographies).enumerate() {
-              if i == self.primary_orthography {
-                main_spelling = spelling;
-              } else {
-                other_spellings.push((*orthography,spelling.as_str()))
-              }
-            }
-            assert_ne!(main_spelling.len(),0,"Missing spelling for orthography {} in {}",self.primary_orthography,entry.word);
-
-            Self::format_entry(style,main_spelling,other_spellings,&entry.word,&entry.definition,&mut result);
-
+        match style {
+            // NOTE: The Plain, Terminal, and Markdown lexicons should be in paragraph format, so I'm not using a TableWriter for those.
+            // (The HTML output can be styled to look like paragraph format if you really want it that way)
+            GridStyle::Plain |
+            GridStyle::Terminal { .. } => self.into_output::<_,PlainLexiconWriter<_>>(&mut result),
+            GridStyle::Markdown => self.into_output::<_,MarkdownLexiconWriter<_>>(&mut result),
+            GridStyle::HTML { .. } => self.into_output::<_,LexiconTableWriter<HTMLTableWriter<_>>>(&mut result),
+            GridStyle::JSON => self.into_output::<_,LexiconTableWriter<JSONTableWriter<_>>>(&mut result),
+            GridStyle::CSV => self.into_output::<_,LexiconTableWriter<CSVTableWriter<_>>>(&mut result),
         }
 
-
         result
+
     }
 }
