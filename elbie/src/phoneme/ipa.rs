@@ -62,7 +62,7 @@ pub mod consonants {
     /**
     VOICELESS BILABIAL PLOSIVE
 
-    Consonant -- Place: Bilabial; Manner: Plosive; Voiced
+    Consonant -- Place: Bilabial; Manner: Plosive; Voiceless
 
     IPA -- NAME: Lower-case P; Number: 101
 
@@ -73,7 +73,7 @@ pub mod consonants {
     /**
     VOICED BILABIAL PLOSIVE
 
-    Consonant -- Place: Bilabial; Manner: Plosive; Voiceless
+    Consonant -- Place: Bilabial; Manner: Plosive; Voiced
 
     IPA -- NAME: Lower-case B; Number: 102
 
@@ -84,7 +84,7 @@ pub mod consonants {
     /**
     VOICELESS DENTAL/ALVEOLAR PLOSIVE
 
-    Consonant -- Place: Alveolar; Manner: Plosive; Voiced
+    Consonant -- Place: Alveolar; Manner: Plosive; Voiceless
 
     IPA -- NAME: Lower-case T; Number: 103
 
@@ -95,7 +95,7 @@ pub mod consonants {
     /**
     VOICED DENTAL/ALVEOLAR PLOSIVE
 
-    Consonant -- Place: Alveolar; Manner: Plosive; Voiceless
+    Consonant -- Place: Alveolar; Manner: Plosive; Voiced
 
     IPA -- NAME: Lower-case D; Number: 104
 
@@ -106,7 +106,7 @@ pub mod consonants {
     /**
     VOICELESS RETROFLEX PLOSIVE
 
-    Consonant -- Place: Retroflex; Manner: Plosive; Voiced
+    Consonant -- Place: Retroflex; Manner: Plosive; Voiceless
 
     IPA -- NAME: Right-tail T; Number: 105
 
@@ -117,7 +117,7 @@ pub mod consonants {
     /**
     VOICED RETROFLEX PLOSIVE
 
-    Consonant -- Place: Retroflex; Manner: Plosive; Voiceless
+    Consonant -- Place: Retroflex; Manner: Plosive; Voiced
 
     IPA -- NAME: Right-tail D; Number: 106
 
@@ -128,7 +128,7 @@ pub mod consonants {
     /**
     VOICELESS PALATAL PLOSIVE
 
-    Consonant -- Place: Palatal; Manner: Plosive; Voiced
+    Consonant -- Place: Palatal; Manner: Plosive; Voiceless
 
     IPA -- NAME: Lower-case C; Number: 107
 
@@ -139,7 +139,7 @@ pub mod consonants {
     /**
     VOICED PALATAL PLOSIVE
 
-    Consonant -- Place: Palatal; Manner: Plosive; Voiceless
+    Consonant -- Place: Palatal; Manner: Plosive; Voiced
 
     IPA -- NAME: Barred dotless J; Number: 108
 
@@ -150,7 +150,7 @@ pub mod consonants {
     /**
     VOICELESS VELAR PLOSIVE
 
-    Consonant -- Place: Velar; Manner: Plosive; Voiced
+    Consonant -- Place: Velar; Manner: Plosive; Voiceless
 
     IPA -- NAME: Lower-case K; Number: 109
 
@@ -161,7 +161,7 @@ pub mod consonants {
     /**
     VOICED VELAR PLOSIVE
 
-    Consonant -- Place: Velar; Manner: Plosive; Voiceless
+    Consonant -- Place: Velar; Manner: Plosive; Voiced
 
     IPA -- NAME: Opentail G; Number: 110
 
@@ -172,7 +172,7 @@ pub mod consonants {
     /**
     VOICELESS UVULAR PLOSIVE
 
-    Consonant -- Place: Uvular; Manner: Plosive; Voiced
+    Consonant -- Place: Uvular; Manner: Plosive; Voiceless
 
     IPA -- NAME: Lower-case Q; Number: 111
 
@@ -183,7 +183,7 @@ pub mod consonants {
     /**
     VOICED UVULAR PLOSIVE
 
-    Consonant -- Place: Uvular; Manner: Plosive; Voiceless
+    Consonant -- Place: Uvular; Manner: Plosive; Voiced
 
     IPA -- NAME: Small capital G; Number: 112
 
@@ -194,7 +194,7 @@ pub mod consonants {
     /**
     GLOTTAL PLOSIVE
 
-    Consonant -- Place: Glottal; Manner: Plosive; Voiced
+    Consonant -- Place: Glottal; Manner: Plosive; Voiceless
 
     IPA -- NAME: Glottal stop; Number: 113
 
@@ -205,7 +205,7 @@ pub mod consonants {
     /**
     VOICED BILABIAL NASAL
 
-    Consonant -- Place: Bilabial; Manner: Nasal; Voiceless
+    Consonant -- Place: Bilabial; Manner: Nasal; Voiced
 
     IPA -- NAME: Lower-case M; Number: 114
 
@@ -216,7 +216,7 @@ pub mod consonants {
     /**
     VOICED LABIODENTAL NASAL
 
-    Consonant -- Place: Labiodental; Manner: Nasal; Voiceless
+    Consonant -- Place: Labiodental; Manner: Nasal; Voiced
 
     IPA -- NAME: Left-tail M (at right); Number: 115
 
@@ -227,7 +227,7 @@ pub mod consonants {
     /**
     VOICED DENTAL/ALVEOLAR NASAL
 
-    Consonant -- Place: Alveolar; Manner: Nasal; Voiceless
+    Consonant -- Place: Alveolar; Manner: Nasal; Voiced
 
     IPA -- NAME: Lower-case N; Number: 116
 
@@ -238,7 +238,7 @@ pub mod consonants {
     /**
     VOICED RETROFLEX NASAL
 
-    Consonant -- Place: Retroflex; Manner: Nasal; Voiceless
+    Consonant -- Place: Retroflex; Manner: Nasal; Voiced
 
     IPA -- NAME: Right-tail N; Number: 117
 
@@ -249,7 +249,7 @@ pub mod consonants {
     /**
     VOICED PALATAL NASAL
 
-    Consonant -- Place: Palatal; Manner: Nasal; Voiceless
+    Consonant -- Place: Palatal; Manner: Nasal; Voiced
 
     IPA -- NAME: Left-tail N (at left); Number: 118
 
@@ -260,7 +260,7 @@ pub mod consonants {
     /**
     VOICED VELAR NASAL
 
-    Consonant -- Place: Velar; Manner: Nasal; Voiceless
+    Consonant -- Place: Velar; Manner: Nasal; Voiced
 
     IPA -- NAME: Eng; Number: 119
 
@@ -271,7 +271,7 @@ pub mod consonants {
     /**
     VOICED UVULAR NASAL
 
-    Consonant -- Place: Uvular; Manner: Nasal; Voiceless
+    Consonant -- Place: Uvular; Manner: Nasal; Voiced
 
     IPA -- NAME: Small capital N; Number: 120
 
@@ -282,7 +282,7 @@ pub mod consonants {
     /**
     VOICED BILABIAL TRILL
 
-    Consonant -- Place: Bilabial; Manner: Trill; Voiceless
+    Consonant -- Place: Bilabial; Manner: Trill; Voiced
 
     IPA -- NAME: Small capital B; Number: 121
 
@@ -293,7 +293,7 @@ pub mod consonants {
     /**
     VOICED DENTAL/ALVEOLAR TRILL
 
-    Consonant -- Place: Alveolar; Manner: Trill; Voiceless
+    Consonant -- Place: Alveolar; Manner: Trill; Voiced
 
     IPA -- NAME: Lower-case R; Number: 122
 
@@ -304,7 +304,7 @@ pub mod consonants {
     /**
     VOICED UVULAR TRILL
 
-    Consonant -- Place: Uvular; Manner: Trill; Voiceless
+    Consonant -- Place: Uvular; Manner: Trill; Voiced
 
     IPA -- NAME: Small capital R; Number: 123
 
@@ -315,7 +315,7 @@ pub mod consonants {
     /**
     VOICED LABIODENTAL FLAP
 
-    Consonant -- Place: Labiodental; Manner: Tap or flap; Voiceless
+    Consonant -- Place: Labiodental; Manner: Tap or flap; Voiced
 
     IPA -- NAME: Right-hook V; Number: 184
 
@@ -326,7 +326,7 @@ pub mod consonants {
     /**
     VOICED DENTAL/ALVEOLAR TAP
 
-    Consonant -- Place: Alveolar; Manner: Tap or flap; Voiceless
+    Consonant -- Place: Alveolar; Manner: Tap or flap; Voiced
 
     IPA -- NAME: Fish-hook R; Number: 124
 
@@ -337,7 +337,7 @@ pub mod consonants {
     /**
     VOICED RETROFLEX FLAP
 
-    Consonant -- Place: Retroflex; Manner: Tap or flap; Voiceless
+    Consonant -- Place: Retroflex; Manner: Tap or flap; Voiced
 
     IPA -- NAME: Right-tail R; Number: 125
 
@@ -348,7 +348,7 @@ pub mod consonants {
     /**
     VOICELESS BILABIAL FRICATIVE
 
-    Consonant -- Place: Bilabial; Manner: Fricative; Voiced
+    Consonant -- Place: Bilabial; Manner: Fricative; Voiceless
 
     IPA -- NAME: Phi; Number: 126
 
@@ -359,7 +359,7 @@ pub mod consonants {
     /**
     VOICED BILABIAL FRICATIVE
 
-    Consonant -- Place: Bilabial; Manner: Fricative; Voiceless
+    Consonant -- Place: Bilabial; Manner: Fricative; Voiced
 
     IPA -- NAME: Beta; Number: 127
 
@@ -370,7 +370,7 @@ pub mod consonants {
     /**
     VOICELESS LABIODENTAL FRICATIVE
 
-    Consonant -- Place: Labiodental; Manner: Fricative; Voiced
+    Consonant -- Place: Labiodental; Manner: Fricative; Voiceless
 
     IPA -- NAME: Lower-case F; Number: 128
 
@@ -381,7 +381,7 @@ pub mod consonants {
     /**
     VOICED LABIODENTAL FRICATIVE
 
-    Consonant -- Place: Labiodental; Manner: Fricative; Voiceless
+    Consonant -- Place: Labiodental; Manner: Fricative; Voiced
 
     IPA -- NAME: Lower-case V; Number: 129
 
@@ -392,7 +392,7 @@ pub mod consonants {
     /**
     VOICELESS DENTAL FRICATIVE
 
-    Consonant -- Place: Dental; Manner: Fricative; Voiced
+    Consonant -- Place: Dental; Manner: Fricative; Voiceless
 
     IPA -- NAME: Theta; Number: 130
 
@@ -403,7 +403,7 @@ pub mod consonants {
     /**
     VOICED DENTAL FRICATIVE
 
-    Consonant -- Place: Dental; Manner: Fricative; Voiceless
+    Consonant -- Place: Dental; Manner: Fricative; Voiced
 
     IPA -- NAME: Eth; Number: 131
 
@@ -414,7 +414,7 @@ pub mod consonants {
     /**
     VOICELESS ALVEOLAR FRICATIVE
 
-    Consonant -- Place: Alveolar; Manner: Fricative; Voiced
+    Consonant -- Place: Alveolar; Manner: Fricative; Voiceless
 
     IPA -- NAME: Lower-case S; Number: 132
 
@@ -425,7 +425,7 @@ pub mod consonants {
     /**
     VOICED ALVEOLAR FRICATIVE
 
-    Consonant -- Place: Alveolar; Manner: Fricative; Voiceless
+    Consonant -- Place: Alveolar; Manner: Fricative; Voiced
 
     IPA -- NAME: Lower-case Z; Number: 133
 
@@ -436,7 +436,7 @@ pub mod consonants {
     /**
     VOICELESS POSTALVEOLAR FRICATIVE
 
-    Consonant -- Place: Postalveolar; Manner: Fricative; Voiced
+    Consonant -- Place: Postalveolar; Manner: Fricative; Voiceless
 
     IPA -- NAME: Esh; Number: 134
 
@@ -447,7 +447,7 @@ pub mod consonants {
     /**
     VOICED POSTALVEOLAR FRICATIVE
 
-    Consonant -- Place: Postalveolar; Manner: Fricative; Voiceless
+    Consonant -- Place: Postalveolar; Manner: Fricative; Voiced
 
     IPA -- NAME: Ezh; Tailed Z; Number: 135
 
@@ -459,7 +459,7 @@ pub mod consonants {
     /**
     VOICELESS RETROFLEX FRICATIVE
 
-    Consonant -- Place: Retroflex; Manner: Fricative; Voiced
+    Consonant -- Place: Retroflex; Manner: Fricative; Voiceless
 
     IPA -- NAME: Right-tail S (at left); Number: 136
 
@@ -470,7 +470,7 @@ pub mod consonants {
     /**
     VOICED RETROFLEX FRICATIVE
 
-    Consonant -- Place: Retroflex; Manner: Fricative; Voiceless
+    Consonant -- Place: Retroflex; Manner: Fricative; Voiced
 
     IPA -- NAME: Right-tail Z; Number: 137
 
@@ -481,7 +481,7 @@ pub mod consonants {
     /**
     VOICELESS PALATAL FRICATIVE
 
-    Consonant -- Place: Palatal; Manner: Fricative; Voiced
+    Consonant -- Place: Palatal; Manner: Fricative; Voiceless
 
     IPA -- NAME: C cedilla; Number: 138
 
@@ -492,7 +492,7 @@ pub mod consonants {
     /**
     VOICED PALATAL FRICATIVE
 
-    Consonant -- Place: Palatal; Manner: Fricative; Voiceless
+    Consonant -- Place: Palatal; Manner: Fricative; Voiced
 
     IPA -- NAME: Curly-tail J; Number: 139
 
@@ -503,7 +503,7 @@ pub mod consonants {
     /**
     VOICELESS VELAR FRICATIVE
 
-    Consonant -- Place: Velar; Manner: Fricative; Voiced
+    Consonant -- Place: Velar; Manner: Fricative; Voiceless
 
     IPA -- NAME: Lower-case X; Number: 140
 
@@ -514,7 +514,7 @@ pub mod consonants {
     /**
     VOICED VELAR FRICATIVE
 
-    Consonant -- Place: Velar; Manner: Fricative; Voiceless
+    Consonant -- Place: Velar; Manner: Fricative; Voiced
 
     IPA -- NAME: Gamma; Number: 141
 
@@ -525,7 +525,7 @@ pub mod consonants {
     /**
     VOICELESS UVULAR FRICATIVE
 
-    Consonant -- Place: Uvular; Manner: Fricative; Voiced
+    Consonant -- Place: Uvular; Manner: Fricative; Voiceless
 
     IPA -- NAME: Chi; Number: 142
 
@@ -536,7 +536,7 @@ pub mod consonants {
     /**
     VOICED UVULAR FRICATIVE
 
-    Consonant -- Place: Uvular; Manner: Fricative; Voiceless
+    Consonant -- Place: Uvular; Manner: Fricative; Voiced
 
     IPA -- NAME: Inverted small capital R; Number: 143
 
@@ -547,7 +547,7 @@ pub mod consonants {
     /**
     VOICELESS PHARYNGEAL FRICATIVE
 
-    Consonant -- Place: Pharyngeal; Manner: Fricative; Voiced
+    Consonant -- Place: Pharyngeal; Manner: Fricative; Voiceless
 
     IPA -- NAME: Barred H; Number: 144
 
@@ -558,7 +558,7 @@ pub mod consonants {
     /**
     VOICED PHARYNGEAL FRICATIVE/APPROXIMANT
 
-    Consonant -- Place: Pharyngeal; Manner: Fricative; Voiceless
+    Consonant -- Place: Pharyngeal; Manner: Fricative; Voiced
 
     IPA -- NAME: Reversed glottal stop; Number: 145
 
@@ -569,7 +569,7 @@ pub mod consonants {
     /**
     VOICELESS GLOTTAL FRICATIVE
 
-    Consonant -- Place: Glottal; Manner: Fricative; Voiced
+    Consonant -- Place: Glottal; Manner: Fricative; Voiceless
 
     IPA -- NAME: Lower-case H; Number: 146
 
@@ -580,7 +580,7 @@ pub mod consonants {
     /**
     VOICED GLOTTAL FRICATIVE
 
-    Consonant -- Place: Glottal; Manner: Fricative; Voiceless
+    Consonant -- Place: Glottal; Manner: Fricative; Voiced
 
     IPA -- NAME: Hooktop H; Number: 147
 
@@ -591,7 +591,7 @@ pub mod consonants {
     /**
     VOICELESS DENTAL/ALVEOLAR LATERAL FRICATIVE
 
-    Consonant -- Place: Alveolar; Manner: Lateral fricative; Voiced
+    Consonant -- Place: Alveolar; Manner: Lateral fricative; Voiceless
 
     IPA -- NAME: Belted L; Number: 148
 
@@ -602,7 +602,7 @@ pub mod consonants {
     /**
     VOICED DENTAL/ALVEOLAR LATERAL FRICATIVE
 
-    Consonant -- Place: Alveolar; Manner: Lateral fricative; Voiceless
+    Consonant -- Place: Alveolar; Manner: Lateral fricative; Voiced
 
     IPA -- NAME: L-Ezh ligature; Number: 149
 
@@ -613,7 +613,7 @@ pub mod consonants {
     /**
     VOICED LABIODENTAL APPROXIMANT
 
-    Consonant -- Place: Labiodental; Manner: Approximant; Voiceless
+    Consonant -- Place: Labiodental; Manner: Approximant; Voiced
 
     IPA -- NAME: Cursive V; Number: 150
 
@@ -624,7 +624,7 @@ pub mod consonants {
     /**
     VOICED DENTAL/ALVEOLAR APPROXIMANT
 
-    Consonant -- Place: Alveolar; Manner: Approximant; Voiceless
+    Consonant -- Place: Alveolar; Manner: Approximant; Voiced
 
     IPA -- NAME: Turned R; Number: 151
 
@@ -635,7 +635,7 @@ pub mod consonants {
     /**
     VOICED RETROFLEX APPROXIMANT
 
-    Consonant -- Place: Retroflex; Manner: Approximant; Voiceless
+    Consonant -- Place: Retroflex; Manner: Approximant; Voiced
 
     IPA -- NAME: Turned R|right tail; Number: 152
 
@@ -646,7 +646,7 @@ pub mod consonants {
     /**
     VOICED PALATAL APPROXIMANT
 
-    Consonant -- Place: Palatal; Manner: Approximant; Voiceless
+    Consonant -- Place: Palatal; Manner: Approximant; Voiced
 
     IPA -- NAME: Lower-case J; Number: 153
 
@@ -657,7 +657,7 @@ pub mod consonants {
     /**
     VOICED VELAR APPROXIMANT
 
-    Consonant -- Place: Velar; Manner: Approximant; Voiceless
+    Consonant -- Place: Velar; Manner: Approximant; Voiced
 
     IPA -- NAME: Turned M|right leg; Number: 154
 
@@ -668,7 +668,7 @@ pub mod consonants {
     /**
     VOICED DENTAL/ALVEOLAR LATERAL APPROXIMANT
 
-    Consonant -- Place: Alveolar; Manner: Lateral approximant; Voiceless
+    Consonant -- Place: Alveolar; Manner: Lateral approximant; Voiced
 
     IPA -- NAME: Lower-case L; Number: 155
 
@@ -679,7 +679,7 @@ pub mod consonants {
     /**
     VOICED RETROFLEX LATERAL APPROXIMANT
 
-    Consonant -- Place: Retroflex; Manner: Lateral approximant; Voiceless
+    Consonant -- Place: Retroflex; Manner: Lateral approximant; Voiced
 
     IPA -- NAME: Right-tail L; Number: 156
 
@@ -690,7 +690,7 @@ pub mod consonants {
     /**
     VOICED PALATAL LATERAL APPROXIMANT
 
-    Consonant -- Place: Palatal; Manner: Lateral approximant; Voiceless
+    Consonant -- Place: Palatal; Manner: Lateral approximant; Voiced
 
     IPA -- NAME: Turned Y; Number: 157
 
@@ -701,7 +701,7 @@ pub mod consonants {
     /**
     VOICED VELAR LATERAL APPROXIMANT
 
-    Consonant -- Place: Velar; Manner: Lateral approximant; Voiceless
+    Consonant -- Place: Velar; Manner: Lateral approximant; Voiced
 
     IPA -- NAME: Small capital L; Number: 158
 

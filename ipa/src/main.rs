@@ -1032,7 +1032,7 @@ impl OutputData {
             match table.kind_name.0 {
                 TableKind::PulmonicConsonants => {
                     #[expect(clippy::integer_division,reason="I do want integer division")]
-                    let (place_idx, voiced_mod) = ((symbol.column - 1) / 2, symbol.column % 2);
+                    let (place_idx, voiced_mod) = ((symbol.column - 1) / 2, (symbol.column - 1) % 2);
                     let manner_idx = symbol.row - 1;
                     let voiced = voiced_mod == 1;
                     let place = source.places.get(place_idx).ok_or_else(|| format!("'{}' Invalid place index: {place_idx} (from column idx {})",symbol.ipa_name,symbol.column))?.clone();
