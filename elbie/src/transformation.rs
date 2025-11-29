@@ -448,8 +448,8 @@ impl Transformation {
         self.inventory.extend(inventory,name)
     }
 
-    pub fn add_rule<Sequence: Fn(&mut RuleState) -> Result<bool,RuleStateError> + 'static>(&mut self, name: &'static str, sequence: Sequence) {
-        self.rules.push(Rule::new(name, sequence));
+    pub fn add_rule<Sequence: Fn(&mut RuleState) -> Result<bool,RuleStateError> + 'static>(&mut self, name: &'static str, rule: Sequence) {
+        self.rules.push(Rule::new(name, rule));
     }
 
 
