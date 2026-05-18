@@ -344,12 +344,6 @@ impl DoIt for Transform {
 
         let transformation = family.get_transformation(source_language.name(),&self.target)?;
 
-        let target_language = if (!self.dont_validate) && let Some(validation_language) = transformation.validation_language() {
-            Some(family.get_language(validation_language)?)
-        } else {
-            None
-        };
-
         let mut word_data = WordTable::default();
 
         word_data.add_words(&self.words);
@@ -359,6 +353,12 @@ impl DoIt for Transform {
             word_data.combine_with(data);
         }
 
+
+        let target_language = if (!self.dont_validate) && let Some(validation_language) = transformation.validation_language() {
+            Some(family.get_language(validation_language)?)
+        } else {
+            None
+        };
 
         transform_words(transformation,source_language,target_language,word_data,&match (self.explain,self.trace)  {
             (true, true) => TransformationOption::ExplainAndTrace,
