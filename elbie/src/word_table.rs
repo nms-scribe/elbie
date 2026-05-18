@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::mem;
-use std::error::Error;
+use core::mem;
+use core::error::Error;
 use std::path::Path;
 use csv::Reader;
 use crate::format::Format;
@@ -10,7 +10,7 @@ use crate::grid::GridRow;
 use crate::grid::TRBodyClass;
 use crate::grid::Cell;
 use crate::grid::ColumnHeader;
-use std::iter;
+use core::iter;
 
 
 pub(crate) struct WordTableEntry {
@@ -42,7 +42,7 @@ impl WordTableEntry {
         }
     }
 
-    pub(crate) fn word(&self) -> &String {
+    pub(crate) const fn word(&self) -> &String {
         &self.word
     }
 }

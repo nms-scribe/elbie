@@ -159,7 +159,6 @@ pub(crate) fn show_usage(program: &str) {
 
 
 
-
 pub fn run<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Args, language: Result<Language,ElbieError>) {
   let arguments = parse_args(&mut args.skip(1));
 
@@ -181,8 +180,11 @@ pub fn run<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Args,
             Command::ShowSpelling(columns) => show_spelling(arguments.grid_style.as_ref(), &language, columns),
             Command::ProcessLexicon(path,ortho_index) => {
                 // NOTE: I'm doing an expect here because this whole 'run' function is deprecated anyway, so I'm not going to change it's signature.
-                let words_data = WordTable::read(&path).expect("Couldn't read input lexicon");
-                format_lexicon(arguments.grid_style.as_ref().unwrap_or(&Format::Plain), &LexiconStyle::List, &language, words_data, ortho_index)
+                let Ok(words_data) = WordTable::read(&path) else {
+                    eprintln!("!!! Couldn't read input lexicon");
+                    return;
+                };
+                format_lexicon(arguments.grid_style.as_ref().unwrap_or(&Format::Plain), &LexiconStyle::List, &language, &words_data, ortho_index)
             },
             Command::ShowUsage => {
                 let exe_name = env::current_exe().ok().as_deref().and_then(Path::file_name).map(OsStr::display).as_ref().map(ToString::to_string);

@@ -286,7 +286,7 @@ impl DoIt for FormatLexicon {
         let word_data = word_data.ok_or("Please specify at least one file to load.")?;
 
 
-        format_lexicon(grid_style, &self.style, language, word_data, self.spelling);
+        format_lexicon(grid_style, &self.style, language, &word_data, self.spelling);
 
         Ok(())
 
@@ -300,7 +300,7 @@ impl DoIt for FormatLexicon {
 pub struct Transform {
 
     #[options(required)]
-    /// The target language for transformation. Used to lookup the transformation even if dont_validate is true.
+    /// The target transformation. Used to lookup the transformation even if dont_validate is true.
     target: String,
 
     #[options(no_short)]
@@ -344,10 +344,10 @@ impl DoIt for Transform {
 
         let transformation = family.get_transformation(source_language.name(),&self.target)?;
 
-        let target_language = if self.dont_validate || transformation.dont_validate() {
-            None
+        let target_language = if (!self.dont_validate) && let Some(validation_language) = transformation.validation_language() {
+            Some(family.get_language(validation_language)?)
         } else {
-            Some(family.get_language(&self.target)?)
+            None
         };
 
         let mut word_data = WordTable::default();

@@ -103,7 +103,7 @@ pub(crate) fn validate_words(language: &Language, mut words: WordTable, option: 
 
 
     for entry in &mut words.entries_mut() {
-        match language.read_word(&entry.word()) {
+        match language.read_word(entry.word()) {
             Ok(word) => {
                 // Make sure word is in phonemic format
                 entry.replace_word(None, word.to_string());
@@ -192,7 +192,7 @@ pub(crate) fn show_spelling(grid_style: Option<&Format>, language: &Language, co
 
 
 
-pub(crate) fn format_lexicon(format: &Format, style: &LexiconStyle, language: &Language, path: WordTable, ortho_index: usize) {
+pub(crate) fn format_lexicon(format: &Format, style: &LexiconStyle, language: &Language, path: &WordTable, ortho_index: usize) {
   if ortho_index >= language.orthographies().len() {
         panic!("Language only has {} orthographies.",language.orthographies().len())
   }
@@ -241,7 +241,7 @@ pub(crate) fn transform_words(transformation: &Transformation, from: &Language, 
 
 
     for entry in &mut words.entries_mut() {
-        let error = match from.read_word(&entry.word()) {
+        let error = match from.read_word(entry.word()) {
             Ok(word) => {
                 // make sure the original word is in phonemic format
                 entry.replace_word(None,word.to_string());

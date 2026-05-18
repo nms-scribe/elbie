@@ -318,7 +318,8 @@ pub(crate) mod to_hobgoblin {
 
         let mut transformation = Transformation::from(goblin);
         // The language doesn't really exist yet, so don't validate it.
-        transformation.set_dont_validate(true);
+        // Note that this is None by default, but just in case...
+        transformation.set_validation_language(None);
 
         // FUTURE: Some of these belong in HOBGOBLIN
         let mut temporary = Inventory::default();

@@ -413,7 +413,7 @@ impl Rule {
 pub struct Transformation {
     inventory: Inventory,
     rules: Vec<Rule>,
-    dont_validate: bool,
+    validation_language: Option<&'static str>,
 }
 
 impl Transformation {
@@ -425,19 +425,44 @@ impl Transformation {
         let mut result = Self {
             inventory,
             rules,
-            dont_validate: false
+            validation_language: None
         };
         result.add_language(source);
         result
     }
 
+    /**
+    # Panics
+
+    Do not try to turn on validation using this deprecated function, use set_validation_language or add_validation_language instead.
+    */
+    #[deprecated="Use set_validation_language instead"]
     pub const fn set_dont_validate(&mut self, value: bool) {
-        self.dont_validate = value;
+        if value {
+            self.validation_language = None
+        } else {
+            panic!("Setting dont_validate to false is obsolete, use set_validation_language instead")
+        }
     }
 
     #[must_use]
+    #[deprecated="Check if validation_language is None instead"]
     pub const fn dont_validate(&self) -> bool {
-        self.dont_validate
+        self.validation_language.is_none()
+    }
+
+    pub const fn set_validation_language(&mut self, value: Option<&'static str>) {
+        self.validation_language = value
+    }
+
+    pub fn add_validation_language(&mut self, value: &Language) {
+        self.validation_language = Some(value.name());
+        self.add_language(value);
+    }
+
+    #[must_use]
+    pub const fn validation_language(&self) -> Option<&str> {
+        self.validation_language
     }
 
     pub fn add_language(&mut self, source: &Language) {

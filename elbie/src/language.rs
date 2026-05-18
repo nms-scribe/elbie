@@ -586,7 +586,7 @@ impl Language {
 
     }
 
-    pub(crate) fn load_lexicon(&self, words: WordTable, primary_orthography: usize, style: &LexiconStyle) -> Result<Lexicon,Box<dyn Error>> {
+    pub(crate) fn load_lexicon(&self, words: &WordTable, primary_orthography: usize, style: &LexiconStyle) -> Result<Lexicon,Box<dyn Error>> {
 
 
       let definition_field = words.find_attribute(|a| a.to_lowercase() == "definition").ok_or_else(|| "No 'definition' field found.".to_owned())?;
