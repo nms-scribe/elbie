@@ -19,7 +19,6 @@ use core::error::Error;
 use std::env;
 use crate::lexicon::LexiconStyle;
 use crate::word_table::WordTable;
-use crate::cli_functions::TransformationSetItem;
 use core::convert::identity;
 
 // Gumdrop kind of makes showing usage difficult. The only way it works is if you have a --help flag on each command, and then only if it's discovered in `parse_args_or_exit`. And I'm not calling that because I want to be able to supply my own arguments. I would prefer to have a help command that takes an optional command name parameter anyway.
@@ -348,7 +347,7 @@ impl DoIt for Transform {
 
         let source_language = family.get_language(&source_language)?;
 
-        let transformation = family.get_transformation(source_language.name(),&self.target)?;
+        let transformations = family.get_transformations(source_language.name(),&self.target,!self.dont_validate)?;
 
         let mut word_data = WordTable::default();
 
@@ -359,15 +358,8 @@ impl DoIt for Transform {
             word_data.combine_with(data);
         }
 
-
-        let target_language = if (!self.dont_validate) && let Some(validation_language) = transformation.validation_language() {
-            Some(family.get_language(validation_language)?)
-        } else {
-            None
-        };
-
         transform_words(source_language,
-            &[TransformationSetItem::new(self.target.clone(),transformation,target_language)],
+            &transformations,
             word_data,
             self.replace_word.is_some_and(identity),
             &match (self.explain,self.trace)  {
@@ -430,7 +422,12 @@ impl DoIt for ShowInformation {
             }
             println!("TRANSFORMATIONS:");
             for (from,to) in transformations {
-                println!("{from} 🡺 {to}")
+                println!("{from} 🡺 {to}");
+                if let Some(list) = family.transformation_set_contents(&from,&to)? {
+                    println!("  set of {}",list.join(", "))
+                }
+
+
             }
         }
 

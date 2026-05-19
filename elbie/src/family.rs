@@ -2,18 +2,26 @@ use crate::language::Language;
 use crate::errors::ElbieError;
 use crate::transformation::Transformation;
 use std::collections::HashMap;
+use crate::transformation::TransformationEntry;
+use crate::transformation::TransformationSet;
+use crate::transformation::PreparedTransformation;
 
 
 type LanguageCreator = Box<dyn FnOnce() -> Result<Language,ElbieError>>;
 type TransformationCreator = Box<dyn FnOnce(&mut Family) -> Result<Transformation,ElbieError>>;
+
+enum TransformationEntryCreator {
+    Single(TransformationCreator),
+    Set(TransformationSet)
+}
 
 #[derive(Default)]
 pub struct Family {
     default_language: Option<String>,
     delayed_languages: HashMap<String,LanguageCreator>,
     languages: HashMap<String,Language>,
-    delayed_transformations: HashMap<(String,String),TransformationCreator>,
-    transformations: HashMap<(String,String),Transformation>
+    delayed_transformations: HashMap<(String,String),TransformationEntryCreator>,
+    transformations: HashMap<(String,String),TransformationEntry>
 }
 
 impl Family {
@@ -43,9 +51,16 @@ impl Family {
         }
     }
 
-    pub fn transformation<Creator: FnOnce(&mut Self) -> Result<Transformation,ElbieError> + 'static>(&mut self, from: &'static str, to: &'static str, creator: Creator) -> Result<(),ElbieError> {
-        match self.delayed_transformations.insert((from.to_owned(),to.to_owned()), Box::new(creator)) {
-            Some(_) => Err(ElbieError::TransformationAlreadyAdded(from.to_owned(),to.to_owned())),
+    pub fn transformation<Creator: FnOnce(&mut Self) -> Result<Transformation,ElbieError> + 'static>(&mut self, from: &'static str, name: &'static str, creator: Creator) -> Result<(),ElbieError> {
+        match self.delayed_transformations.insert((from.to_owned(),name.to_owned()), TransformationEntryCreator::Single(Box::new(creator))) {
+            Some(_) => Err(ElbieError::TransformationAlreadyAdded(from.to_owned(),name.to_owned())),
+            None => Ok(()),
+        }
+    }
+
+    pub fn transformation_set(&mut self, from: &'static str, name: &'static str, set: &[&'static str]) -> Result<(),ElbieError> {
+        match self.delayed_transformations.insert((from.to_owned(),name.to_owned()), TransformationEntryCreator::Set(TransformationSet::new(set))) {
+            Some(_) => Err(ElbieError::TransformationAlreadyAdded(from.to_owned(),name.to_owned())),
             None => Ok(()),
         }
     }
@@ -56,6 +71,22 @@ impl Family {
 
     pub(crate) fn transformation_keys(&self) -> Vec<(String,String)> {
         self.delayed_transformations.keys().chain(self.transformations.keys()).cloned().collect()
+    }
+
+    pub(crate) fn transformation_set_contents(&self, from: &str, name: &str) -> Result<Option<&[&'static str]>,ElbieError> {
+        let key = &(from.to_owned(),name.to_owned());
+
+        match self.delayed_transformations.get(&key) {
+            Some(TransformationEntryCreator::Set(items)) => Ok(Some(items.items())),
+            Some(TransformationEntryCreator::Single(_)) => Ok(None),
+            None => {
+                match self.transformations.get(&key) {
+                    Some(TransformationEntry::Set(items)) => Ok(Some(items.items())),
+                    Some(TransformationEntry::Single(_)) => Ok(None),
+                    None => Err(ElbieError::UnknownTransformation(from.to_owned(), name.to_owned())),
+                }
+            },
+        }
     }
 
     // I originally tried to do this automatically in the get_language, but because of the mutable borrow, I could only get and keep one language
@@ -90,8 +121,18 @@ impl Family {
         if self.transformations.contains_key(&key) {
             Ok(())
         } else if let Some(creator) = self.delayed_transformations.remove(&key) {
-            let transformation = (creator)(self)?;
-            _ = self.transformations.insert(key.clone(), transformation);
+            match creator {
+                TransformationEntryCreator::Single(creator) => {
+                    let transformation = (creator)(self)?;
+                    _ = self.transformations.insert(key.clone(), TransformationEntry::Single(transformation));
+                },
+                TransformationEntryCreator::Set(transformation_set) => {
+                    for item in &transformation_set {
+                        self.load_transformation(from, item)?;
+                    }
+                    _ = self.transformations.insert(key.clone(), TransformationEntry::Set(transformation_set));
+                },
+            }
 
             Ok(())
         } else {
@@ -124,7 +165,7 @@ impl Family {
         }
     }
 
-    pub(crate) fn get_transformation(&self, from: &str, name: &str) -> Result<&Transformation,ElbieError> {
+    pub(crate) fn get_transformation(&self, from: &str, name: &str) -> Result<&TransformationEntry,ElbieError> {
 
         let key = (from.to_owned(),name.to_owned());
         match self.transformations.get(&key) {
@@ -137,5 +178,37 @@ impl Family {
         }
 
     }
+
+    fn extend_transformations<'me>(&'me self, from: &str, name: &str, load_validators: bool, transformations: &mut Vec<PreparedTransformation<'me,'me>>) -> Result<(),ElbieError> {
+
+        match self.get_transformation(from, name)? {
+            TransformationEntry::Single(transformation) => {
+                let validator = if load_validators && let Some(validator) = transformation.validation_language() {
+                    Some(self.get_language(validator)?)
+                } else {
+                    None
+                };
+                transformations.push(PreparedTransformation::new(name.to_owned(), transformation, validator))
+            },
+            TransformationEntry::Set(transformation_set) => {
+                for transformation in transformation_set {
+                    self.extend_transformations(from, transformation, load_validators, transformations)?;
+                }
+            },
+        }
+        Ok(())
+
+    }
+
+
+    pub(crate) fn get_transformations(&self, from: &str, name: &str, load_validators: bool) -> Result<Vec<PreparedTransformation>,ElbieError> {
+
+        let mut result = Vec::new();
+        self.extend_transformations(from, name, load_validators, &mut result)?;
+        Ok(result)
+
+
+    }
+
 
 }

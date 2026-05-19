@@ -14,6 +14,7 @@ use crate::errors::ElbieError;
 use crate::lexicon::LexiconStyle;
 use crate::validation::ValidationError;
 use crate::word_table::WordTable;
+use crate::transformation::PreparedTransformation;
 
 pub(crate) enum ValidateOption {
   Simple,
@@ -223,26 +224,8 @@ pub(crate) fn transform_and_validate_word(word: &Word, transformation: &Transfor
 
 }
 
-pub(crate) struct TransformationSetItem<'transformation,'language> {
-    name: String,
-    // TODO: Do these need lifetimes? When I finish this feature I'll see...
-    transformation: &'transformation Transformation,
-    validator: Option<&'language Language>
-}
-
-impl<'transformation,'language> TransformationSetItem<'transformation,'language> {
-
-    pub(crate) const fn new(name: String, transformation: &'transformation Transformation, validator: Option<&'language Language>) -> Self {
-        Self {
-            name,
-            transformation,
-            validator,
-        }
-    }
-}
-
 /// replace_word: if this is true, and there is only one transformation, the original word will be moved into a new attribute, and the transformation creates the word for the word entry. Otherwise, each transformation is added as an attribute and the original word is kept. If there is not exactly one transformation, replace_word will be set to false no matter what the input value is.
-pub(crate) fn transform_words(from: &Language, transformations: &[TransformationSetItem], mut words: WordTable, replace_word: bool, option: &TransformationOption, output_format: &Format) {
+pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransformation], mut words: WordTable, replace_word: bool, option: &TransformationOption, output_format: &Format) {
 
     const ERROR_ATTR: &str = "Error";
 
@@ -307,7 +290,7 @@ pub(crate) fn transform_words(from: &Language, transformations: &[Transformation
                         },
                         Err(err) => {
                             // these should be errors in programming the transformation and validator, not just an invalid word.
-                            eprintln!("!!! Error transforming and validating word: {err}");
+                            eprintln!("!!! Error transforming and validating word {word}: {err}");
                             process::exit(1)
                         },
                     }

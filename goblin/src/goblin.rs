@@ -588,5 +588,30 @@ pub(crate) mod to_hobgoblin {
         Ok(transformation)
     }
 
+    pub(crate) const PLURAL: &str = "plural";
+
+    pub(crate) fn create_goblin_plural(family: &mut Family) -> Result<Transformation,ElbieError> {
+
+        family.load_language(GOBLIN)?;
+        let goblin = family.get_language(GOBLIN)?;
+
+        let mut transformation = Transformation::from(goblin);
+        transformation.set_validation_language(Some(GOBLIN));
+
+        transformation.add_rule("pluralize", |rule| {
+            if rule.opt(BILABIAL)? {
+                rule.final_()?;
+                rule.ins(&[SMALL_CAP_I,B,I])?;
+            } else {
+                rule.any()?;
+                rule.final_()?;
+                rule.ins(&[B,I])?;
+            }
+            Ok(true)
+        });
+
+        Ok(transformation)
+    }
+
 
 }

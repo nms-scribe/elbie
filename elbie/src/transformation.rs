@@ -409,7 +409,6 @@ impl Rule {
 
 }
 
-
 pub struct Transformation {
     inventory: Inventory,
     rules: Vec<Rule>,
@@ -492,4 +491,66 @@ impl Transformation {
 
     }
 
+}
+
+pub struct TransformationSet {
+    items: Vec<&'static str>
+}
+
+impl TransformationSet {
+
+    pub(crate) fn new(items: &[&'static str]) -> Self {
+        Self {
+            items: items.to_vec()
+        }
+    }
+
+    pub(crate) fn items(&self) -> &[&'static str] {
+        &self.items
+    }
+}
+
+impl IntoIterator for TransformationSet {
+    type Item = <Vec<&'static str> as IntoIterator>::Item;
+
+    type IntoIter = <Vec<&'static str> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.items.into_iter()
+    }
+}
+
+impl<'vec> IntoIterator for &'vec TransformationSet {
+    type Item = <&'vec Vec<&'static str> as IntoIterator>::Item;
+
+    type IntoIter = <&'vec Vec<&'static str> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.items.iter()
+    }
+}
+
+
+pub enum TransformationEntry {
+    Single(Transformation),
+    Set(TransformationSet)
+}
+
+// this is used in a list when loading transformations from a set
+pub(crate) struct PreparedTransformation<'transformation,'language> {
+    pub name: String,
+    pub transformation: &'transformation Transformation,
+    pub validator: Option<&'language Language>
+}
+
+
+impl<'transformation,'language> PreparedTransformation<'transformation,'language> {
+
+    pub(crate) const fn new(name: String, transformation: &'transformation Transformation, validator: Option<&'language Language>) -> Self {
+        Self {
+            name,
+            transformation,
+            validator,
+        }
+    }
 }
