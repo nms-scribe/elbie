@@ -19,6 +19,8 @@ use core::error::Error;
 use std::env;
 use crate::lexicon::LexiconStyle;
 use crate::word_table::WordTable;
+use crate::cli_functions::TransformationSetItem;
+use core::convert::identity;
 
 // Gumdrop kind of makes showing usage difficult. The only way it works is if you have a --help flag on each command, and then only if it's discovered in `parse_args_or_exit`. And I'm not calling that because I want to be able to supply my own arguments. I would prefer to have a help command that takes an optional command name parameter anyway.
 fn show_usage<Command: Options>(program: &str, selected_command: Option<&str>) {
@@ -307,6 +309,10 @@ pub struct Transform {
     /// Requests that the words not be validated after transformation.
     dont_validate: bool,
 
+    #[options(no_short,required)]
+    /// If the transformation is not a set, and `true` is passed to this option, then the transformation will be output as the word, and the original will be in a separate column. This option is required as legacy behavior doing this automatically without an option. Eventually, this will default to false and the option will no longer be required.
+    replace_word: Option<bool>,
+
     #[options(no_short)]
     /// Traces the validation through all phonotactic branches
     trace: bool,
@@ -360,13 +366,17 @@ impl DoIt for Transform {
             None
         };
 
-        transform_words(transformation,source_language,target_language,word_data,&match (self.explain,self.trace)  {
-            (true, true) => TransformationOption::ExplainAndTrace,
-            (true, false) => TransformationOption::Explain,
-            (false, true) => TransformationOption::Trace,
-            (false, false) => TransformationOption::Simple,
-        },
-        &self.format);
+        transform_words(source_language,
+            &[TransformationSetItem::new(self.target.clone(),transformation,target_language)],
+            word_data,
+            self.replace_word.is_some_and(identity),
+            &match (self.explain,self.trace)  {
+                (true, true) => TransformationOption::ExplainAndTrace,
+                (true, false) => TransformationOption::Explain,
+                (false, true) => TransformationOption::Trace,
+                (false, false) => TransformationOption::Simple,
+            },
+            &self.format);
 
         Ok(())
 

@@ -35,6 +35,7 @@ impl WordTableEntry {
         self.attributes.get(attr_name)
     }
 
+    /// Replaces the word in the entry with the new value. If an attribute name is passed, replaces that attribute with the original word.
     pub(crate) fn replace_word(&mut self, original_attr_name: Option<String>, new_value: String) {
         let original_word = mem::replace(&mut self.word, new_value);
         if let Some(original_attr_name) = original_attr_name {

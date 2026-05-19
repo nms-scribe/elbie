@@ -124,15 +124,15 @@ impl Family {
         }
     }
 
-    pub(crate) fn get_transformation(&self, from: &str, to: &str) -> Result<&Transformation,ElbieError> {
+    pub(crate) fn get_transformation(&self, from: &str, name: &str) -> Result<&Transformation,ElbieError> {
 
-        let key = (from.to_owned(),to.to_owned());
+        let key = (from.to_owned(),name.to_owned());
         match self.transformations.get(&key) {
             Some(transformation) => Ok(transformation),
             None => if self.delayed_transformations.contains_key(&key) {
-                Err(ElbieError::TransformationNotLoaded(from.to_owned(), to.to_owned()))
+                Err(ElbieError::TransformationNotLoaded(from.to_owned(), name.to_owned()))
             } else {
-                Err(ElbieError::UnknownTransformation(from.to_owned(), to.to_owned()))
+                Err(ElbieError::UnknownTransformation(from.to_owned(), name.to_owned()))
             }
         }
 

@@ -210,8 +210,39 @@ pub(crate) fn format_lexicon(format: &Format, style: &LexiconStyle, language: &L
 }
 
 
+pub(crate) fn transform_and_validate_word(word: &Word, transformation: &Transformation, validator: Option<&Language>, explain: bool, transformation_trace_cb: Option<&TransformationTraceCallback>, validation_trace_cb: Option<&ValidationTraceCallback>) -> Result<(Word,Option<ValidationError>),ElbieError> {
 
-pub(crate) fn transform_words(transformation: &Transformation, from: &Language, validator: Option<&Language>, mut words: WordTable, option: &TransformationOption, output_format: &Format) {
+    let transformed = transformation.transform(word, transformation_trace_cb)?;
+
+    if let Some(validator) = validator {
+        let validation_err = validate_word(validator, &transformed, explain, validation_trace_cb)?.err();
+        Ok((transformed,validation_err))
+    } else {
+        Ok((transformed,None))
+    }
+
+}
+
+pub(crate) struct TransformationSetItem<'transformation,'language> {
+    name: String,
+    // TODO: Do these need lifetimes? When I finish this feature I'll see...
+    transformation: &'transformation Transformation,
+    validator: Option<&'language Language>
+}
+
+impl<'transformation,'language> TransformationSetItem<'transformation,'language> {
+
+    pub(crate) const fn new(name: String, transformation: &'transformation Transformation, validator: Option<&'language Language>) -> Self {
+        Self {
+            name,
+            transformation,
+            validator,
+        }
+    }
+}
+
+/// replace_word: if this is true, and there is only one transformation, the original word will be moved into a new attribute, and the transformation creates the word for the word entry. Otherwise, each transformation is added as an attribute and the original word is kept. If there is not exactly one transformation, replace_word will be set to false no matter what the input value is.
+pub(crate) fn transform_words(from: &Language, transformations: &[TransformationSetItem], mut words: WordTable, replace_word: bool, option: &TransformationOption, output_format: &Format) {
 
     const ERROR_ATTR: &str = "Error";
 
@@ -219,7 +250,6 @@ pub(crate) fn transform_words(transformation: &Transformation, from: &Language, 
 
     let validation_trace_cb: Option<&ValidationTraceCallback> = if matches!(option,TransformationOption::Trace | TransformationOption::ExplainAndTrace) {
       Some(&|level,message| {
-        /* eat message, no need to report */
         eprintln!("{}{}",str::repeat(" ",level*2),message);
       })
     } else {
@@ -236,46 +266,64 @@ pub(crate) fn transform_words(transformation: &Transformation, from: &Language, 
 
     let original_word_attr = from.name();
 
-    words.add_attribute(original_word_attr.to_owned());
+    // we can't replace the word with sets, so only allow that option if it's not a set
+    let replace_word = if replace_word && transformations.len() == 1 {
+        // also add an attribute for the original word
+        words.add_attribute(original_word_attr.to_owned());
+        true
+    } else {
+        // add attributes for the transformations
+        for item in transformations {
+            words.add_attribute(item.name.clone());
+        }
+        // override the value of replace_word, so we don't ever do that again
+        false
+    };
     words.add_attribute(ERROR_ATTR.to_owned());
-
 
     for entry in &mut words.entries_mut() {
         let error = match from.read_word(entry.word()) {
             Ok(word) => {
-                // make sure the original word is in phonemic format
-                entry.replace_word(None,word.to_string());
-                match transformation.transform(&word, transformation_trace_cb) {
-                    Ok(transformed) => {
-                        // replace the word but keep it in a separate attribute.
-                        entry.replace_word(Some(original_word_attr.to_owned()),transformed.to_string());
-                        if let Some(validator) = validator {
-                            match validate_word(validator, &transformed, matches!(option,TransformationOption::Explain | TransformationOption::ExplainAndTrace), validation_trace_cb) {
-                                Ok(Ok(())) => {
-                                    // don't mark as "Valid", just leave the Error field blank
-                                    None
-                                },
-                                Ok(Err(err)) => {
-                                    Some(format!("Invalid Result: {err}"))
-                                }
-                                Err(err) => {
-                                    eprintln!("!!!! Can't validate word: {err}");
-                                    process::exit(1)
-                                },
+
+                // The original word might not be in phonemic notation, make sure it is now for consistency...
+                entry.replace_word(None, word.to_string());
+
+                // only the last error will be returned if this is a set...
+                let mut last_error = None;
+
+                for item in transformations {
+
+                    match transform_and_validate_word(&word, item.transformation, item.validator, matches!(option,TransformationOption::Explain | TransformationOption::ExplainAndTrace), transformation_trace_cb, validation_trace_cb) {
+                        Ok((transformed,error)) => {
+                            if replace_word {
+                                // replace that word with the transformed and move the original to a new attribute
+                                entry.replace_word(Some(original_word_attr.to_owned()), transformed.to_string());
+                            } else {
+                                entry.set_attribute(item.name.clone(), transformed.to_string());
                             }
-                        } else {
-                            None
-                        }
-                    },
-                    Err(err) => {
-                        // replace with blank.
-                        entry.replace_word(Some(original_word_attr.to_owned()), String::new());
-                        Some(format!("Can't Transform: {err}"))
-                    },
+
+                            // return the original word in phonemic format
+                            last_error = error.map(|err| format!("Invalid Result: {err}"))
+                        },
+                        Err(err) => {
+                            // these should be errors in programming the transformation and validator, not just an invalid word.
+                            eprintln!("!!! Error transforming and validating word: {err}");
+                            process::exit(1)
+                        },
+                    }
+
                 }
+
+                last_error
+
             },
             Err(err) => {
-                entry.replace_word(Some(original_word_attr.to_owned()), String::new());
+                // this is an error in the data, I don't want to stop the whole batch, that could be a problem later.
+                if replace_word {
+                    // replace that word with an empty value and move the original to a new attribute
+                    entry.replace_word(Some(original_word_attr.to_owned()), String::new());
+                } // else leave the transformed attribute blank.
+
                 Some(format!("Can't read word: {err}"))
             },
         };
@@ -293,9 +341,8 @@ pub(crate) fn transform_words(transformation: &Transformation, from: &Language, 
     words.print_to_stdout(output_format);
 
     if invalid_found {
-        eprintln!("Error happened while transforming (see Error column)");
+        eprintln!("Look for errors in Error column.");
         process::exit(1)
     }
-
 
 }
