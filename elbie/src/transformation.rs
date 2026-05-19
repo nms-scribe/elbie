@@ -508,6 +508,11 @@ impl TransformationSet {
     pub(crate) fn items(&self) -> &[&'static str] {
         &self.items
     }
+
+    #[allow(dead_code,reason="Clippy says I should do this, and it's probably a good idea if I ever need this later.")]
+    pub(crate) fn iter(&self) -> <&Vec<&'static str> as IntoIterator>::IntoIter {
+       <&Self as IntoIterator>::into_iter(self)
+    }
 }
 
 impl IntoIterator for TransformationSet {

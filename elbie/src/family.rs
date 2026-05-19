@@ -76,11 +76,11 @@ impl Family {
     pub(crate) fn transformation_set_contents(&self, from: &str, name: &str) -> Result<Option<&[&'static str]>,ElbieError> {
         let key = &(from.to_owned(),name.to_owned());
 
-        match self.delayed_transformations.get(&key) {
+        match self.delayed_transformations.get(key) {
             Some(TransformationEntryCreator::Set(items)) => Ok(Some(items.items())),
             Some(TransformationEntryCreator::Single(_)) => Ok(None),
             None => {
-                match self.transformations.get(&key) {
+                match self.transformations.get(key) {
                     Some(TransformationEntry::Set(items)) => Ok(Some(items.items())),
                     Some(TransformationEntry::Single(_)) => Ok(None),
                     None => Err(ElbieError::UnknownTransformation(from.to_owned(), name.to_owned())),
