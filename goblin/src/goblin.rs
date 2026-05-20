@@ -599,7 +599,7 @@ pub(crate) mod to_hobgoblin {
         transformation.set_validation_language(Some(GOBLIN));
 
         transformation.add_rule("pluralize", |rule| {
-            if rule.opt(BILABIAL)? {
+            if rule.opt(BILABIAL)? || rule.opt(UNVOICED)? {
                 rule.final_()?;
                 rule.ins(&[SMALL_CAP_I,B,I])?;
             } else {

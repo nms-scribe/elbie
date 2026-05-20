@@ -223,7 +223,6 @@ impl DoIt for ShowSpelling {
 
         let language = family.get_language_or_default(language.as_deref())?;
 
-        // TODO: These things should now be able to throw errors, maybe?
         show_spelling(Some(grid_style), language, self.columns);
 
         Ok(())

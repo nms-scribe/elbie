@@ -14,11 +14,7 @@ There have been arguments against syllables being a real thing, but I feel like 
 https://web.archive.org/web/20150923211920/http://www.cunyphonologyforum.net/syllable.php
 https://web.archive.org/web/20150918220252/http://cunyphonologyforum.wikifoundry.com/page/Paraphonological+Phenomena
 
-FUTURE: Implement transformations:
-* regular sound change for building lexicons of daughter languages
-* regular sound changes for loan words from other languages (I don't expect this to be common)
-* orthography -- the same pattern matching of sound change could potentially be used to create more realistic orthography
-- This is mostly something very similar to regular expressions, searching for patterns in a word, possibly capturing some patterns, and replacing them with other patterns. The final test, however, would require validation to a new language, or something like that.
+FUTURE: Implement transformations for orthography: I would just have to make a mark that indicates the transformation is not a word and shouldn't be shown in phonemic form.
 
 FUTURE: Is there some way to use types or something else to make languages easier to create?
 - One issue is the use of string constants to identify environments, sets, phonemes, etc.
@@ -26,12 +22,7 @@ FUTURE: Is there some way to use types or something else to make languages easie
   - The use of a string constant removes some useful type-checking: if I specify an environment name instead of a set name, I don't know until run-time.
   - It would be nice if I could just have "phoneme" and "phoneme_set" objects and the like that can be reference by variable, and have internal access to the language they are associated with. (For example, "fricative.intersect_with(glottal)" should work without having to retrieve things off of the language, or even without having a string name)
 - Constant type parameters are now possible in rust, there might be something I could use out of that.
-
-// FUTURE: Is there some way I can do the environments and sets as types? Maybe phonemes, sets and environments are traits instead that you implement in structs. I might be able to use generic constant parameters to help with that.
-// I could use macros to make those implementations easier to code. Phonemes should really be enumerations. This would require the language to be generic
-// and base itself off of phonemes. --- I think the hardest part is implementing a set that describes which phonemes can be chosen, and then to choose such a
-// type randomly?
-
+- I could use macros to make those implementations easier to code. Phonemes should really be enumerations. This would require the language to be generic and base itself off of phonemes. --- I think the hardest part is implementing a set that describes which phonemes can be chosen, and then to choose such a  type randomly?
 
 */
 
@@ -167,6 +158,7 @@ mod orthography;
 mod phoneme_behavior;
 pub mod word;
 pub mod phonotactics;
+pub mod generation;
 pub mod validation;
 pub mod phoneme_table_builder;
 pub mod language;
