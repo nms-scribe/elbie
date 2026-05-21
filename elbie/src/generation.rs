@@ -15,7 +15,7 @@ use std::collections::hash_map::Entry;
 // TODO: A rewrite of the generation/validation system. I'm not sure how to integrate, but this should look much more like the transformation thing, so much easier to do.
 
 // TODO: Converting to the new system in a way that I don't need to mess up old programs.
-// [ ] Tag the git commit so we can go back to it.
+// [X] Tag the git commit so we can go back to it. (v0.3.2)
 // [ ] Language::new will create the pattern by declaring a simple pattern that is just an environment switch.
 // [ ] Language::add_environment will add environments to the patternset that look very much like the old one, but it will keep the old stuff at first.
 // [ ] duplicate word generation code in the new feature to use the patternset instead.
