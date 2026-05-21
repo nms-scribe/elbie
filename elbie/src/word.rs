@@ -24,7 +24,8 @@ impl Word {
     self.phonemes.push(phoneme)
   }
 
-  pub(crate) fn _last(&self) -> Option<&Rc<Phoneme>> {
+  #[allow(dead_code)]
+  pub(crate) fn last(&self) -> Option<&Rc<Phoneme>> {
     self.phonemes.last()
   }
 

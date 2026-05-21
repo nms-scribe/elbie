@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::language::Language;
 use crate::word::Word;
 use rand::rngs::ThreadRng;
@@ -13,6 +14,22 @@ use std::collections::hash_map::Entry;
 
 // TODO: A rewrite of the generation/validation system. I'm not sure how to integrate, but this should look much more like the transformation thing, so much easier to do.
 
+// TODO: Converting to the new system in a way that I don't need to mess up old programs.
+// [ ] Tag the git commit so we can go back to it.
+// [ ] Language::new will create the pattern by declaring a simple pattern that is just an environment switch.
+// [ ] Language::add_environment will add environments to the patternset that look very much like the old one, but it will keep the old stuff at first.
+// [ ] duplicate word generation code in the new feature to use the patternset instead.
+// [ ] convert goblin over to the new feature. It should just work if I've done it right.
+// [ ] test generation and validation of goblin over and over to make sure that generated phonemes look the same in the new system.
+// [ ] duplicate word validation code in the new feature to also use the patternset.
+// [ ] Test that everything in goblin is working the same.
+// [ ] Deprecate the old API, but do not delete. In the deprecation message, report that they can use the tag made above to get the old API, but that tag is unsupported so it's best if they convert to the new.
+// [ ] Also probably deprecate the named environments in the new API. Those are only there to support the deprecated API, and I'm not sure they're that useful.
+// [ ] Add in an API that lets you use the patternset system directly.
+// [ ] Start converting goblin to making use of the new API, and possibly even some of it's new features.
+
+// TODO: I think I can almost convert the old environments to the new now.
+// - An Old Environment generates a phoneme, then iterates through the branches looking for one that matches the phoneme. Then it does a choice (tree) where each branch is basically another switch.
 // TODO: Find a way to convert the current phonotactics system into these Patterns so I don't have to edit them on the old languages.
 //       -- the phonotactics are currently supplied with 'add_environment', so I can hook into that. And add an 'add_patterns' to the Language and eventually deprecate 'add_environment'
 //       -- one issue is that the input for the phonotactics are in the new function for Language. I'm not sure how to deprecate that without changing the name of the constructor.
@@ -82,7 +99,9 @@ pub(crate) enum ValidationTraceStart {
     Series,
     Option,
     Tree,
-    Switch,
+    // If the value is Some, then the switch called a named environment.
+    Switch(Option<&'static str>),
+    Environment,
     RuleReference(&'static str)
 }
 
@@ -94,8 +113,10 @@ pub(crate) enum ValidationTraceEnd {
     Option(bool),
     // number indicates the current branch position
     Tree(usize),
+    // If the value is Some, then the switch called a named environment.
+    Switch(Option<&'static str>),
     // number indicates the current branch position, if None then this ended with the else or the initial phoneme.
-    Switch(Option<usize>),
+    Environment(Option<usize>),
     RuleReference(&'static str),
     PhonemeSuccess(Rc<Phoneme>),
     PhonemeFail,
@@ -179,7 +200,7 @@ where
 
 }
 
-
+#[derive(Debug)]
 struct Sequence {
     patterns: Vec<Pattern>,
     defined_at: Location<'static>
@@ -208,6 +229,7 @@ impl PatternValidate for Sequence {
     }
 }
 
+#[derive(Debug)]
 struct Series {
     pattern: Pattern,
     probability: u8,
@@ -265,6 +287,7 @@ impl PatternValidate for Series {
     }
 }
 
+#[derive(Debug)]
 struct Optional {
     pattern: Pattern,
     probability: u8,
@@ -302,6 +325,7 @@ impl PatternValidate for Optional {
 }
 
 
+#[derive(Debug)]
 struct TreeBranch {
     head: Pattern,
     weight: u8,
@@ -310,6 +334,7 @@ struct TreeBranch {
 }
 
 
+#[derive(Debug)]
 struct Tree {
     branches: Vec<TreeBranch>,
     total_weight: u8,
@@ -369,26 +394,26 @@ impl PatternValidate for Tree {
     }
 }
 
-struct SwitchBranch {
-    condition_set: &'static str,
-    body: Pattern,
-    defined_at: Location<'static>
-}
 
-
-
-struct PhonemeSet {
+#[derive(Debug)]
+struct PhonemeInSet {
     name: &'static str,
+    avoid_duplicates: bool,
     defined_at: Location<'static>
 }
 
-impl PhonemeSet {
+impl PhonemeInSet {
 
     fn extend_with_phoneme(&self,language: &Language, rng: &mut ThreadRng, is_complete: bool, result: &mut Word) -> Result<Rc<Phoneme>,PatternError> {
         if is_complete {
             return Err(PatternError::PhonemeAfterTerminate)
         }
-        let phoneme = language.inventory().choose(self.name,rng).map_err(PatternError::Elbie)?;
+        let phoneme = if self.avoid_duplicates && let Some(phoneme) = result.last() {
+            language.inventory().choose_except(self.name,&[phoneme],rng).map_err(PatternError::Elbie)?
+        } else {
+            language.inventory().choose(self.name,rng).map_err(PatternError::Elbie)?
+        };
+
         result.push(phoneme.clone());
         Ok(phoneme)
     }
@@ -422,14 +447,14 @@ impl PhonemeSet {
 
 }
 
-impl PatternGenerate for PhonemeSet {
+impl PatternGenerate for PhonemeInSet {
     fn extend_word(&self,language: &Language, _: &PatternSet, rng: &mut ThreadRng, is_complete: &mut bool, result: &mut Word) -> Result<(),PatternError> {
         _ = self.extend_with_phoneme(language, rng, *is_complete, result)?;
         Ok(())
     }
 }
 
-impl PatternValidate for PhonemeSet {
+impl PatternValidate for PhonemeInSet {
     fn validate_word(&self, language: &Language, _: &PatternSet, word: &mut EnumerateCount<Iter<Rc<Phoneme>>>, trace: Option<&ValidationTraceCallback>) -> Result<Result<(),ValidationError>,PatternError> {
         match self.validate_with_phoneme(language, word, trace)? {
             Ok(_) => Ok(Ok(())),
@@ -438,16 +463,24 @@ impl PatternValidate for PhonemeSet {
     }
 }
 
-struct Switch {
-    initial: PhonemeSet,
+
+
+#[derive(Debug)]
+struct SwitchBranch {
+    condition_set: &'static str,
+    body: Pattern,
+    defined_at: Location<'static>
+}
+
+#[derive(Debug)]
+struct Environment {
     branches: Vec<SwitchBranch>,
     else_: Pattern,
     defined_at: Location<'static>
 }
 
-impl PatternGenerate for Switch {
-    fn extend_word(&self,language: &Language, rules: &PatternSet, rng: &mut ThreadRng, is_complete: &mut bool, result: &mut Word) -> Result<(),PatternError> {
-        let phoneme = self.initial.extend_with_phoneme(language, rng, *is_complete, result)?;
+impl Environment {
+    fn extend_word(&self, phoneme: &Rc<Phoneme>, language: &Language, rules: &PatternSet, rng: &mut ThreadRng, is_complete: &mut bool, result: &mut Word) -> Result<(),PatternError> {
         for branch in &self.branches {
             if language.inventory().phoneme_is(&phoneme, branch.condition_set).map_err(PatternError::Elbie)? {
                 return branch.body.extend_word(language, rules, rng, is_complete, result)
@@ -455,48 +488,92 @@ impl PatternGenerate for Switch {
         }
         self.else_.extend_word(language, rules, rng, is_complete, result)
     }
-}
 
-impl PatternValidate for Switch {
-    fn validate_word(&self, language: &Language, rules: &PatternSet, word: &mut EnumerateCount<Iter<Rc<Phoneme>>>, trace: Option<&ValidationTraceCallback>) -> Result<Result<(),ValidationError>,PatternError> {
-        trace.start(self.defined_at,word.next_index,ValidationTraceStart::Switch);
-        match self.initial.validate_with_phoneme(language, word, trace)? {
-            Ok(phoneme) => {
+    fn validate_word(&self, phoneme: &Rc<Phoneme>, language: &Language, rules: &PatternSet, word: &mut EnumerateCount<Iter<Rc<Phoneme>>>, trace: Option<&ValidationTraceCallback>) -> Result<Result<(),ValidationError>,PatternError> {
+        trace.start(self.defined_at,word.next_index,ValidationTraceStart::Environment);
 
-                for (index,branch) in self.branches.iter().enumerate() {
-                    if language.inventory().phoneme_is(&phoneme, branch.condition_set).map_err(PatternError::Elbie)? {
-                        match branch.body.validate_word(language, rules, word, trace)? {
-                            Ok(()) => {
-                                trace.success(self.defined_at, word.next_index, ValidationTraceEnd::Switch(Some(index)));
-                                return Ok(Ok(()))
-                            },
-                            Err(err) => {
-                                trace.failure(ValidationTraceEnd::Switch(Some(index)),err.clone());
-                                return Ok(Err(err))
-                            },
-                        }
-                    }
-                }
-
-                match self.else_.validate_word(language, rules, word, trace)? {
+        for (index,branch) in self.branches.iter().enumerate() {
+            if language.inventory().phoneme_is(&phoneme, branch.condition_set).map_err(PatternError::Elbie)? {
+                match branch.body.validate_word(language, rules, word, trace)? {
                     Ok(()) => {
-                        trace.success(self.defined_at, word.next_index, ValidationTraceEnd::Switch(None));
-                        Ok(Ok(()))
+                        trace.success(self.defined_at, word.next_index, ValidationTraceEnd::Environment(Some(index)));
+                        return Ok(Ok(()))
                     },
                     Err(err) => {
-                        trace.failure(ValidationTraceEnd::Switch(None),err.clone());
-                        Ok(Err(err))
+                        trace.failure(ValidationTraceEnd::Environment(Some(index)),err.clone());
+                        return Ok(Err(err))
                     },
                 }
+            }
+        }
+
+        match self.else_.validate_word(language, rules, word, trace)? {
+            Ok(()) => {
+                trace.success(self.defined_at, word.next_index, ValidationTraceEnd::Environment(None));
+                Ok(Ok(()))
             },
             Err(err) => {
-                trace.failure(ValidationTraceEnd::Switch(None), err.clone());
+                trace.failure(ValidationTraceEnd::Environment(None),err.clone());
                 Ok(Err(err))
             },
         }
     }
 }
 
+#[derive(Debug)]
+enum SwitchEnvironment {
+    Environment(Environment),
+    Named(&'static str)
+}
+
+#[derive(Debug)]
+struct Switch {
+    initial: PhonemeInSet,
+    environment: SwitchEnvironment,
+    defined_at: Location<'static>
+}
+
+impl PatternGenerate for Switch {
+    fn extend_word(&self,language: &Language, rules: &PatternSet, rng: &mut ThreadRng, is_complete: &mut bool, result: &mut Word) -> Result<(),PatternError> {
+        let phoneme = self.initial.extend_with_phoneme(language, rng, *is_complete, result)?;
+        let environment = match &self.environment {
+            SwitchEnvironment::Environment(environment) => environment,
+            SwitchEnvironment::Named(name) => rules.get_environment(name)?,
+        };
+        environment.extend_word(&phoneme, language, rules, rng, is_complete, result)
+    }
+}
+
+impl PatternValidate for Switch {
+    fn validate_word(&self, language: &Language, rules: &PatternSet, word: &mut EnumerateCount<Iter<Rc<Phoneme>>>, trace: Option<&ValidationTraceCallback>) -> Result<Result<(),ValidationError>,PatternError> {
+        let (environment,name) = match &self.environment {
+            SwitchEnvironment::Environment(environment) => (environment,None),
+            SwitchEnvironment::Named(name) => (rules.get_environment(name)?,Some(*name)),
+        };
+        trace.start(self.defined_at,word.next_index,ValidationTraceStart::Switch(name));
+        match self.initial.validate_with_phoneme(language, word, trace)? {
+            Ok(phoneme) => {
+
+                match environment.validate_word(&phoneme, language, rules, word, trace)? {
+                    Ok(()) => {
+                        trace.success(self.defined_at, word.next_index, ValidationTraceEnd::Switch(name));
+                        Ok(Ok(()))
+                    },
+                    Err(err) => {
+                        trace.failure(ValidationTraceEnd::Switch(name), err.clone());
+                        Ok(Err(err))
+                    }
+                }
+            },
+            Err(err) => {
+                trace.failure(ValidationTraceEnd::Switch(name), err.clone());
+                Ok(Err(err))
+            },
+        }
+    }
+}
+
+#[derive(Debug)]
 struct TerminateWord {
     defined_at: Location<'static>
 }
@@ -555,13 +632,14 @@ impl PatternValidate for RuleReference {
     }
 }
 
+#[derive(Debug)]
 enum Pattern {
     Sequence(Sequence),
     Series(Box<Series>),
     Option(Box<Optional>),
     Tree(Tree),
     Switch(Box<Switch>),
-    Set(PhonemeSet),
+    Set(PhonemeInSet),
     // This can be used to force completion in certain situations, such as not allowing a series to continue, or disallowing an option.
     // If used in a pattern before a non-optional pattern with phonemes, it will fail.
     Terminate(TerminateWord)
@@ -630,7 +708,7 @@ fn validate_word(language: &Language, rules: &PatternSet, pattern: &Pattern, wor
     }
 }
 
-struct PatternBuilder {
+pub(crate) struct PatternBuilder {
     patterns: Vec<Pattern>
 }
 
@@ -656,7 +734,7 @@ impl PatternBuilder {
         }
     }
 
-    fn seq<PatternCallback: Fn(&mut Self)>(&mut self, callback: PatternCallback) {
+    pub(crate) fn seq<PatternCallback: Fn(&mut Self)>(&mut self, callback: PatternCallback) {
         let mut patterns = Self::new();
         callback(&mut patterns);
         self.patterns.append(&mut patterns.patterns);
@@ -681,27 +759,27 @@ impl PatternBuilder {
     }
 
     #[track_caller]
-    fn ser_min_max<PatternCallback: Fn(&mut Self)>(&mut self, probability: u8, callback: PatternCallback, minimum: usize, maximum: usize) {
+    pub(crate) fn ser_min_max<PatternCallback: Fn(&mut Self)>(&mut self, probability: u8, callback: PatternCallback, minimum: usize, maximum: usize) {
         self.series(probability, callback, minimum, Some(maximum));
     }
 
     #[track_caller]
-    fn ser_min<PatternCallback: Fn(&mut Self)>(&mut self, probability: u8, callback: PatternCallback, minimum: usize) {
+    pub(crate) fn ser_min<PatternCallback: Fn(&mut Self)>(&mut self, probability: u8, callback: PatternCallback, minimum: usize) {
         self.series(probability, callback, minimum, None);
     }
 
     #[track_caller]
-    fn ser_max<PatternCallback: Fn(&mut Self)>(&mut self, probability: u8, callback: PatternCallback, maximum: usize) {
+    pub(crate) fn ser_max<PatternCallback: Fn(&mut Self)>(&mut self, probability: u8, callback: PatternCallback, maximum: usize) {
         self.series(probability, callback, 0, Some(maximum));
     }
 
     #[track_caller]
-    fn ser<PatternCallback: Fn(&mut Self)>(&mut self, probability: u8, callback: PatternCallback) {
+    pub(crate) fn ser<PatternCallback: Fn(&mut Self)>(&mut self, probability: u8, callback: PatternCallback) {
         self.series(probability, callback, 0, None);
     }
 
     #[track_caller]
-    fn opt<PatternCallback: Fn(&mut Self)>(&mut self, probability: u8, callback: PatternCallback) {
+    pub(crate) fn opt<PatternCallback: Fn(&mut Self)>(&mut self, probability: u8, callback: PatternCallback) {
         let defined_at = *Location::caller();
         let mut pattern = Self::new();
         callback(&mut pattern);
@@ -714,7 +792,7 @@ impl PatternBuilder {
     }
 
     #[track_caller]
-    fn tree<BranchCallback: Fn(&mut TreeBuilder)>(&mut self, callback: BranchCallback) {
+    pub(crate) fn tree<BranchCallback: Fn(&mut TreeBuilder)>(&mut self, callback: BranchCallback) {
         let defined_at = *Location::caller();
         let mut builder = TreeBuilder::new();
         callback(&mut builder);
@@ -728,31 +806,80 @@ impl PatternBuilder {
         }));
     }
 
-    #[track_caller]
-    fn switch<BranchCallback: Fn(&mut SwitchBuilder)>(&mut self, initial_phoneme: &'static str, callback: BranchCallback) {
-        let defined_at = *Location::caller();
-        let mut builder = SwitchBuilder::new();
-        callback(&mut builder);
+    fn switch_opt<BranchCallback: Fn(&mut EnvironmentBuilder)>(&mut self, defined_at: Location<'static>, initial_phoneme: &'static str, avoid_duplicates: bool, callback: BranchCallback) {
+        let environment = SwitchEnvironment::Environment(EnvironmentBuilder::build(defined_at, callback));
 
         self.patterns.push(Pattern::Switch(Box::new(Switch {
-            initial: PhonemeSet { name: initial_phoneme, defined_at },
-            branches: builder.branches,
-            else_: builder.else_.expect("No else on switch"),
+            initial: PhonemeInSet {
+                name: initial_phoneme,
+                avoid_duplicates,
+                defined_at
+            },
+            environment,
             defined_at,
         })));
     }
 
     #[track_caller]
-    fn set(&mut self, name: &'static str) {
+    pub(crate) fn switch<BranchCallback: Fn(&mut EnvironmentBuilder)>(&mut self, initial_phoneme: &'static str, callback: BranchCallback) {
         let defined_at = *Location::caller();
-        self.patterns.push(Pattern::Set(PhonemeSet {
+        self.switch_opt(defined_at, initial_phoneme, false, callback);
+    }
+
+    #[track_caller]
+    pub(crate) fn switch_nodup<BranchCallback: Fn(&mut EnvironmentBuilder)>(&mut self, initial_phoneme: &'static str, callback: BranchCallback) {
+        let defined_at = *Location::caller();
+        self.switch_opt(defined_at, initial_phoneme, true, callback);
+    }
+
+    fn switch_env_opt(&mut self, defined_at: Location<'static>, initial_phoneme: &'static str, avoid_duplicates: bool, environment: &'static str) {
+        let environment = SwitchEnvironment::Named(environment);
+
+        self.patterns.push(Pattern::Switch(Box::new(Switch {
+            initial: PhonemeInSet {
+                name: initial_phoneme,
+                avoid_duplicates,
+                defined_at
+            },
+            environment,
+            defined_at,
+        })));
+    }
+
+    #[track_caller]
+    pub(crate) fn switch_env(&mut self, initial_phoneme: &'static str, environment: &'static str) {
+        let defined_at = *Location::caller();
+        self.switch_env_opt(defined_at, initial_phoneme, false, environment);
+    }
+
+    #[track_caller]
+    pub(crate) fn switch_env_nodup(&mut self, initial_phoneme: &'static str, environment: &'static str) {
+        let defined_at = *Location::caller();
+        self.switch_env_opt(defined_at, initial_phoneme, true, environment);
+    }
+
+    #[track_caller]
+    pub(crate) fn set(&mut self, name: &'static str) {
+        let defined_at = *Location::caller();
+        self.patterns.push(Pattern::Set(PhonemeInSet {
             name,
-            defined_at
+            avoid_duplicates: false,
+            defined_at,
         }));
     }
 
     #[track_caller]
-    fn done(&mut self) {
+    pub(crate) fn set_nodup(&mut self, name: &'static str) {
+        let defined_at = *Location::caller();
+        self.patterns.push(Pattern::Set(PhonemeInSet {
+            name,
+            avoid_duplicates: true,
+            defined_at,
+        }));
+    }
+
+    #[track_caller]
+    pub(crate) fn done(&mut self) {
         let defined_at = *Location::caller();
         self.patterns.push(Pattern::Terminate(TerminateWord {
             defined_at
@@ -761,7 +888,7 @@ impl PatternBuilder {
 
 }
 
-struct TreeBuilder {
+pub(crate) struct TreeBuilder {
     total_weight: u8,
     branches: Vec<TreeBranch>
 }
@@ -798,18 +925,26 @@ impl TreeBuilder {
 }
 
 
-struct SwitchBuilder {
+pub(crate) struct EnvironmentBuilder {
     branches: Vec<SwitchBranch>,
     else_: Option<Pattern>
 }
 
-impl SwitchBuilder {
+impl EnvironmentBuilder {
 
-    const fn new() -> Self {
-        Self {
+    fn build<BranchCallback: Fn(&mut EnvironmentBuilder)>(defined_at: Location<'static>, callback: BranchCallback) -> Environment {
+        let mut builder = Self {
             branches: Vec::new(),
             else_: None
+        };
+        callback(&mut builder);
+
+        Environment {
+            branches: builder.branches,
+            else_: builder.else_.expect("The environment at least needs an else."),
+            defined_at
         }
+
     }
 
     #[track_caller]
@@ -836,20 +971,23 @@ impl SwitchBuilder {
 
 }
 
-struct PatternSet {
+#[derive(Debug)]
+pub(crate) struct PatternSet {
     patterns: HashMap<String,Pattern>,
+    environments: HashMap<String,Environment>,
     initial: Pattern
 }
 
 impl PatternSet {
 
     #[track_caller]
-    fn new<Callback: Fn(&mut PatternBuilder)>(callback: Callback) -> Self {
+    pub(crate) fn new<Callback: Fn(&mut PatternBuilder)>(callback: Callback) -> Self {
         let mut builder = PatternBuilder::new();
         callback(&mut builder);
         let initial = builder.flatten(*Location::caller());
         Self {
             patterns: HashMap::new(),
+            environments: HashMap::new(),
             initial
         }
 
@@ -871,6 +1009,23 @@ impl PatternSet {
             Ok(pattern)
         } else {
             Err(PatternError::UnknownPattern(name.to_owned()))
+        }
+    }
+
+    #[track_caller]
+    fn add_environment<Callback: Fn(&mut EnvironmentBuilder)>(&mut self, name: &'static str, callback: Callback) {
+        let environment = EnvironmentBuilder::build(*Location::caller(), callback);
+        match self.environments.entry(name.to_owned()) {
+            Entry::Occupied(_) => panic!("An environment named '{name}' already exists."),
+            Entry::Vacant(vacant_entry) => _ = vacant_entry.insert(environment),
+        }
+    }
+
+    fn get_environment(&self, name: &'static str) -> Result<&Environment,PatternError> {
+        if let Some(pattern) = self.environments.get(name) {
+            Ok(pattern)
+        } else {
+            Err(PatternError::Elbie(ElbieError::UnknownEnvironment(name)))
         }
     }
 }
