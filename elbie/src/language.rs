@@ -21,12 +21,7 @@ use core::cmp::Ordering;
 use std::rc::Rc;
 use crate::grid::TRBodyClass;
 use crate::grid::TableClass;
-use crate::validation::ValidationTraceMessage;
-use crate::validation::ValidationTraceCallback;
-use crate::validation::ValidWordElement;
-use core::iter::Enumerate;
 use crate::phonotactics::EnvironmentChoice;
-use rand::prelude::ThreadRng;
 use crate::phoneme_table_builder::TableBuilder;
 use crate::word::Word;
 use core::slice::Iter;
@@ -39,12 +34,13 @@ use crate::phonotactics::EnvironmentBranch;
 use crate::phoneme::Phoneme;
 use std::collections::HashMap;
 use core::iter;
-use crate::validation::ValidPhonemeElement;
-use crate::validation::ValidInitialPhoneme;
-use crate::validation::ValidationError;
 use crate::lexicon::Lexicon;
 use crate::lexicon::LexiconStyle;
 use crate::word_table::WordTable;
+use crate::generation::PhonoPatternSet;
+use crate::generation::ValidationTraceCallback;
+use crate::generation::ValidWordElement;
+use crate::generation::PhonoPatternBuilder;
 
 
 
@@ -64,8 +60,6 @@ fn sort_phonemes_by_length_descending(a: &Rc<Phoneme>, b: &Rc<Phoneme>)  -> Orde
 #[derive(Debug)]
 pub struct Language {
   name: &'static str,
-  initial_environment: &'static str,
-  initial_phoneme_set: &'static str,
   inventory: Inventory,
   // These are kept separate from the phoneme structure to reduce some type dependencies.
   // For example, if this were part of the Phoneme structure, the ORTHOGRAPHIES parameter would be required on almost everything.
@@ -74,27 +68,50 @@ pub struct Language {
   phoneme_behavior: HashMap<Rc<Phoneme>,PhonemeBehavior>,
   orthographies: Vec<&'static str>,
   environments: HashMap<&'static str,Vec<EnvironmentBranch>>,
+  patterns: PhonoPatternSet,
   tables: Vec<TableEntry>
 }
 
 impl Language {
 
     #[must_use]
+    #[deprecated(since = "0.4.0", note = "Use `with_pattern` instead. The phonotactics system was overhauled, and this effects constructor parameters. If you don't have time to convert yours, make sure you check out the crate from git with tag 'v0.3.2'.")]
     pub fn new(name: &'static str, initial_phoneme_set: &'static str, initial_environment: &'static str, orthographies: Vec<&'static str>) -> Self {
       let inventory = Inventory::new();
       let environments = HashMap::new();
       let phoneme_behavior = HashMap::new();
       let tables = vec![];
+      let patterns = PhonoPatternSet::new(|rules| {
+          #[allow(deprecated)]
+          rules.case_env(initial_phoneme_set, initial_environment);
+      });
       Self {
         name,
-        initial_environment,
-        initial_phoneme_set,
         inventory,
         phoneme_behavior,
         orthographies,
         environments,
+        patterns,
         tables
       }
+
+    }
+
+    pub fn with_pattern<Pattern: Fn(&mut PhonoPatternBuilder)>(name: &'static str, orthographies: Vec<&'static str>, initial_pattern: Pattern) -> Self {
+        let inventory = Inventory::new();
+        let environments = HashMap::new();
+        let phoneme_behavior = HashMap::new();
+        let tables = vec![];
+        let patterns = PhonoPatternSet::new(initial_pattern);
+        Self {
+          name,
+          inventory,
+          phoneme_behavior,
+          orthographies,
+          environments,
+          patterns,
+          tables
+        }
 
     }
 
@@ -116,6 +133,10 @@ impl Language {
 
     pub(crate) const fn name(&self) -> &'static str {
         self.name
+    }
+
+    pub(crate) const fn patterns(&self) -> &PhonoPatternSet {
+        &self.patterns
     }
 
 
@@ -187,14 +208,41 @@ impl Language {
 
     }
 
-    pub(crate) fn get_environment(&self, environment: &'static str) -> Result<&Vec<EnvironmentBranch>,ElbieError> {
-      match self.environments.get(environment) {
-        Some(environment) => Ok(environment),
-        None => Err(ElbieError::UnknownEnvironment(environment))
-      }
-    }
 
+    #[deprecated(since = "0.4.0", note = "Use the new patterns API available with `add_pattern` instead. If you don't have time to convert yours, make sure you check out the crate from git with tag 'v0.3.2'.")]
     pub fn add_environment(&mut self, name: &'static str, environment: &[EnvironmentBranch]) -> Result<(),ElbieError> {
+
+      self.patterns.case_environment(name, |rule| {
+          for branch in environment {
+              let set = branch.set();
+              let choices = branch.choices();
+              rule.branch(set, |rule| {
+                  rule.choice(|choice| {
+                      for (item,weight) in choices.items() {
+                          choice.add(*weight, |head| {
+                              match item {
+                                EnvironmentChoice::Done => head.done(),
+                                // set to generate next phoneme from, next environment to follow, whether to allow duplicate phoneme to be generated
+                                EnvironmentChoice::Continuing(generate_set, next_environment, allow_duplicates) => {
+                                    if *allow_duplicates {
+                                        #[allow(deprecated)]
+                                        head.case_env(generate_set, next_environment);
+                                    } else {
+                                        #[allow(deprecated)]
+                                        head.case_env_nodup(generate_set, next_environment);
+                                    }
+                                },
+                            }
+                          });
+                      }
+                  });
+              });
+          }
+          rule.else_(|else_| {
+              else_.done();
+          });
+      });
+
       if self.environments.contains_key(name) {
         Err(ElbieError::EnvironmentAlreadyExists(name))
       } else {
@@ -204,47 +252,21 @@ impl Language {
 
     }
 
+    pub fn add_pattern<Pattern: Fn(&mut PhonoPatternBuilder)>(&mut self, name: &'static str, pattern: Pattern) {
+        self.patterns.pattern(name, pattern);
+    }
+
     pub fn new_table(&mut self, id: &'static str, set: &'static str, caption: &'static str) -> TableBuilder {
         TableBuilder::new(self, id, caption, set)
 
     }
 
-
-    pub(crate) fn build_word(&self, environment_name: &'static str, word: &mut Word, phoneme: &Rc<Phoneme>, rng: &mut ThreadRng) -> Result<(),ElbieError> {
-
-        let environment = self.get_environment(environment_name)?;
-
-        for branch in environment {
-            if self.inventory.phoneme_is(phoneme, branch.set())? {
-                word.push(phoneme.clone()); // have to clone because we're referencing it again later. It's an RC, so that's okay.
-                match branch.choices().choose(rng) {
-                    None => return Err(ElbieError::NoEnvironmentChoices(environment_name)),
-                    Some(EnvironmentChoice::Done) => return Ok(()),
-                    Some(EnvironmentChoice::Continuing(generate_set,continuing_environment,can_duplicate)) => {
-                        let phoneme = if *can_duplicate {
-                            self.inventory.choose(generate_set,rng)?
-                        } else {
-                            self.inventory.choose_except(generate_set,&[phoneme],rng)?
-                        };
-                        return self.build_word(continuing_environment, word, &phoneme, rng)
-                    }
-                }
-
-            }
-        }
-
-        Err(ElbieError::IncompleteBranches(environment_name))
-
-    }
-
-
     pub(crate) fn make_word(&self) -> Result<Word,ElbieError> {
 
-        let mut word = Word::new(&[]);
+        //let mut word = Word::new(&[]);
+        // FUTURE: Should I keep an rng and re-use it, and then be able to specify a seed when generating words?
         let mut rng = rand::rng();
-        let phoneme = self.inventory.choose(self.initial_phoneme_set, &mut rng)?;
-        self.build_word(self.initial_environment, &mut word, &phoneme, &mut rng)?;
-        Ok(word)
+        self.patterns().generate(self, &mut rng)
     }
 
 
@@ -273,164 +295,11 @@ impl Language {
         Ok(Word::new(&word))
     }
 
-    pub(crate) fn validate_word(&self, environment_name: &'static str,
-                            word: &mut Enumerate<Iter<Rc<Phoneme>>>, idx: usize, phoneme: &Rc<Phoneme>,
-                            level: usize, validated: &[ValidWordElement], trace: Option<&ValidationTraceCallback>) -> Result<Result<Vec<ValidWordElement>,ValidationError>,ElbieError> {
 
+    pub(crate) fn check_word(&self,word: &Word, trace: Option<&ValidationTraceCallback>) -> Result<Result<Vec<ValidWordElement>,()>,ElbieError> {
 
-        let environment = self.get_environment(environment_name)?;
-        let mut validated = validated.to_vec();
+        self.patterns().validate(self, word, trace)
 
-        let mut found_valid_path = false;
-        let mut error = None;
-
-        macro_rules! trace_error {
-          ($error: expr) => {{
-            if let Some(trace) = trace {
-                trace(level,ValidationTraceMessage::FoundError(&$error));
-            }
-            $error
-          }};
-        }
-
-        // I want to return only the deepest error, so only set the error if one hasn't been found.
-        macro_rules! check_error {
-          ($error: expr) => {_ = {
-            let this_error = $error;
-            if error.is_none() {
-              error = Some(this_error.clone());
-            }
-            trace_error!(this_error)
-          }};
-        }
-
-        macro_rules! trace_valid {
-          ($valid: expr) => {{
-            let this_valid = $valid;
-            if let Some(trace) = trace {
-                trace(level,ValidationTraceMessage::FoundValid(&this_valid));
-            }
-            validated.push(this_valid);
-          }};
-        }
-
-        macro_rules! check_valid {
-          ($valid: expr) => {{
-            found_valid_path = true;
-            trace_valid!($valid)
-          }};
-        }
-
-        for branch in environment {
-
-            if self.inventory.phoneme_is(phoneme, branch.set())? {
-
-                let next_phoneme = word.next();
-
-                for choice in branch.choices().items() {
-                    match (choice, next_phoneme) {
-                        ((EnvironmentChoice::Done,_),Some((next_idx,next_phoneme))) => {
-                          check_error!(ValidationError::ExpectedEndOfWord(next_idx,next_phoneme.clone(),environment_name,branch.set()));
-                        },
-                        ((EnvironmentChoice::Continuing(generate_set,_,_),_),None) => {
-                          check_error!(ValidationError::ExpectedPhonemeFoundEndOfWord(idx + 1,environment_name,branch.set(),generate_set));
-                        },
-                        ((EnvironmentChoice::Continuing(generate_set,continuing_environment,can_duplicate),_),Some((next_idx,next_phoneme))) => {
-                            let valid_phoneme = if *can_duplicate {
-                                self.inventory.phoneme_is(next_phoneme, generate_set)?
-                            } else {
-                                (next_phoneme != phoneme) && self.inventory.phoneme_is(next_phoneme, generate_set)?
-                            };
-
-                            if valid_phoneme {
-                              trace_valid!(ValidWordElement::Phoneme(next_idx,ValidPhonemeElement {
-                                  found: next_phoneme.clone(),
-                                  environment: environment_name,
-                                  branch_set: branch.set(),
-                                  choice_set: generate_set,
-                                  next_environment: continuing_environment
-                              }));
-                              // NOTE: I'm cloning the iterator here so that the next branch choice looks at the same next phoneme.
-                              match self.validate_word(continuing_environment, &mut word.clone(), next_idx, next_phoneme, level + 1, &validated, trace)? {
-                                Err(err) => error = Some(err),
-                                Ok(sub_validated) => {
-                                  validated = sub_validated;
-                                  found_valid_path = true;
-                                  // break out of the loop, we found a successful branch.
-                                  break;
-                                }
-                              }
-                            } else {
-                              check_error!(ValidationError::IncorrectPhoneme(next_idx,next_phoneme.clone(),environment_name,branch.set(),generate_set));
-                            }
-                        },
-                        ((EnvironmentChoice::Done,_),None) => {
-                          check_valid!(ValidWordElement::Done(idx + 1,environment_name,branch.set()));
-                          // break out of the loop, we found a successful branch.
-                          break;
-                        }
-                    }
-
-                    // otherwise keep iterating branches until an Ok is found or the branches are exhausted.
-
-                };
-
-                if !found_valid_path && error.is_none() {
-
-                  // no successful choices were found. Check if error was set, and if not, then we didn't find
-                  // any choices at all, which is an error.
-                  return Err(ElbieError::IncompleteBranches(environment_name));
-
-                }
-
-                // no further processing, if the phoneme was valid for this branch, then that's the one that would have
-                // been used for generating, so there's no way any other branches should match.
-                break;
-
-            }
-        }
-
-        if found_valid_path {
-            Ok(Ok(validated))
-        } else {
-          match error {
-            None =>
-              // if we got here, then there were no branches that fit the current phoneme.
-              Ok(Err(trace_error!(ValidationError::NoBranchFitsPhoneme(idx,phoneme.clone(),environment_name)))),
-            Some(err) => Ok(Err(err))
-          }
-        }
-
-
-    }
-
-    pub(crate) fn check_word(&self,word: &Word, trace: Option<&ValidationTraceCallback>) -> Result<Result<Vec<ValidWordElement>,ValidationError>,ElbieError> {
-
-        if let Some(trace) = trace {
-            trace(0,ValidationTraceMessage::StartTrace(word))
-        }
-        let mut word = word.phonemes().iter().enumerate();
-        if let Some((idx,phoneme)) = word.next() {
-            if self.inventory.phoneme_is(phoneme, self.initial_phoneme_set)? {
-              let valid = ValidWordElement::InitialPhoneme(idx,ValidInitialPhoneme {
-                found: phoneme.clone(),
-                choice_set: self.initial_phoneme_set,
-                next_environment: self.initial_environment
-              });
-              if let Some(trace) = trace {
-                  trace(0,ValidationTraceMessage::FoundValid(&valid));
-              }
-              self.validate_word(self.initial_environment, &mut word, idx, phoneme,1,&[valid],trace)
-            } else {
-              let err = ValidationError::IncorrectInitialPhoneme(idx,phoneme.clone(),self.initial_phoneme_set);
-              if let Some(trace) = trace {
-                  trace(0,ValidationTraceMessage::FoundError(&err));
-              }
-              Ok(Err(err))
-            }
-        } else {
-            Err(ElbieError::EmptyWord)
-        }
     }
 
 

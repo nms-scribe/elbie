@@ -92,11 +92,11 @@ impl DoIt for GenerateWords {
 pub struct ValidateWords {
 
     #[options(no_short)]
-    /// Traces the validation through all phonotactic branches
+    /// Traces the validation through all branches and patterns
     trace: bool,
 
     #[options(no_short)]
-    /// Provides detailed explanation of valid phonemes on success.
+    /// On success, traces the validation through only successful branches and patterns
     explain: bool,
 
     #[options(default="plain")]

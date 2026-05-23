@@ -2,6 +2,7 @@ use thiserror::Error;
 use crate::phoneme_table::HeaderDef;
 use crate::phoneme_table::Axis;
 use crate::phoneme_table::TableOption;
+use core::panic::Location;
 
 #[derive(Debug,Clone,Error)]
 pub enum ElbieError {
@@ -31,6 +32,16 @@ pub enum ElbieError {
     IncompleteBranches(&'static str),
     #[error("Phoneme '{0}' was added with {2} spellings, but {1} were expected.")]
     MismatchedSpellingsForPhoneme(&'static str, usize,usize),
+
+    // word generation errors
+    #[error("Phoneme added after termination pattern.")]
+    PhonemeAfterTerminate,
+    #[error("Unknown pattern {0}.")]
+    UnknownPattern(&'static str),
+    #[error("No choices could be chosen (Is the choice empty?).")]
+    NoChoiceChoices(Location<'static>),
+    #[error("No tree branches could be chosen (Is the tree empty?).")]
+    NoTreeChoices(Location<'static>),
 
     // word validation errors //
     #[error("Word is empty")]

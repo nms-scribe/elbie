@@ -84,5 +84,3 @@ impl Display for ValidationTraceMessage<'_> {
 
   }
 }
-
-pub(crate) type ValidationTraceCallback = dyn Fn(usize, ValidationTraceMessage);

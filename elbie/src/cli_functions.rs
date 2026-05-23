@@ -6,15 +6,14 @@ use crate::grid::GridRow;
 use crate::grid::TRBodyClass;
 use crate::grid::Cell;
 use std::process;
-use crate::validation::ValidationTraceCallback;
 use crate::word::Word;
 use crate::transformation::Transformation;
 use crate::transformation::TransformationTraceCallback;
 use crate::errors::ElbieError;
 use crate::lexicon::LexiconStyle;
-use crate::validation::ValidationError;
 use crate::word_table::WordTable;
 use crate::transformation::PreparedTransformation;
+use crate::generation::ValidationTraceCallback;
 
 pub(crate) enum ValidateOption {
   Simple,
@@ -65,10 +64,10 @@ pub(crate) fn generate_words(grid_style: Option<&Format>, language: &Language, c
 }
 
 
-fn validate_word(language: &Language, word: &Word, explain: bool, trace_cb: Option<&ValidationTraceCallback>) -> Result<Result<(),ValidationError>,ElbieError> {
+fn validate_word(language: &Language, word: &Word, explain: bool, trace_cb: Option<&ValidationTraceCallback>) -> Result<Result<(),()>,ElbieError> {
     match language.check_word(word,trace_cb)? {
-        Err(err) => {
-          Ok(Err(err))
+        Err(()) => {
+          Ok(Err(()))
         },
         Ok(validated) => {
           if explain {
@@ -115,8 +114,8 @@ pub(crate) fn validate_words(language: &Language, mut words: WordTable, option: 
                             entry.set_attribute((*orthography).to_owned(), language.spell_word(&word, i));
                         }
                     },
-                    Ok(Err(error)) => {
-                        entry.set_attribute(VALIDATED_ATTR.to_owned(),format!("{error}"));
+                    Ok(Err(())) => {
+                        entry.set_attribute(VALIDATED_ATTR.to_owned(),"!! Invalid".to_owned());
                         invalid_found = true;
                     },
                     Err(err) => {
@@ -211,13 +210,13 @@ pub(crate) fn format_lexicon(format: &Format, style: &LexiconStyle, language: &L
 }
 
 
-pub(crate) fn transform_and_validate_word(word: &Word, transformation: &Transformation, validator: Option<&Language>, explain: bool, transformation_trace_cb: Option<&TransformationTraceCallback>, validation_trace_cb: Option<&ValidationTraceCallback>) -> Result<(Word,Option<ValidationError>),ElbieError> {
+pub(crate) fn transform_and_validate_word(word: &Word, transformation: &Transformation, validator: Option<&Language>, explain: bool, transformation_trace_cb: Option<&TransformationTraceCallback>, validation_trace_cb: Option<&ValidationTraceCallback>) -> Result<(Word,Option<bool>),ElbieError> {
 
     let transformed = transformation.transform(word, transformation_trace_cb)?;
 
     if let Some(validator) = validator {
-        let validation_err = validate_word(validator, &transformed, explain, validation_trace_cb)?.err();
-        Ok((transformed,validation_err))
+        let valid = validate_word(validator, &transformed, explain, validation_trace_cb)?.is_ok();
+        Ok((transformed,Some(valid)))
     } else {
         Ok((transformed,None))
     }
@@ -272,12 +271,12 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
                 entry.replace_word(None, word.to_string());
 
                 // only the last error will be returned if this is a set...
-                let mut last_error = None;
+                let mut last_failure = None;
 
                 for item in transformations {
 
                     match transform_and_validate_word(&word, item.transformation, item.validator, matches!(option,TransformationOption::Explain | TransformationOption::ExplainAndTrace), transformation_trace_cb, validation_trace_cb) {
-                        Ok((transformed,error)) => {
+                        Ok((transformed,validated)) => {
                             if replace_word {
                                 // replace that word with the transformed and move the original to a new attribute
                                 entry.replace_word(Some(original_word_attr.to_owned()), transformed.to_string());
@@ -285,8 +284,7 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
                                 entry.set_attribute(item.name.clone(), transformed.to_string());
                             }
 
-                            // return the original word in phonemic format
-                            last_error = error.map(|err| format!("Invalid Result: {err}"))
+                            last_failure = validated.and_then(|valid| (!valid).then(|| "Word was invalid (see trace)".to_owned()))
                         },
                         Err(err) => {
                             // these should be errors in programming the transformation and validator, not just an invalid word.
@@ -297,7 +295,7 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
 
                 }
 
-                last_error
+                last_failure
 
             },
             Err(err) => {
