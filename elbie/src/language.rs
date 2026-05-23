@@ -21,6 +21,7 @@ use core::cmp::Ordering;
 use std::rc::Rc;
 use crate::grid::TRBodyClass;
 use crate::grid::TableClass;
+#[allow(deprecated)]
 use crate::phonotactics::EnvironmentChoice;
 use crate::phoneme_table_builder::TableBuilder;
 use crate::word::Word;
@@ -30,6 +31,7 @@ use crate::orthography::SpellingCallback;
 use crate::orthography::SpellingBehavior;
 use crate::errors::ElbieError;
 use crate::phoneme_table_builder::TableEntry;
+#[allow(deprecated)]
 use crate::phonotactics::EnvironmentBranch;
 use crate::phoneme::Phoneme;
 use std::collections::HashMap;
@@ -37,10 +39,10 @@ use core::iter;
 use crate::lexicon::Lexicon;
 use crate::lexicon::LexiconStyle;
 use crate::word_table::WordTable;
-use crate::generation::PhonoPatternSet;
-use crate::generation::ValidationTraceCallback;
-use crate::generation::ValidWordElement;
-use crate::generation::PhonoPatternBuilder;
+use crate::phonotactics::PatternSet;
+use crate::phonotactics::PatternBuilder;
+use crate::validation::ValidationTraceCallback;
+use crate::validation::ValidWordElement;
 
 
 
@@ -67,8 +69,9 @@ pub struct Language {
   // (such as temporary phonemes during transformations)
   phoneme_behavior: HashMap<Rc<Phoneme>,PhonemeBehavior>,
   orthographies: Vec<&'static str>,
+  #[allow(deprecated)]
   environments: HashMap<&'static str,Vec<EnvironmentBranch>>,
-  patterns: PhonoPatternSet,
+  patterns: PatternSet,
   tables: Vec<TableEntry>
 }
 
@@ -81,7 +84,7 @@ impl Language {
       let environments = HashMap::new();
       let phoneme_behavior = HashMap::new();
       let tables = vec![];
-      let patterns = PhonoPatternSet::new(|rules| {
+      let patterns = PatternSet::new(|rules| {
           #[allow(deprecated)]
           rules.case_env(initial_phoneme_set, initial_environment);
       });
@@ -97,12 +100,12 @@ impl Language {
 
     }
 
-    pub fn with_pattern<Pattern: Fn(&mut PhonoPatternBuilder)>(name: &'static str, orthographies: Vec<&'static str>, initial_pattern: Pattern) -> Self {
+    pub fn with_pattern<Pattern: Fn(&mut PatternBuilder)>(name: &'static str, orthographies: Vec<&'static str>, initial_pattern: Pattern) -> Self {
         let inventory = Inventory::new();
         let environments = HashMap::new();
         let phoneme_behavior = HashMap::new();
         let tables = vec![];
-        let patterns = PhonoPatternSet::new(initial_pattern);
+        let patterns = PatternSet::new(initial_pattern);
         Self {
           name,
           inventory,
@@ -135,7 +138,7 @@ impl Language {
         self.name
     }
 
-    pub(crate) const fn patterns(&self) -> &PhonoPatternSet {
+    pub(crate) const fn patterns(&self) -> &PatternSet {
         &self.patterns
     }
 
@@ -210,6 +213,7 @@ impl Language {
 
 
     #[deprecated(since = "0.4.0", note = "Use the new patterns API available with `add_pattern` instead. If you don't have time to convert yours, make sure you check out the crate from git with tag 'v0.3.2'.")]
+    #[allow(deprecated)]
     pub fn add_environment(&mut self, name: &'static str, environment: &[EnvironmentBranch]) -> Result<(),ElbieError> {
 
       self.patterns.case_environment(name, |rule| {
@@ -252,7 +256,7 @@ impl Language {
 
     }
 
-    pub fn add_pattern<Pattern: Fn(&mut PhonoPatternBuilder)>(&mut self, name: &'static str, pattern: Pattern) {
+    pub fn add_pattern<Pattern: Fn(&mut PatternBuilder)>(&mut self, name: &'static str, pattern: Pattern) {
         self.patterns.pattern(name, pattern);
     }
 

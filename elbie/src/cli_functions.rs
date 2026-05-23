@@ -13,7 +13,7 @@ use crate::errors::ElbieError;
 use crate::lexicon::LexiconStyle;
 use crate::word_table::WordTable;
 use crate::transformation::PreparedTransformation;
-use crate::generation::ValidationTraceCallback;
+use crate::validation::ValidationTraceCallback;
 
 pub(crate) enum ValidateOption {
   Simple,

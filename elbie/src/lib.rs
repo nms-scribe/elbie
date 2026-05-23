@@ -157,6 +157,7 @@ pub mod phoneme;
 mod orthography;
 mod phoneme_behavior;
 pub mod word;
+mod enumerate_with_count;
 pub mod phonotactics;
 pub mod generation;
 pub mod validation;
@@ -192,8 +193,10 @@ pub type HeaderDef = phoneme_table::HeaderDef;
 #[deprecated(since="0.2.2",note="Use `elbie::phoneme_table_builder::TableBuilder` instead.")]
 pub type TableBuilder<'language,const ORTHOGRAPHIES: usize> = phoneme_table_builder::TableBuilder<'language>;
 #[deprecated(since="0.2.2",note="Use `elbie::phonotactics::EnvironmentBranch` instead.")]
+#[allow(deprecated)]
 pub type EnvironmentBranch = phonotactics::EnvironmentBranch;
 #[deprecated(since="0.2.2",note="Use `elbie::phonotactics::EnvironmentChoice` instead.")]
+#[allow(deprecated)]
 pub type EnvironmentChoice = phonotactics::EnvironmentChoice;
 #[deprecated(since="0.2.2",note="Use `elbie::word::Word` instead.")]
 pub type Word = word::Word;
