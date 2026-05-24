@@ -124,7 +124,6 @@ pub(crate) struct CaseEnvironmentBranch {
 #[derive(Debug)]
 pub(crate) struct CaseEnvironment {
     pub branches: Vec<CaseEnvironmentBranch>,
-    pub else_: Pattern,
     pub defined_at: Location<'static>
 }
 
@@ -189,87 +188,197 @@ impl Pattern {
 
 }
 
+struct PatternList<Extra>(Vec<(Pattern,Extra)>);
+
+impl<Extra> PatternList<Extra> {
+
+    fn seq<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, defined_at: Location<'static>, callback: PatternCallback, extra: Extra) {
+        let mut builder = PatternBuilder::new();
+        callback(&mut builder);
+        self.0.push((Pattern::Sequence(Sequence {
+            patterns: builder.patterns(),
+            defined_at,
+        }),extra));
+    }
+
+
+    fn series<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, defined_at: Location<'static>, probability: u8, callback: PatternCallback, minimum: usize, maximum: Option<usize>, extra: Extra) {
+        if maximum.is_some_and(|max| max < minimum) {
+            // I don't want to return an error here, as that would add undue complications on the closures used to build patterns. FUTURE: reconsider?
+            panic!("Maximum length of series is less than minimum.")
+        }
+        let mut pattern = PatternBuilder::new();
+        callback(&mut pattern);
+        let pattern = pattern.flatten(defined_at);
+        self.0.push((Pattern::Series(Box::new(Series {
+            pattern,
+            probability,
+            minimum,
+            maximum,
+            defined_at
+        })),extra));
+    }
+
+
+    fn opt<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, defined_at: Location<'static>, probability: u8, callback: PatternCallback, extra: Extra) {
+        let mut pattern = PatternBuilder::new();
+        callback(&mut pattern);
+        let pattern = pattern.flatten(defined_at);
+        self.0.push((Pattern::Option(Box::new(Optional {
+            pattern,
+            probability,
+            defined_at
+        })),extra));
+    }
+
+    /**
+    # Panics
+
+    Panics if no choices are added in the callback.
+    */
+    fn choice<BranchCallback: Fn(&mut ChoiceBuilder)>(&mut self, defined_at: Location<'static>, callback: BranchCallback, extra: Extra) {
+        let mut builder = ChoiceBuilder::new();
+        callback(&mut builder);
+        if builder.pattern_list.0.is_empty() {
+            // I don't want to return an error here, as that would add undue complications on the closures used to build patterns. FUTURE: reconsider?
+            panic!("Branches are empty.")
+        }
+        self.0.push((Pattern::Choice(Choice {
+            branches: builder.choices(),
+            defined_at
+        }),extra));
+    }
+
+    /**
+    A tree is a branching pattern, where each branch consists of a head, tail and a weight. If the branch is chosen, the head pattern is generated, followed by the tail. However, when validating, only the head is matched to determine if it's the correct branch. If the head fails to match, the branch is assumed to be wrong and the validation goes onto the next branch. If the head matches, but the tail doesn't, then the whole tree doesn't match. If none of the heads match, then the tree also fails to match. If you don't need the tail, just add an empty pattern.
+
+    # Panics
+
+    Panics if no branches are added to the tree in the callback.
+    */
+    fn tree<BranchCallback: Fn(&mut TreeBuilder)>(&mut self, defined_at: Location<'static>, callback: BranchCallback, extra: Extra) {
+        let mut builder = TreeBuilder::new();
+        callback(&mut builder);
+        if builder.branches.items().is_empty() {
+            // I don't want to return an error here, as that would add undue complications on the closures used to build patterns. FUTURE: reconsider?
+            panic!("Branches are empty.")
+        }
+        self.0.push((Pattern::Tree(Tree {
+            branches: builder.branches,
+            defined_at
+        }),extra));
+    }
+
+    fn case_opt<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, defined_at: Location<'static>, initial_phoneme: &'static str, avoid_duplicates: bool, callback: BranchCallback, extra: Extra) {
+        let mut builder = CaseEnvironmentBuilder::new();
+        callback(&mut builder);
+        let environment = NamedOrInlineEnvironment::Environment(CaseEnvironment {
+            branches: builder.branches(),
+            defined_at,
+        });
+
+        self.0.push((Pattern::Case(Box::new(Case {
+            initial: AddPhoneme {
+                name: initial_phoneme,
+                avoid_duplicates,
+                defined_at
+            },
+            environment,
+            defined_at,
+        })),extra));
+    }
+
+    fn case_env_opt(&mut self, defined_at: Location<'static>, initial_phoneme: &'static str, avoid_duplicates: bool, environment: &'static str,extra: Extra) {
+        let environment = NamedOrInlineEnvironment::Named(environment);
+
+        self.0.push((Pattern::Case(Box::new(Case {
+            initial: AddPhoneme {
+                name: initial_phoneme,
+                avoid_duplicates,
+                defined_at
+            },
+            environment,
+            defined_at,
+        })),extra));
+    }
+
+    fn rule(&mut self, defined_at: Location<'static>, name: &'static str, extra: Extra) {
+        self.0.push((Pattern::RuleReference(RuleReference {
+            name,
+            defined_at,
+        }),extra));
+    }
+
+    fn set_opt(&mut self, defined_at: Location<'static>, name: &'static str, avoid_duplicates: bool, extra: Extra) {
+        self.0.push((Pattern::Set(AddPhoneme {
+            name,
+            avoid_duplicates,
+            defined_at,
+        }),extra));
+    }
+
+    fn done(&mut self, defined_at: Location<'static>, extra: Extra) {
+        self.0.push((Pattern::Terminate(TerminateWord {
+            defined_at
+        }),extra));
+    }
+
+}
 
 
 pub struct PatternBuilder {
-    patterns: Vec<Pattern>
+    pattern_list: PatternList<()>
 }
 
 impl PatternBuilder {
 
     const fn new() -> Self {
         Self {
-            patterns: Vec::new()
+            pattern_list: PatternList(Vec::new())
         }
     }
 
+    fn patterns(self) -> Vec<Pattern> {
+        self.pattern_list.0.into_iter().map(|(p,_)| p).collect()
+    }
+
     fn flatten(mut self, defined_at: Location<'static>) -> Pattern {
-        let len = self.patterns.len();
+        let len = self.pattern_list.0.len();
         if len == 1 {
-            self.patterns.remove(0)
+            self.pattern_list.0.remove(0).0
         } else {
             Pattern::Sequence(Sequence {
-                patterns: self.patterns,
+                patterns: self.patterns(),
                 defined_at
             })
         }
     }
 
-    pub fn seq<PatternCallback: Fn(&mut Self)>(&mut self, callback: PatternCallback) {
-        let mut patterns = Self::new();
-        callback(&mut patterns);
-        self.patterns.append(&mut patterns.patterns);
-    }
-
-    #[track_caller]
-    fn series<PatternCallback: Fn(&mut Self)>(&mut self, probability: u8, callback: PatternCallback, minimum: usize, maximum: Option<usize>) {
-        let defined_at = *Location::caller();
-        if maximum.is_some_and(|max| max < minimum) {
-            panic!("Maximum length of series is less than minimum.")
-        }
-        let mut pattern = Self::new();
-        callback(&mut pattern);
-        let pattern = pattern.flatten(defined_at);
-        self.patterns.push(Pattern::Series(Box::new(Series {
-            pattern,
-            probability,
-            minimum,
-            maximum,
-            defined_at
-        })));
-    }
+    // NOTE: no seq on the sequence, because you want to avoid nested sequences in the long run.
 
     #[track_caller]
     pub fn ser_min_max<PatternCallback: Fn(&mut Self)>(&mut self, probability: u8, callback: PatternCallback, minimum: usize, maximum: usize) {
-        self.series(probability, callback, minimum, Some(maximum));
+        self.pattern_list.series(*Location::caller(), probability, callback, minimum, Some(maximum), ());
     }
 
     #[track_caller]
     pub fn ser_min<PatternCallback: Fn(&mut Self)>(&mut self, probability: u8, callback: PatternCallback, minimum: usize) {
-        self.series(probability, callback, minimum, None);
+        self.pattern_list.series(*Location::caller(), probability, callback, minimum, None, ());
     }
 
     #[track_caller]
     pub fn ser_max<PatternCallback: Fn(&mut Self)>(&mut self, probability: u8, callback: PatternCallback, maximum: usize) {
-        self.series(probability, callback, 0, Some(maximum));
+        self.pattern_list.series(*Location::caller(), probability, callback, 0, Some(maximum), ());
     }
 
     #[track_caller]
     pub fn ser<PatternCallback: Fn(&mut Self)>(&mut self, probability: u8, callback: PatternCallback) {
-        self.series(probability, callback, 0, None);
+        self.pattern_list.series(*Location::caller(), probability, callback, 0, None, ());
     }
 
     #[track_caller]
     pub fn opt<PatternCallback: Fn(&mut Self)>(&mut self, probability: u8, callback: PatternCallback) {
-        let defined_at = *Location::caller();
-        let mut pattern = Self::new();
-        callback(&mut pattern);
-        let pattern = pattern.flatten(defined_at);
-        self.patterns.push(Pattern::Option(Box::new(Optional {
-            pattern,
-            probability,
-            defined_at
-        })));
+        self.pattern_list.opt(*Location::caller(), probability, callback, ());
     }
 
     #[track_caller]
@@ -279,16 +388,7 @@ impl PatternBuilder {
     Panics if no choices are added in the callback.
     */
     pub fn choice<BranchCallback: Fn(&mut ChoiceBuilder)>(&mut self, callback: BranchCallback) {
-        let defined_at = *Location::caller();
-        let mut builder = ChoiceBuilder::new();
-        callback(&mut builder);
-        if builder.branches.items().is_empty() {
-            panic!("Branches are empty.")
-        }
-        self.patterns.push(Pattern::Choice(Choice {
-            branches: builder.branches,
-            defined_at
-        }));
+        self.pattern_list.choice(*Location::caller(), callback, ());
     }
 
     /**
@@ -300,135 +400,168 @@ impl PatternBuilder {
     */
     #[track_caller]
     pub fn tree<BranchCallback: Fn(&mut TreeBuilder)>(&mut self, callback: BranchCallback) {
-        let defined_at = *Location::caller();
-        let mut builder = TreeBuilder::new();
-        callback(&mut builder);
-        if builder.branches.items().is_empty() {
-            panic!("Branches are empty.")
-        }
-        self.patterns.push(Pattern::Tree(Tree {
-            branches: builder.branches,
-            defined_at
-        }));
-    }
-
-    fn case_opt<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, defined_at: Location<'static>, initial_phoneme: &'static str, avoid_duplicates: bool, callback: BranchCallback) {
-        let environment = NamedOrInlineEnvironment::Environment(CaseEnvironmentBuilder::build(defined_at, callback));
-
-        self.patterns.push(Pattern::Case(Box::new(Case {
-            initial: AddPhoneme {
-                name: initial_phoneme,
-                avoid_duplicates,
-                defined_at
-            },
-            environment,
-            defined_at,
-        })));
+        self.pattern_list.tree(*Location::caller(), callback, ());
     }
 
     #[track_caller]
     pub fn case<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, initial_phoneme: &'static str, callback: BranchCallback) {
-        let defined_at = *Location::caller();
-        self.case_opt(defined_at, initial_phoneme, false, callback);
+        self.pattern_list.case_opt(*Location::caller(), initial_phoneme, false, callback, ());
     }
 
     #[track_caller]
     pub fn case_nodup<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, initial_phoneme: &'static str, callback: BranchCallback) {
-        let defined_at = *Location::caller();
-        self.case_opt(defined_at, initial_phoneme, true, callback);
+        self.pattern_list.case_opt(*Location::caller(), initial_phoneme, true, callback, ());
     }
 
-    fn case_env_opt(&mut self, defined_at: Location<'static>, initial_phoneme: &'static str, avoid_duplicates: bool, environment: &'static str) {
-        let environment = NamedOrInlineEnvironment::Named(environment);
-
-        self.patterns.push(Pattern::Case(Box::new(Case {
-            initial: AddPhoneme {
-                name: initial_phoneme,
-                avoid_duplicates,
-                defined_at
-            },
-            environment,
-            defined_at,
-        })));
-    }
 
     #[track_caller]
-    #[deprecated(since="0.4.0", note="Named environments will probably go away unless there's a good use for them. They exist only to facilitate the deprecated Phonotactic environments.")]
     pub fn case_env(&mut self, initial_phoneme: &'static str, environment: &'static str) {
-        let defined_at = *Location::caller();
-        self.case_env_opt(defined_at, initial_phoneme, false, environment);
+        self.pattern_list.case_env_opt(*Location::caller(), initial_phoneme, false, environment, ());
     }
 
     #[track_caller]
-    #[deprecated(since="0.4.0", note="Named environments will probably go away unless there's a good use for them. They exist only to facilitate the deprecated Phonotactic environments.")]
     pub fn case_env_nodup(&mut self, initial_phoneme: &'static str, environment: &'static str) {
-        let defined_at = *Location::caller();
-        self.case_env_opt(defined_at, initial_phoneme, true, environment);
+        self.pattern_list.case_env_opt(*Location::caller(), initial_phoneme, true, environment, ());
     }
 
     #[track_caller]
     pub fn rule(&mut self, name: &'static str) {
-        let defined_at = *Location::caller();
-        self.patterns.push(Pattern::RuleReference(RuleReference {
-            name,
-            defined_at,
-        }));
+        self.pattern_list.rule(*Location::caller(), name, ());
     }
 
     #[track_caller]
     pub fn set(&mut self, name: &'static str) {
-        let defined_at = *Location::caller();
-        self.patterns.push(Pattern::Set(AddPhoneme {
-            name,
-            avoid_duplicates: false,
-            defined_at,
-        }));
+        self.pattern_list.set_opt(*Location::caller(), name, false, ());
     }
 
     #[track_caller]
     pub fn set_nodup(&mut self, name: &'static str) {
-        let defined_at = *Location::caller();
-        self.patterns.push(Pattern::Set(AddPhoneme {
-            name,
-            avoid_duplicates: true,
-            defined_at,
-        }));
+        self.pattern_list.set_opt(*Location::caller(), name, true, ());
     }
 
     #[track_caller]
     pub fn done(&mut self) {
-        let defined_at = *Location::caller();
-        self.patterns.push(Pattern::Terminate(TerminateWord {
-            defined_at
-        }));
+        self.pattern_list.done(*Location::caller(), ());
     }
 
 }
 
 pub struct ChoiceBuilder {
-    branches: WeightedVec<ChoiceBranch>
+    pattern_list: PatternList<usize>
 }
 
 impl ChoiceBuilder {
 
     const fn new() -> Self {
         Self {
-            branches: WeightedVec::new()
+            pattern_list: PatternList(Vec::new())
         }
     }
 
-    #[track_caller]
-    /// see PhonoPatternBuilder::tree for an explanation of the head and the tail patterns.
-    pub fn add<BodyCallback: Fn(&mut PatternBuilder)>(&mut self, weight: usize, body_cb: BodyCallback) {
-        let defined_at = *Location::caller();
-
-        let mut head = PatternBuilder::new();
-        body_cb(&mut head);
-        self.branches.push(ChoiceBranch {
-            body: head.flatten(defined_at)
-            //defined_at
-        },weight)
+    fn choices(self) -> WeightedVec<ChoiceBranch> {
+        let mut result = WeightedVec::new();
+        for (p,weight) in self.pattern_list.0 {
+            result.push(ChoiceBranch {
+                body: p
+            }, weight);
+        }
+        result
     }
+
+    #[track_caller]
+    pub fn seq<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, weight: usize, callback: PatternCallback) {
+        self.pattern_list.seq(*Location::caller(), callback, weight);
+    }
+
+    #[track_caller]
+    pub fn ser_min_max<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, weight: usize, probability: u8, callback: PatternCallback, minimum: usize, maximum: usize) {
+        self.pattern_list.series(*Location::caller(), probability, callback, minimum, Some(maximum), weight);
+    }
+
+    #[track_caller]
+    pub fn ser_min<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, weight: usize, probability: u8, callback: PatternCallback, minimum: usize) {
+        self.pattern_list.series(*Location::caller(), probability, callback, minimum, None, weight);
+    }
+
+    #[track_caller]
+    pub fn ser_max<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, weight: usize, probability: u8, callback: PatternCallback, maximum: usize) {
+        self.pattern_list.series(*Location::caller(), probability, callback, 0, Some(maximum), weight);
+    }
+
+    #[track_caller]
+    pub fn ser<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, weight: usize, probability: u8, callback: PatternCallback) {
+        self.pattern_list.series(*Location::caller(), probability, callback, 0, None, weight);
+    }
+
+    #[track_caller]
+    pub fn opt<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, weight: usize, probability: u8, callback: PatternCallback) {
+        self.pattern_list.opt(*Location::caller(), probability, callback, weight);
+    }
+
+    #[track_caller]
+    /**
+    # Panics
+
+    Panics if no choices are added in the callback.
+    */
+    pub fn choice<BranchCallback: Fn(&mut ChoiceBuilder)>(&mut self, weight: usize, callback: BranchCallback) {
+        self.pattern_list.choice(*Location::caller(), callback, weight);
+    }
+
+    /**
+    A tree is a branching pattern, where each branch consists of a head, tail and a weight. If the branch is chosen, the head pattern is generated, followed by the tail. However, when validating, only the head is matched to determine if it's the correct branch. If the head fails to match, the branch is assumed to be wrong and the validation goes onto the next branch. If the head matches, but the tail doesn't, then the whole tree doesn't match. If none of the heads match, then the tree also fails to match. If you don't need the tail, just add an empty pattern.
+
+    # Panics
+
+    Panics if no branches are added to the tree in the callback.
+    */
+    #[track_caller]
+    pub fn tree<BranchCallback: Fn(&mut TreeBuilder)>(&mut self, weight: usize, callback: BranchCallback) {
+        self.pattern_list.tree(*Location::caller(), callback, weight);
+    }
+
+    #[track_caller]
+    pub fn case<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, weight: usize, initial_phoneme: &'static str, callback: BranchCallback) {
+        self.pattern_list.case_opt(*Location::caller(), initial_phoneme, false, callback, weight);
+    }
+
+    #[track_caller]
+    pub fn case_nodup<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, weight: usize, initial_phoneme: &'static str, callback: BranchCallback) {
+        self.pattern_list.case_opt(*Location::caller(), initial_phoneme, true, callback, weight);
+    }
+
+
+    #[track_caller]
+    pub fn case_env(&mut self, weight: usize, initial_phoneme: &'static str, environment: &'static str) {
+        self.pattern_list.case_env_opt(*Location::caller(), initial_phoneme, false, environment, weight);
+    }
+
+    #[track_caller]
+    pub fn case_env_nodup(&mut self, weight: usize, initial_phoneme: &'static str, environment: &'static str) {
+        self.pattern_list.case_env_opt(*Location::caller(), initial_phoneme, true, environment, weight);
+    }
+
+    #[track_caller]
+    pub fn rule(&mut self, weight: usize, name: &'static str) {
+        self.pattern_list.rule(*Location::caller(), name, weight);
+    }
+
+    #[track_caller]
+    pub fn set(&mut self, weight: usize, name: &'static str) {
+        self.pattern_list.set_opt(*Location::caller(), name, false, weight);
+    }
+
+    #[track_caller]
+    pub fn set_nodup(&mut self, weight: usize, name: &'static str) {
+        self.pattern_list.set_opt(*Location::caller(), name, true, weight);
+    }
+
+    #[track_caller]
+    pub fn done(&mut self, weight: usize) {
+        self.pattern_list.done(*Location::caller(), weight);
+    }
+
+
 }
 
 pub struct TreeBuilder {
@@ -462,48 +595,124 @@ impl TreeBuilder {
 
 
 pub struct CaseEnvironmentBuilder {
-    branches: Vec<CaseEnvironmentBranch>,
-    else_: Option<Pattern>
+    pattern_list: PatternList<&'static str>,
 }
 
 impl CaseEnvironmentBuilder {
 
-    fn build<BranchCallback: Fn(&mut Self)>(defined_at: Location<'static>, callback: BranchCallback) -> CaseEnvironment {
-        let mut builder = Self {
-            branches: Vec::new(),
-            else_: None
-        };
-        callback(&mut builder);
-
-        CaseEnvironment {
-            branches: builder.branches,
-            else_: builder.else_.expect("The environment at least needs an else."),
-            defined_at
+    fn new() -> CaseEnvironmentBuilder {
+        Self {
+            pattern_list: PatternList(Vec::new())
         }
 
     }
 
-    #[track_caller]
-    pub fn branch<Callback: Fn(&mut PatternBuilder)>(&mut self, condition_set: &'static str, body_cb: Callback) {
-        let defined_at = *Location::caller();
 
-        let mut body = PatternBuilder::new();
-        body_cb(&mut body);
-        self.branches.push(CaseEnvironmentBranch {
-            condition_set,
-            body: body.flatten(defined_at),
-            //defined_at,
-        })
+    fn branches(self) -> Vec<CaseEnvironmentBranch> {
+        let mut result = Vec::new();
+        for (p,condition_set) in self.pattern_list.0 {
+            result.push(CaseEnvironmentBranch {
+                condition_set,
+                body: p,
+                //defined_at,
+            });
+        }
+        result
     }
 
     #[track_caller]
-    pub fn else_<Callback: Fn(&mut PatternBuilder)>(&mut self, body_cb: Callback) {
-        let defined_at = *Location::caller();
-
-        let mut body = PatternBuilder::new();
-        body_cb(&mut body);
-        self.else_ = Some(body.flatten(defined_at))
+    pub fn seq<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, condition_set: &'static str, callback: PatternCallback) {
+        self.pattern_list.seq(*Location::caller(), callback, condition_set);
     }
+
+    #[track_caller]
+    pub fn ser_min_max<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, condition_set: &'static str, probability: u8, callback: PatternCallback, minimum: usize, maximum: usize) {
+        self.pattern_list.series(*Location::caller(), probability, callback, minimum, Some(maximum), condition_set);
+    }
+
+    #[track_caller]
+    pub fn ser_min<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, condition_set: &'static str, probability: u8, callback: PatternCallback, minimum: usize) {
+        self.pattern_list.series(*Location::caller(), probability, callback, minimum, None, condition_set);
+    }
+
+    #[track_caller]
+    pub fn ser_max<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, condition_set: &'static str, probability: u8, callback: PatternCallback, maximum: usize) {
+        self.pattern_list.series(*Location::caller(), probability, callback, 0, Some(maximum), condition_set);
+    }
+
+    #[track_caller]
+    pub fn ser<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, condition_set: &'static str, probability: u8, callback: PatternCallback) {
+        self.pattern_list.series(*Location::caller(), probability, callback, 0, None, condition_set);
+    }
+
+    #[track_caller]
+    pub fn opt<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, condition_set: &'static str, probability: u8, callback: PatternCallback) {
+        self.pattern_list.opt(*Location::caller(), probability, callback, condition_set);
+    }
+
+    #[track_caller]
+    /**
+    # Panics
+
+    Panics if no choices are added in the callback.
+    */
+    pub fn choice<BranchCallback: Fn(&mut ChoiceBuilder)>(&mut self, condition_set: &'static str, callback: BranchCallback) {
+        self.pattern_list.choice(*Location::caller(), callback, condition_set);
+    }
+
+    /**
+    A tree is a branching pattern, where each branch consists of a head, tail and a weight. If the branch is chosen, the head pattern is generated, followed by the tail. However, when validating, only the head is matched to determine if it's the correct branch. If the head fails to match, the branch is assumed to be wrong and the validation goes onto the next branch. If the head matches, but the tail doesn't, then the whole tree doesn't match. If none of the heads match, then the tree also fails to match. If you don't need the tail, just add an empty pattern.
+
+    # Panics
+
+    Panics if no branches are added to the tree in the callback.
+    */
+    #[track_caller]
+    pub fn tree<BranchCallback: Fn(&mut TreeBuilder)>(&mut self, condition_set: &'static str, callback: BranchCallback) {
+        self.pattern_list.tree(*Location::caller(), callback, condition_set);
+    }
+
+    #[track_caller]
+    pub fn case<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, condition_set: &'static str, initial_phoneme: &'static str, callback: BranchCallback) {
+        self.pattern_list.case_opt(*Location::caller(), initial_phoneme, false, callback, condition_set);
+    }
+
+    #[track_caller]
+    pub fn case_nodup<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, condition_set: &'static str, initial_phoneme: &'static str, callback: BranchCallback) {
+        self.pattern_list.case_opt(*Location::caller(), initial_phoneme, true, callback, condition_set);
+    }
+
+
+    #[track_caller]
+    pub fn case_env(&mut self, condition_set: &'static str, initial_phoneme: &'static str, environment: &'static str) {
+        self.pattern_list.case_env_opt(*Location::caller(), initial_phoneme, false, environment, condition_set);
+    }
+
+    #[track_caller]
+    pub fn case_env_nodup(&mut self, condition_set: &'static str, initial_phoneme: &'static str, environment: &'static str) {
+        self.pattern_list.case_env_opt(*Location::caller(), initial_phoneme, true, environment, condition_set);
+    }
+
+    #[track_caller]
+    pub fn rule(&mut self, condition_set: &'static str, name: &'static str) {
+        self.pattern_list.rule(*Location::caller(), name, condition_set);
+    }
+
+    #[track_caller]
+    pub fn set(&mut self, condition_set: &'static str, name: &'static str) {
+        self.pattern_list.set_opt(*Location::caller(), name, false, condition_set);
+    }
+
+    #[track_caller]
+    pub fn set_nodup(&mut self, condition_set: &'static str, name: &'static str) {
+        self.pattern_list.set_opt(*Location::caller(), name, true, condition_set);
+    }
+
+    #[track_caller]
+    pub fn done(&mut self, condition_set: &'static str) {
+        self.pattern_list.done(*Location::caller(), condition_set);
+    }
+
 
 }
 
@@ -530,14 +739,15 @@ impl PatternSet {
     }
 
     #[track_caller]
-    pub(crate) fn pattern<Callback: Fn(&mut PatternBuilder)>(&mut self, name: &'static str, callback: Callback) {
+    pub(crate) fn pattern<Callback: Fn(&mut PatternBuilder)>(&mut self, name: &'static str, callback: Callback) -> Result<(),ElbieError> {
         let mut builder = PatternBuilder::new();
         callback(&mut builder);
         let pattern = builder.flatten(*Location::caller());
         match self.patterns.entry(name.to_owned()) {
-            Entry::Occupied(_) => panic!("A pattern named '{name}' already exists."),
+            Entry::Occupied(_) => return Err(ElbieError::PatternAlreadyExists(name)),
             Entry::Vacant(vacant_entry) => _ = vacant_entry.insert(pattern),
         }
+        Ok(())
     }
 
     pub(crate) fn get(&self, name: &'static str) -> Result<&Pattern,ElbieError> {
@@ -549,12 +759,18 @@ impl PatternSet {
     }
 
     #[track_caller]
-    pub(crate) fn case_environment<Callback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, name: &'static str, callback: Callback) {
-        let environment = CaseEnvironmentBuilder::build(*Location::caller(), callback);
+    pub(crate) fn case_environment<Callback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, name: &'static str, callback: Callback) -> Result<(),ElbieError> {
+        let mut builder = CaseEnvironmentBuilder::new();
+        callback(&mut builder);
+        let environment = CaseEnvironment {
+            branches: builder.branches(),
+            defined_at: *Location::caller(),
+        };
         match self.case_environments.entry(name.to_owned()) {
-            Entry::Occupied(_) => panic!("An environment named '{name}' already exists."),
+            Entry::Occupied(_) => return Err(ElbieError::EnvironmentAlreadyExists(name)),
             Entry::Vacant(vacant_entry) => _ = vacant_entry.insert(environment),
         }
+        Ok(())
     }
 
     pub(crate) fn get_case_environment(&self, name: &'static str) -> Result<&CaseEnvironment,ElbieError> {

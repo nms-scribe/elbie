@@ -43,6 +43,7 @@ use crate::phonotactics::PatternSet;
 use crate::phonotactics::PatternBuilder;
 use crate::validation::ValidationTraceCallback;
 use crate::validation::ValidWordElement;
+use crate::phonotactics::CaseEnvironmentBuilder;
 
 
 
@@ -70,7 +71,6 @@ pub struct Language {
   phoneme_behavior: HashMap<Rc<Phoneme>,PhonemeBehavior>,
   orthographies: Vec<&'static str>,
   #[allow(deprecated)]
-  environments: HashMap<&'static str,Vec<EnvironmentBranch>>,
   patterns: PatternSet,
   tables: Vec<TableEntry>
 }
@@ -81,7 +81,6 @@ impl Language {
     #[deprecated(since = "0.4.0", note = "Use `with_pattern` instead. The phonotactics system was overhauled, and this effects constructor parameters. If you don't have time to convert yours, make sure you check out the crate from git with tag 'v0.3.2'.")]
     pub fn new(name: &'static str, initial_phoneme_set: &'static str, initial_environment: &'static str, orthographies: Vec<&'static str>) -> Self {
       let inventory = Inventory::new();
-      let environments = HashMap::new();
       let phoneme_behavior = HashMap::new();
       let tables = vec![];
       let patterns = PatternSet::new(|rules| {
@@ -93,7 +92,6 @@ impl Language {
         inventory,
         phoneme_behavior,
         orthographies,
-        environments,
         patterns,
         tables
       }
@@ -102,7 +100,6 @@ impl Language {
 
     pub fn with_pattern<Pattern: Fn(&mut PatternBuilder)>(name: &'static str, orthographies: Vec<&'static str>, initial_pattern: Pattern) -> Self {
         let inventory = Inventory::new();
-        let environments = HashMap::new();
         let phoneme_behavior = HashMap::new();
         let tables = vec![];
         let patterns = PatternSet::new(initial_pattern);
@@ -111,7 +108,6 @@ impl Language {
           inventory,
           phoneme_behavior,
           orthographies,
-          environments,
           patterns,
           tables
         }
@@ -212,7 +208,7 @@ impl Language {
     }
 
 
-    #[deprecated(since = "0.4.0", note = "Use the new patterns API available with `add_pattern` instead. If you don't have time to convert yours, make sure you check out the crate from git with tag 'v0.3.2'.")]
+    #[deprecated(since = "0.4.0", note = "Use the new patterns API available with `add_pattern` and `add_pattern_environment` instead. If you don't have time to convert yours, make sure you check out the crate from git with tag 'v0.3.2'.")]
     #[allow(deprecated)]
     pub fn add_environment(&mut self, name: &'static str, environment: &[EnvironmentBranch]) -> Result<(),ElbieError> {
 
@@ -220,44 +216,38 @@ impl Language {
           for branch in environment {
               let set = branch.set();
               let choices = branch.choices();
-              rule.branch(set, |rule| {
-                  rule.choice(|choice| {
-                      for (item,weight) in choices.items() {
-                          choice.add(*weight, |head| {
-                              match item {
-                                EnvironmentChoice::Done => head.done(),
-                                // set to generate next phoneme from, next environment to follow, whether to allow duplicate phoneme to be generated
-                                EnvironmentChoice::Continuing(generate_set, next_environment, allow_duplicates) => {
-                                    if *allow_duplicates {
-                                        #[allow(deprecated)]
-                                        head.case_env(generate_set, next_environment);
-                                    } else {
-                                        #[allow(deprecated)]
-                                        head.case_env_nodup(generate_set, next_environment);
-                                    }
-                                },
-                            }
-                          });
-                      }
-                  });
+              rule.choice(set, |choice| {
+                for (item,weight) in choices.items() {
+                    match item {
+                    EnvironmentChoice::Done => choice.done(*weight),
+                    // set to generate next phoneme from, next environment to follow, whether to allow duplicate phoneme to be generated
+                    EnvironmentChoice::Continuing(generate_set, next_environment, allow_duplicates) => {
+                        if *allow_duplicates {
+                            #[allow(deprecated)]
+                            choice.case_env(*weight, generate_set, next_environment);
+                        } else {
+                            #[allow(deprecated)]
+                            choice.case_env_nodup(*weight,generate_set, next_environment);
+                        }
+                    },
+                    }
+                }
               });
           }
-          rule.else_(|else_| {
-              else_.done();
-          });
-      });
-
-      if self.environments.contains_key(name) {
-        Err(ElbieError::EnvironmentAlreadyExists(name))
-      } else {
-        _ = self.environments.insert(name,environment.to_vec());
-        Ok(())
-      }
+      })
 
     }
 
-    pub fn add_pattern<Pattern: Fn(&mut PatternBuilder)>(&mut self, name: &'static str, pattern: Pattern) {
-        self.patterns.pattern(name, pattern);
+    // track caller allows us to catch the locations of the calls, to help the user debug.
+    #[track_caller]
+    pub fn add_pattern<Pattern: Fn(&mut PatternBuilder)>(&mut self, name: &'static str, pattern: Pattern) -> Result<(),ElbieError> {
+        self.patterns.pattern(name, pattern)
+    }
+
+    // track caller allows us to catch the locations of the calls, to help the user debug.
+    #[track_caller]
+    pub fn add_pattern_environment<Callback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, name: &'static str, callback: Callback) -> Result<(),ElbieError> {
+        self.patterns.case_environment(name, callback)
     }
 
     pub fn new_table(&mut self, id: &'static str, set: &'static str, caption: &'static str) -> TableBuilder {

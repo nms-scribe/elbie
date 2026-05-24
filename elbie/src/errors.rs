@@ -24,6 +24,8 @@ pub enum ElbieError {
     PhonemeExistsWithSetName(&'static str),
     #[error( "Environment {0} already exists.")]
     EnvironmentAlreadyExists(&'static str),
+    #[error( "Pattern {0} already exists.")]
+    PatternAlreadyExists(&'static str),
     #[error("Unknown environment {0}.")]
     UnknownEnvironment(&'static str),
     #[error("Environment {0} is missing some branch environment choices.")]
@@ -42,6 +44,8 @@ pub enum ElbieError {
     NoChoiceChoices(Location<'static>),
     #[error("No tree branches could be chosen (Is the tree empty?).")]
     NoTreeChoices(Location<'static>),
+    #[error("No catch-all (PHONEME case) in environment")]
+    NoCatchAllInEnvironment(Location<'static>),
 
     // word validation errors //
     #[error("Word is empty")]

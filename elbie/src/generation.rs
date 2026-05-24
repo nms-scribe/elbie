@@ -19,32 +19,12 @@ use crate::phonotactics::TerminateWord;
 use crate::phonotactics::RuleReference;
 use crate::phonotactics::PatternSet;
 
-// TODO: A rewrite of the generation/validation system. I'm not sure how to integrate, but this should look much more like the transformation thing, so much easier to do.
-
-// TODO: I think I do need a "choice" instead of the tree, at least for the old environment conversion.
-
-// TODO: Converting to the new system in a way that I don't need to mess up old programs.
-// [X] Tag the git commit so we can go back to it. (v0.3.2)
-// [X] Language::new will create the pattern by declaring a simple pattern that is just an environment switch.
-// [X] Language::add_environment will add environments to the patternset that look very much like the old one, but it will keep the old stuff at first.
-// [X] change generation code to use new patterns instead.
-// [X] test generation and validation of goblin over and over to make sure that generated phonemes look the same in the new system.
-// [X] change validation code to work with the new patterns. -- This is more difficult since I've change the explain and validation API to fit the new structure.
-// [X] Test that everything in goblin is working the same.
-// [X] Deprecate the old API, but do not delete. In the deprecation message, report that they can use the tag made above to get the old API, but that tag is unsupported so it's best if they convert to the new.
-// [X] Also probably deprecate the named environments in the new API. Those are only there to support the deprecated API, and I'm not sure they're that useful.
-// [X] Add in an API that lets you use the patternset system directly.
-// [X] Separate this into three modules: patterns.rs, generation.rs, and validation.rs
-// [ ] Start converting goblin to making use of the new API, and possibly even some of it's new features.
-// [ ] Time to set up rustfmt rules so that I can get this thing easier to contribute to.
-
-// TODO: Get rid of panics and replace with ElbieErrors.
+// TODO: Time to set up rustfmt so that I can make it easier to contribute to. As long as I can check the config into git.
 
 /* NOTE:
 
 Probabilities in the patterns below are marked by u8 instead of f64. To check a probability, a random u8 is generated, and if the value is <= the probability, then it is true. This is slightly more efficient since I'm not bogged down by floating point precission issues, and I don't need to worry about someone adding in values higher than 1.0.
 
-Weight in the patterns below are found in collections of choices, branches, etc. All weights in the patterns must add up to u8::MAX. When an item is chosen, a random number is generated and the items are evaluated in order, adding up their weights, until one's running weight is that value or higher.
 */
 
 fn is_probable(probability: u8, rng: &mut ThreadRng) -> bool {
@@ -156,7 +136,7 @@ impl CaseEnvironment {
                 return branch.body.extend_word(language, rng, is_complete, result)
             }
         }
-        self.else_.extend_word(language, rng, is_complete, result)
+        Err(ElbieError::NoCatchAllInEnvironment(self.defined_at))
     }
 
 }

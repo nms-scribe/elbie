@@ -5,8 +5,6 @@ use core::iter;
 use elbie::phoneme::InventoryLoader as _;
 use core::slice::Iter;
 use elbie::phoneme::PHONEME;
-use elbie::phonotactics::EnvironmentBranch;
-use elbie::phonotactics::EnvironmentChoice;
 use elbie::phoneme_table::TableOption;
 use elbie::errors::ElbieError;
 use elbie::phoneme::ipa::CONSONANT;
@@ -146,7 +144,9 @@ result.push('n');
 }
 
 pub(crate) fn create_goblin_language() -> Result<Language,ElbieError> {
-    let mut language = Language::new(GOBLIN,INITIAL_ONSET_PHONEME,ONSET,vec!["Transcription"]);
+    let mut language = Language::with_pattern(GOBLIN,vec!["Transcription"],|pattern| {
+        pattern.case_env(INITIAL_ONSET_PHONEME, ONSET);
+    });
 
     _ = language.add_phoneme(M,&[CONSONANT,LABIAL,BILABIAL,NASAL,UNASPIRATED,VOICED])?;
     _ = language.add_phoneme(N,&[CONSONANT,CORONAL,ALVEOLAR,NASAL,UNASPIRATED,VOICED])?;
@@ -209,50 +209,48 @@ pub(crate) fn create_goblin_language() -> Result<Language,ElbieError> {
     language.add_exclusion(CODA_AFTER_APPROXIMANT, NASAL_OR_OBSTRUENT, &[LEFT_TAIL_N_AT_LEFT, V_ASPIR, Z_ASPIR, H])?;
     language.add_union(TAP_OR_GLOTTAL, &[TAP_OR_FLAP, GLOTTAL])?;
 
-    language.add_environment(ONSET, &[
-        EnvironmentBranch::new(VOWEL, &[
-            (EnvironmentChoice::Continuing(ONSET_CONSONANT,ONSET,true),10), // Duplicates allowed here because a duplicate is impossible, improves efficiency
-            (EnvironmentChoice::Continuing(CODA_CONSONANT,CODA,true),50),
-            (EnvironmentChoice::Done,40)
-        ]),
-        EnvironmentBranch::new(OBSTRUENT_EXCEPT_GLOTTAL, &[
-            (EnvironmentChoice::Continuing(APPROXIMANT,ONSET,true),50),
-            (EnvironmentChoice::Continuing(VOWEL,ONSET,true),50)
-        ]),
-        EnvironmentBranch::new(PHONEME, &[
-            (EnvironmentChoice::Continuing(VOWEL,ONSET,true),100)
-        ])
-    ])?;
+    language.add_pattern_environment(ONSET, |environment| {
+        environment.choice(VOWEL, |choice| {
+            choice.case_env(10, ONSET_CONSONANT, ONSET);
+            choice.case_env(50, CODA_CONSONANT, CODA);
+            choice.done(50)
+        });
+        environment.choice(OBSTRUENT_EXCEPT_GLOTTAL, |choice| {
+            choice.case_env(50, APPROXIMANT, ONSET);
+            choice.case_env(50, VOWEL,ONSET)
+        });
+        environment.case_env(PHONEME, VOWEL, ONSET);
+    })?;
 
-    language.add_environment(CODA, &[
-        EnvironmentBranch::new(TAP_OR_GLOTTAL, &[
-            (EnvironmentChoice::Continuing(VOWEL,ONSET,true),100)
-        ]),
-        EnvironmentBranch::new(LABIAL_NASAL, &[
-            (EnvironmentChoice::Continuing(CODA_LABIAL_OBSTRUENT,CODA,true),10),
-            (EnvironmentChoice::Continuing(ONSET_PHONEME,ONSET,false),10),
-            (EnvironmentChoice::Done,80)
-        ]),
-        EnvironmentBranch::new(CORONAL_NASAL, &[
-            (EnvironmentChoice::Continuing(CODA_CORONAL_OBSTRUENT,CODA,true),10),
-            (EnvironmentChoice::Continuing(ONSET_PHONEME,ONSET,false),10),
-            (EnvironmentChoice::Done,80)
-        ]),
-        EnvironmentBranch::new(DORSAL_NASAL, &[
-            (EnvironmentChoice::Continuing(CODA_DORSAL_OBSTRUENT,CODA,true),10),
-            (EnvironmentChoice::Continuing(ONSET_PHONEME,ONSET,false),10),
-            (EnvironmentChoice::Done,80)
-        ]),
-        EnvironmentBranch::new(APPROXIMANT, &[
-            (EnvironmentChoice::Continuing(CODA_AFTER_APPROXIMANT,CODA,true),10),
-            (EnvironmentChoice::Continuing(ONSET_PHONEME,ONSET,false),10),
-            (EnvironmentChoice::Done,80)
-        ]),
-        EnvironmentBranch::new(PHONEME, &[
-            (EnvironmentChoice::Continuing(ONSET_PHONEME,ONSET,false),20),
-            (EnvironmentChoice::Done,80)
-        ])
-    ])?;
+    language.add_pattern_environment(CODA, |environment| {
+        environment.case_env(TAP_OR_GLOTTAL, VOWEL, ONSET);
+        environment.choice(LABIAL_NASAL, |choice| {
+            choice.case_env(10, CODA_LABIAL_OBSTRUENT, CODA);
+            choice.case_env_nodup(10, ONSET_PHONEME, ONSET);
+            choice.done(80);
+        });
+        environment.choice(CORONAL_NASAL, |choice| {
+            choice.case_env(10, CODA_CORONAL_OBSTRUENT, CODA);
+            choice.case_env_nodup(10, ONSET_PHONEME, ONSET);
+            choice.done(80);
+        });
+        environment.choice(DORSAL_NASAL, |choice| {
+            choice.case_env(10, CODA_DORSAL_OBSTRUENT, CODA);
+            choice.case_env_nodup(10, ONSET_PHONEME, ONSET);
+            choice.done(80);
+        });
+        environment.choice(APPROXIMANT, |choice| {
+            choice.case_env(10, CODA_AFTER_APPROXIMANT, CODA);
+            choice.case_env_nodup(10, ONSET_PHONEME, ONSET);
+            choice.done(80);
+        });
+        environment.choice(PHONEME, |choice| {
+            choice.case_env_nodup(20, ONSET_PHONEME, ONSET);
+            choice.done(80);
+        });
+
+    })?;
+
 
     language.new_table("consonant", CONSONANT, "Consonants (unvoiced ~ voiced / unaspirated ~ aspirated)").
         axis(&[("Bilabial",BILABIAL),("Labiodental",LABIODENTAL),("Dental",DENTAL),("Alveolar",ALVEOLAR),

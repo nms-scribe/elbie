@@ -439,13 +439,8 @@ impl CaseEnvironment {
             }
         }
 
-        if self.else_.validate_word(language, word, trace, explanation)?.is_ok() {
-            trace.success(self.defined_at, word.next_index(), ValidationTraceEnd::CaseEnvironment(None),explanation);
-            Ok(Ok(()))
-        } else {
-            trace.failure(self.defined_at,word.next_index(),ValidationTraceEnd::CaseEnvironment(None),ValidationFailure::NoCaseBranchesMatched);
-            Ok(Err(()))
-        }
+        trace.failure(self.defined_at,word.next_index(),ValidationTraceEnd::CaseEnvironment(None),ValidationFailure::NoCaseBranchesMatched);
+        Ok(Err(()))
     }
 }
 
