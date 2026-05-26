@@ -1,4 +1,4 @@
-use std::iter::Enumerate;
+use core::iter::Enumerate;
 
 /* A simple iterator that lets me access the next index when enumerating. */
 

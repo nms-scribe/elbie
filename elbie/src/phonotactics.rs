@@ -1,5 +1,5 @@
 use crate::weighted_vec::WeightedVec;
-use std::panic::Location;
+use core::panic::Location;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use crate::errors::ElbieError;
@@ -89,22 +89,6 @@ pub(crate) struct Choice {
     pub defined_at: Location<'static>
 }
 
-
-#[derive(Debug)]
-pub(crate) struct TreeBranch {
-    pub head: Pattern,
-    pub tail: Pattern
-}
-
-
-#[derive(Debug)]
-pub(crate) struct Tree {
-    pub branches: WeightedVec<TreeBranch>,
-    pub defined_at: Location<'static>
-}
-
-
-
 #[derive(Debug)]
 pub(crate) struct AddPhoneme {
     pub name: &'static str,
@@ -161,7 +145,6 @@ pub(crate) enum Pattern {
     Series(Box<Series>),
     Option(Box<Optional>),
     Choice(Choice),
-    Tree(Tree),
     Case(Box<Case>),
     RuleReference(RuleReference),
     Set(AddPhoneme),
@@ -178,7 +161,6 @@ impl Pattern {
             Self::Series(series) => series.defined_at,
             Self::Option(optional) => optional.defined_at,
             Self::Choice(choice) => choice.defined_at,
-            Self::Tree(tree) => tree.defined_at,
             Self::Case(case) => case.defined_at,
             Self::RuleReference(reference) => reference.defined_at,
             Self::Set(add_phoneme) => add_phoneme.defined_at,
@@ -245,26 +227,6 @@ impl<Extra> PatternList<Extra> {
         }
         self.0.push((Pattern::Choice(Choice {
             branches: builder.choices(),
-            defined_at
-        }),extra));
-    }
-
-    /**
-    A tree is a branching pattern, where each branch consists of a head, tail and a weight. If the branch is chosen, the head pattern is generated, followed by the tail. However, when validating, only the head is matched to determine if it's the correct branch. If the head fails to match, the branch is assumed to be wrong and the validation goes onto the next branch. If the head matches, but the tail doesn't, then the whole tree doesn't match. If none of the heads match, then the tree also fails to match. If you don't need the tail, just add an empty pattern.
-
-    # Panics
-
-    Panics if no branches are added to the tree in the callback.
-    */
-    fn tree<BranchCallback: Fn(&mut TreeBuilder)>(&mut self, defined_at: Location<'static>, callback: BranchCallback, extra: Extra) {
-        let mut builder = TreeBuilder::new();
-        callback(&mut builder);
-        if builder.branches.items().is_empty() {
-            // I don't want to return an error here, as that would add undue complications on the closures used to build patterns. FUTURE: reconsider?
-            panic!("Branches are empty.")
-        }
-        self.0.push((Pattern::Tree(Tree {
-            branches: builder.branches,
             defined_at
         }),extra));
     }
@@ -339,7 +301,7 @@ impl PatternBuilder {
     }
 
     fn patterns(self) -> Vec<Pattern> {
-        self.pattern_list.0.into_iter().map(|(p,_)| p).collect()
+        self.pattern_list.0.into_iter().map(|(p,())| p).collect()
     }
 
     fn flatten(mut self, defined_at: Location<'static>) -> Pattern {
@@ -391,17 +353,6 @@ impl PatternBuilder {
         self.pattern_list.choice(*Location::caller(), callback, ());
     }
 
-    /**
-    A tree is a branching pattern, where each branch consists of a head, tail and a weight. If the branch is chosen, the head pattern is generated, followed by the tail. However, when validating, only the head is matched to determine if it's the correct branch. If the head fails to match, the branch is assumed to be wrong and the validation goes onto the next branch. If the head matches, but the tail doesn't, then the whole tree doesn't match. If none of the heads match, then the tree also fails to match. If you don't need the tail, just add an empty pattern.
-
-    # Panics
-
-    Panics if no branches are added to the tree in the callback.
-    */
-    #[track_caller]
-    pub fn tree<BranchCallback: Fn(&mut TreeBuilder)>(&mut self, callback: BranchCallback) {
-        self.pattern_list.tree(*Location::caller(), callback, ());
-    }
 
     #[track_caller]
     pub fn case<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, initial_phoneme: &'static str, callback: BranchCallback) {
@@ -504,21 +455,10 @@ impl ChoiceBuilder {
 
     Panics if no choices are added in the callback.
     */
-    pub fn choice<BranchCallback: Fn(&mut ChoiceBuilder)>(&mut self, weight: usize, callback: BranchCallback) {
+    pub fn choice<BranchCallback: Fn(&mut Self)>(&mut self, weight: usize, callback: BranchCallback) {
         self.pattern_list.choice(*Location::caller(), callback, weight);
     }
 
-    /**
-    A tree is a branching pattern, where each branch consists of a head, tail and a weight. If the branch is chosen, the head pattern is generated, followed by the tail. However, when validating, only the head is matched to determine if it's the correct branch. If the head fails to match, the branch is assumed to be wrong and the validation goes onto the next branch. If the head matches, but the tail doesn't, then the whole tree doesn't match. If none of the heads match, then the tree also fails to match. If you don't need the tail, just add an empty pattern.
-
-    # Panics
-
-    Panics if no branches are added to the tree in the callback.
-    */
-    #[track_caller]
-    pub fn tree<BranchCallback: Fn(&mut TreeBuilder)>(&mut self, weight: usize, callback: BranchCallback) {
-        self.pattern_list.tree(*Location::caller(), callback, weight);
-    }
 
     #[track_caller]
     pub fn case<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, weight: usize, initial_phoneme: &'static str, callback: BranchCallback) {
@@ -564,43 +504,13 @@ impl ChoiceBuilder {
 
 }
 
-pub struct TreeBuilder {
-    branches: WeightedVec<TreeBranch>
-}
-
-impl TreeBuilder {
-
-    const fn new() -> Self {
-        Self {
-            branches: WeightedVec::new()
-        }
-    }
-
-    #[track_caller]
-    /// see PhonoPatternBuilder::tree for an explanation of the head and the tail patterns.
-    pub fn add<HeadCallback: Fn(&mut PatternBuilder), TailCallback: Fn(&mut PatternBuilder)>(&mut self, weight: usize, head_cb: HeadCallback, tail_cb: TailCallback) {
-        let defined_at = *Location::caller();
-
-        let mut head = PatternBuilder::new();
-        head_cb(&mut head);
-        let mut tail = PatternBuilder::new();
-        tail_cb(&mut tail);
-        self.branches.push(TreeBranch {
-            head: head.flatten(defined_at),
-            tail: tail.flatten(defined_at),
-            //defined_at
-        },weight)
-    }
-}
-
-
 pub struct CaseEnvironmentBuilder {
     pattern_list: PatternList<&'static str>,
 }
 
 impl CaseEnvironmentBuilder {
 
-    fn new() -> CaseEnvironmentBuilder {
+    const fn new() -> Self {
         Self {
             pattern_list: PatternList(Vec::new())
         }
@@ -660,25 +570,14 @@ impl CaseEnvironmentBuilder {
         self.pattern_list.choice(*Location::caller(), callback, condition_set);
     }
 
-    /**
-    A tree is a branching pattern, where each branch consists of a head, tail and a weight. If the branch is chosen, the head pattern is generated, followed by the tail. However, when validating, only the head is matched to determine if it's the correct branch. If the head fails to match, the branch is assumed to be wrong and the validation goes onto the next branch. If the head matches, but the tail doesn't, then the whole tree doesn't match. If none of the heads match, then the tree also fails to match. If you don't need the tail, just add an empty pattern.
-
-    # Panics
-
-    Panics if no branches are added to the tree in the callback.
-    */
-    #[track_caller]
-    pub fn tree<BranchCallback: Fn(&mut TreeBuilder)>(&mut self, condition_set: &'static str, callback: BranchCallback) {
-        self.pattern_list.tree(*Location::caller(), callback, condition_set);
-    }
 
     #[track_caller]
-    pub fn case<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, condition_set: &'static str, initial_phoneme: &'static str, callback: BranchCallback) {
+    pub fn case<BranchCallback: Fn(&mut Self)>(&mut self, condition_set: &'static str, initial_phoneme: &'static str, callback: BranchCallback) {
         self.pattern_list.case_opt(*Location::caller(), initial_phoneme, false, callback, condition_set);
     }
 
     #[track_caller]
-    pub fn case_nodup<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, condition_set: &'static str, initial_phoneme: &'static str, callback: BranchCallback) {
+    pub fn case_nodup<BranchCallback: Fn(&mut Self)>(&mut self, condition_set: &'static str, initial_phoneme: &'static str, callback: BranchCallback) {
         self.pattern_list.case_opt(*Location::caller(), initial_phoneme, true, callback, condition_set);
     }
 

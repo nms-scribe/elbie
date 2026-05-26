@@ -1,17 +1,16 @@
 use std::rc::Rc;
 use crate::phoneme::Phoneme;
-use std::fmt::Display;
+use core::fmt::Display;
 use core::fmt;
-use std::panic::Location;
+use core::panic::Location;
 use crate::language::Language;
 use crate::enumerate_with_count::EnumerateCount;
-use std::slice::Iter;
+use core::slice::Iter;
 use crate::errors::ElbieError;
 use crate::phonotactics::Sequence;
 use crate::phonotactics::Series;
 use crate::phonotactics::Optional;
 use crate::phonotactics::Choice;
-use crate::phonotactics::Tree;
 use crate::phonotactics::AddPhoneme;
 use crate::phonotactics::CaseEnvironment;
 use crate::phonotactics::Case;
@@ -33,10 +32,6 @@ pub(crate) enum ValidationFailure {
         count: usize
     },
     NoChoiceBranchesMatched,
-    BranchTailPatternFailed {
-        index: usize
-    },
-    NoTreeBranchesMatched,
     CaseBranchBodyFailed {
         index: usize
     },
@@ -72,8 +67,6 @@ impl Display for ValidationFailure {
             Self::UnexpectedPhoneme { found } => write!(f,"Expected end of word, found {found}."),
             Self::UnexpectedPhonemeAfterPattern { found } => write!(f,"Found phoneme {found} after pattern was complete."),
             Self::NoChoiceBranchesMatched => write!(f,"No branches in choice matched."),
-            Self::BranchTailPatternFailed { index } => write!(f,"Tail pattern in branch {index} failed."),
-            Self::NoTreeBranchesMatched => write!(f,"No branches in tree matched."),
             Self::CaseBranchBodyFailed { index } => write!(f,"Case body pattern {index} failed."),
             Self::NoCaseBranchesMatched => write!(f,"No branches in case matched."),
             Self::CaseEnvironmentFailed => write!(f,"Case environment failed."),
@@ -90,7 +83,6 @@ pub(crate) enum ValidationTraceStart {
     Series,
     Option,
     Choice,
-    Tree,
     // If the value is Some, then the switch called a named environment.
     Case(Option<&'static str>),
     CaseEnvironment,
@@ -104,7 +96,6 @@ impl Display for ValidationTraceStart {
             Self::Series => write!(f,"start series"),
             Self::Option => write!(f,"start option"),
             Self::Choice => write!(f,"start choice"),
-            Self::Tree => write!(f,"start tree"),
             Self::Case(Some(case)) => write!(f,"start case for environment '{case}'"),
             Self::Case(None) => write!(f,"start case"),
             Self::CaseEnvironment => write!(f,"start case environment"),
@@ -122,8 +113,6 @@ pub(crate) enum ValidationTraceEnd {
     Option(bool),
     // number indicates the current branch position
     Choice(usize),
-    // number indicates the current branch position
-    Tree(usize),
     // If the value is Some, then the switch called a named environment.
     Case(Option<&'static str>),
     // number indicates the current branch position, if None then this ended with the else or the initial phoneme.
@@ -142,7 +131,6 @@ impl Display for ValidationTraceEnd {
             Self::Series(count) => write!(f,"end series with count {count}"),
             Self::Option(matched) => write!(f,"end option {} matched", if *matched { "" } else { "not" }),
             Self::Choice(branch) => write!(f,"end choice at branch {branch}"),
-            Self::Tree(branch) => write!(f,"end tree at branch {branch}"),
             Self::Case(Some(environment)) => write!(f,"end case for environment '{environment}'"),
             Self::Case(None) => write!(f,"end case"),
             Self::CaseEnvironment(Some(branch)) => write!(f,"end case environment at branch {branch}"),
@@ -354,32 +342,7 @@ impl ValidateWord for Choice {
 }
 
 
-impl ValidateWord for Tree {
-    fn validate_word(&self, language: &Language, word: &mut EnumerateCount<Iter<Rc<Phoneme>>>, trace: &mut ValidationTraceReporter, explanation: &mut Vec<ValidWordElement>) -> Result<Result<(), ()>, ElbieError> {
-        trace.start(self.defined_at,word.next_index(),ValidationTraceStart::Tree,explanation);
-        for (branch_idx,(branch,_weight)) in self.branches.items().iter().enumerate() {
-            let mut working_word = word.clone();
-            let mut working_explanation = explanation.clone();
-            if branch.head.validate_word(language, &mut working_word, trace, &mut working_explanation)?.is_ok() {
-                *word = working_word;
-                *explanation = working_explanation;
-                if branch.tail.validate_word(language, word, trace, explanation)?.is_err() {
-                    trace.failure(self.defined_at,word.next_index(),ValidationTraceEnd::Tree(branch_idx),ValidationFailure::BranchTailPatternFailed {
-                        index: branch_idx
-                    });
-                    return Ok(Err(()))
-                }
-                trace.success(self.defined_at,word.next_index(),ValidationTraceEnd::Tree(branch_idx),explanation);
-                return Ok(Ok(()))
-            }
-        }
-        // none of the choices matched
-        trace.failure(self.defined_at,word.next_index(),ValidationTraceEnd::Tree(self.branches.items().len()),ValidationFailure::NoTreeBranchesMatched);
-
-        Ok(Err(()))
-    }
-}
-
+#[allow(clippy::multiple_inherent_impl,reason="I want to separate validation and generation from the patterns")]
 impl AddPhoneme {
 
 
@@ -416,6 +379,7 @@ impl ValidateWord for AddPhoneme {
     }
 }
 
+#[allow(clippy::multiple_inherent_impl,reason="I want to separate validation and generation from the patterns")]
 impl CaseEnvironment {
 
     // not a ValidatePattern trait because it requires the phoneme information from the previous pattern.
@@ -510,7 +474,6 @@ impl ValidateWord for Pattern {
             Self::Series(series) => series.validate_word(language, word, trace, explanation),
             Self::Option(optional) => optional.validate_word(language, word, trace, explanation),
             Self::Choice(choice) => choice.validate_word(language, word, trace, explanation),
-            Self::Tree(tree) => tree.validate_word(language, word, trace, explanation),
             Self::Case(switch) => switch.validate_word(language, word, trace, explanation),
             Self::RuleReference(reference) => reference.validate_word(language, word, trace, explanation),
             Self::Set(set) => set.validate_word(language, word, trace, explanation),
@@ -520,6 +483,7 @@ impl ValidateWord for Pattern {
 
 }
 
+#[allow(clippy::multiple_inherent_impl,reason="I want to separate validation and generation from the patterns")]
 impl PatternSet {
 
 

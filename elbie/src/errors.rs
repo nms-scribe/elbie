@@ -42,8 +42,6 @@ pub enum ElbieError {
     UnknownPattern(&'static str),
     #[error("No choices could be chosen (Is the choice empty?).")]
     NoChoiceChoices(Location<'static>),
-    #[error("No tree branches could be chosen (Is the tree empty?).")]
-    NoTreeChoices(Location<'static>),
     #[error("No catch-all (PHONEME case) in environment")]
     NoCatchAllInEnvironment(Location<'static>),
 

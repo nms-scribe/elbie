@@ -10,7 +10,6 @@ use crate::phonotactics::Optional;
 use crate::phonotactics::Pattern;
 use rand::Rng as _;
 use crate::phonotactics::Choice;
-use crate::phonotactics::Tree;
 use crate::phonotactics::AddPhoneme;
 use crate::phonotactics::CaseEnvironment;
 use crate::phonotactics::Case;
@@ -19,7 +18,7 @@ use crate::phonotactics::TerminateWord;
 use crate::phonotactics::RuleReference;
 use crate::phonotactics::PatternSet;
 
-// TODO: Time to set up rustfmt so that I can make it easier to contribute to. As long as I can check the config into git.
+// TODO: Time to set up rustfmt so that I can make it easier to contribute to. As long as I can check the config into git to force users to use the same. And also, find some way to force it to run before a git commit, but not on every save. (Although, would it really be bad to do on every save? As long as rustfmt isn't using AI, right?)
 
 /* NOTE:
 
@@ -86,17 +85,6 @@ impl GenerateWord for Choice {
     fn extend_word(&self,language: &Language, rng: &mut ThreadRng, is_complete: &mut bool, result: &mut Word) -> Result<(),ElbieError> {
         let branch = self.branches.choose(rng).ok_or(ElbieError::NoChoiceChoices(self.defined_at))?;
         branch.body.extend_word(language, rng, is_complete, result)
-    }
-
-}
-
-
-impl GenerateWord for Tree {
-
-    fn extend_word(&self,language: &Language, rng: &mut ThreadRng, is_complete: &mut bool, result: &mut Word) -> Result<(),ElbieError> {
-        let branch = self.branches.choose(rng).ok_or(ElbieError::NoTreeChoices(self.defined_at))?;
-        branch.head.extend_word(language, rng, is_complete, result)?;
-        branch.tail.extend_word(language, rng, is_complete, result)
     }
 
 }
@@ -175,7 +163,6 @@ impl GenerateWord for Pattern {
             Self::Series(series) => series.extend_word(language, rng,is_complete,result),
             Self::Option(optional) => optional.extend_word(language, rng, is_complete, result),
             Self::Choice(choice) => choice.extend_word(language, rng, is_complete, result),
-            Self::Tree(tree) => tree.extend_word(language, rng, is_complete, result),
             Self::Case(switch) => switch.extend_word(language, rng, is_complete, result),
             Self::RuleReference(reference) => reference.extend_word(language, rng, is_complete, result),
             Self::Set(set) => set.extend_word(language, rng, is_complete, result),
@@ -186,6 +173,7 @@ impl GenerateWord for Pattern {
 
 }
 
+#[allow(clippy::multiple_inherent_impl,reason="I want to separate validation and generation from the patterns")]
 impl PatternSet {
 
     pub(crate) fn generate(&self, language: &Language, rng: &mut ThreadRng) -> Result<Word,ElbieError> {
