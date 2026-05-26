@@ -201,7 +201,7 @@ impl Family {
     }
 
 
-    pub(crate) fn get_transformations(&self, from: &str, name: &str, load_validators: bool) -> Result<Vec<PreparedTransformation>,ElbieError> {
+    pub(crate) fn get_transformations(&self, from: &str, name: &str, load_validators: bool) -> Result<Vec<PreparedTransformation<'_,'_>>,ElbieError> {
 
         let mut result = Vec::new();
         self.extend_transformations(from, name, load_validators, &mut result)?;

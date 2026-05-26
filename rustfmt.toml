@@ -1,3 +1,7 @@
 # rustfmt sucks right now. It doesn't give me enough control over certain things, and some items which are supported are only available in unstable.
 # I'm putting this here so that some future contributor who has it turned on by default doesn't accidentally reformat my code while trying to fix this.
+# Some examples:
+# - rustfmt was removing blank lines after items before closing braces for the mod block, with no option to turn that off.
+# - rustfmt was wrapping a macro call at a much shorter length than the max_width, and while there are options to change these other widths I would have had to add configurations for every single one of those. (All of these should default to max_width, and only change if you want them to)
+# - when it did wrap those macro calls, it wrapped them so the second line aligned with the beginning of the first, instead of indenting it to match the first parameter. There are "Visual" style available in configuration for some of these blocks that would give me what I want. But those were somehow unstable.
 disable_all_formatting = true

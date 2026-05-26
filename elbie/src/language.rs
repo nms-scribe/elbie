@@ -250,7 +250,7 @@ impl Language {
         self.patterns.case_environment(name, callback)
     }
 
-    pub fn new_table(&mut self, id: &'static str, set: &'static str, caption: &'static str) -> TableBuilder {
+    pub fn new_table(&mut self, id: &'static str, set: &'static str, caption: &'static str) -> TableBuilder<'_> {
         TableBuilder::new(self, id, caption, set)
 
     }
