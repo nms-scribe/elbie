@@ -1,4 +1,3 @@
-#![expect(clippy::empty_structs_with_brackets,reason="The 'Options' derive seems to create some empty structs with brackets, and I can't control that.")]
 use crate::errors::ElbieError;
 use crate::format::Format;
 use crate::cli_functions::generate_words;
