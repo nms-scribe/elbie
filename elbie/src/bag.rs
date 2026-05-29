@@ -4,11 +4,10 @@ use core::cmp::Ordering;
 
 // A set that I can random access. It's more efficient than random access of a HashSet (which can't retrieve by index), and also allows retaining insert order.
 // But probably could be better.
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct Bag<ItemType>(Vec<ItemType>);
 
 impl<ItemType: Clone + Ord> Bag<ItemType> {
-
     pub(crate) const fn new() -> Self {
         Self(Vec::new())
     }
@@ -16,7 +15,6 @@ impl<ItemType: Clone + Ord> Bag<ItemType> {
     pub(crate) const fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
-
 
     pub(crate) fn set_operation(&self, other: &Self, insert_if_in_self: bool, insert_if_in_other: bool, insert_if_in_both: bool) -> Self {
         let mut self_iter = self.0.iter();
@@ -31,7 +29,7 @@ impl<ItemType: Clone + Ord> Bag<ItemType> {
 
         // NOTE: To be very clear, this is not a iter.zip. We're only iterating items conditionally.
         loop {
-            match (self_next,other_next) {
+            match (self_next, other_next) {
                 (Some(self_some), Some(other_some)) => {
                     match self_some.cmp(other_some) {
                         Ordering::Less => {
@@ -56,22 +54,22 @@ impl<ItemType: Clone + Ord> Bag<ItemType> {
                             }
                             self_next = self_iter.next();
                             other_next = other_iter.next();
-                        },
+                        }
                     }
                 },
-                (Some(self_some),None) => {
+                (Some(self_some), None) => {
                     if insert_if_in_self {
                         _ = result.insert(self_some.clone());
                     }
                     self_next = self_iter.next();
                 },
-                (None,Some(other_some)) => {
+                (None, Some(other_some)) => {
                     if insert_if_in_other {
                         _ = result.insert(other_some.clone());
                     }
                     other_next = other_iter.next();
                 },
-                (None, None) => break, // we've exhausted both
+                (None, None) => break // we've exhausted both
             }
         }
 
@@ -91,14 +89,12 @@ impl<ItemType: Clone + Ord> Bag<ItemType> {
     // returns a new bag containing objects both in self and other
     pub(crate) fn intersection(&self, other: &Self) -> Self {
         self.set_operation(other, false, false, true)
-
     }
 
     // returns a new bag containing objects in self or other but not both
     pub(crate) fn _symmetric_difference(&self, other: &Self) -> Self {
         self.set_operation(other, true, true, false)
     }
-
 
     // returns true if the specified value is contained in the bag.
     pub(crate) fn contains(&self, value: &ItemType) -> bool {
@@ -114,14 +110,11 @@ impl<ItemType: Clone + Ord> Bag<ItemType> {
                 true
             }
         }
-
     }
 
     pub(crate) fn remove(&mut self, value: &ItemType) -> Option<ItemType> {
         match self.0.binary_search(value) {
-            Ok(pos) => {
-                Some(self.0.remove(pos))
-            }
+            Ok(pos) => Some(self.0.remove(pos)),
             Err(_) => None
         }
     }
@@ -138,6 +131,4 @@ impl<ItemType: Clone + Ord> Bag<ItemType> {
     pub(crate) fn iter(&self) -> impl Iterator<Item = &ItemType> {
         self.0.iter()
     }
-
-
 }

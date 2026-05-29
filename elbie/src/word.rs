@@ -4,7 +4,7 @@ use core::fmt::Display;
 use crate::phoneme::Phoneme;
 use std::rc::Rc;
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct Word {
     phonemes: Vec<Rc<Phoneme>>
 }
@@ -12,40 +12,35 @@ pub struct Word {
 impl Word {
     pub(crate) fn new(phonemes: &[Rc<Phoneme>]) -> Self {
         let phonemes = phonemes.to_vec();
-        Self{phonemes}
+        Self { phonemes }
     }
 
     pub(crate) const fn phonemes(&self) -> &Vec<Rc<Phoneme>> {
         &self.phonemes
     }
 
-
-    pub(crate) fn push(&mut self,phoneme: Rc<Phoneme>) {
+    pub(crate) fn push(&mut self, phoneme: Rc<Phoneme>) {
         self.phonemes.push(phoneme)
     }
 
     pub(crate) fn last(&self) -> Option<&Rc<Phoneme>> {
         self.phonemes.last()
     }
-
 }
 
 impl Display for Word {
-    fn fmt(&self, f: &mut Formatter) -> Result<(),fmt::Error> {
-        write!(f,"/")?;
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(f, "/")?;
         for phoneme in &self.phonemes {
-            write!(f,"{}",phoneme.name)?
+            write!(f, "{}", phoneme.name)?
         }
-        write!(f,"/")?;
+        write!(f, "/")?;
         Ok(())
     }
-
 }
 
 impl From<Vec<Rc<Phoneme>>> for Word {
     fn from(phonemes: Vec<Rc<Phoneme>>) -> Self {
-        Self {
-            phonemes
-        }
+        Self { phonemes }
     }
 }

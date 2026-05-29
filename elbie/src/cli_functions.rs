@@ -22,7 +22,6 @@ pub(crate) enum ValidateOption {
     ExplainAndTrace
 }
 
-
 pub(crate) enum TransformationOption {
     Simple,
     Explain,
@@ -30,9 +29,8 @@ pub(crate) enum TransformationOption {
     ExplainAndTrace
 }
 
-
 pub(crate) fn generate_words(grid_style: Option<&Format>, language: &Language, count: usize) {
-    let mut grid = Grid::new(TableClass::ElbieWords, format!("Generated {count} words for {}",language.name()));
+    let mut grid = Grid::new(TableClass::ElbieWords, format!("Generated {count} words for {}", language.name()));
 
     // FUTURE: Should I have a header?
 
@@ -42,12 +40,12 @@ pub(crate) fn generate_words(grid_style: Option<&Format>, language: &Language, c
         match language.make_word() {
             Ok(word) => {
                 for orthography in 0..language.orthographies().len() {
-                    row.push_cell(Cell::content(language.spell_word(&word,orthography),None));
+                    row.push_cell(Cell::content(language.spell_word(&word, orthography), None));
                 }
-                row.push_cell(Cell::content(format!("{word}"),None));
+                row.push_cell(Cell::content(format!("{word}"), None));
 
                 // the following is a sanity check. It might catch some logic errors, but really it's just GIGO.
-                if let Err(err) = language.check_word(&word,None /* eat message, no need to report */) {
+                if let Err(err) = language.check_word(&word, None /* eat message, no need to report */) {
                     eprintln!("-- !!!! invalid word: {err}");
                     process::exit(1);
                 }
@@ -63,37 +61,32 @@ pub(crate) fn generate_words(grid_style: Option<&Format>, language: &Language, c
     grid.into_output(grid_style.unwrap_or(&Format::Plain)).print_to_stdout();
 }
 
-
-fn validate_word(language: &Language, word: &Word, explain: bool, trace_cb: Option<&ValidationTraceCallback>) -> Result<Result<(),()>,ElbieError> {
-    match language.check_word(word,trace_cb)? {
-        Err(()) => {
-          Ok(Err(()))
-        },
+fn validate_word(language: &Language, word: &Word, explain: bool, trace_cb: Option<&ValidationTraceCallback>) -> Result<Result<(), ()>, ElbieError> {
+    match language.check_word(word, trace_cb)? {
+        Err(()) => Ok(Err(())),
         Ok(validated) => {
-          if explain {
-            eprintln!("Explain: {word}");
-            for valid in validated {
-              eprintln!("{valid}")
+            if explain {
+                eprintln!("Explain: {word}");
+                for valid in validated {
+                    eprintln!("{valid}")
+                }
             }
-          }
 
-          Ok(Ok(()))
-
+            Ok(Ok(()))
         }
     }
 }
 
 pub(crate) fn validate_words(language: &Language, mut words: WordTable, option: &ValidateOption, output_format: &Format) {
-
     const VALIDATED_ATTR: &str = "Validated";
 
     let mut invalid_found = false;
-    let trace_cb: Option<&ValidationTraceCallback> = if matches!(option,ValidateOption::Trace | ValidateOption::ExplainAndTrace) {
-      Some(&|level,message| {
-        eprintln!("{}{}",str::repeat(" ",level*2),message);
-      })
+    let trace_cb: Option<&ValidationTraceCallback> = if matches!(option, ValidateOption::Trace | ValidateOption::ExplainAndTrace) {
+        Some(&|level, message| {
+            eprintln!("{}{}", str::repeat(" ", level * 2), message);
+        })
     } else {
-      None
+        None
     };
 
     for orthography in language.orthographies() {
@@ -101,27 +94,26 @@ pub(crate) fn validate_words(language: &Language, mut words: WordTable, option: 
     }
     words.add_attribute(VALIDATED_ATTR.to_owned());
 
-
     for entry in &mut words.entries_mut() {
         match language.read_word(entry.word()) {
             Ok(word) => {
                 // Make sure word is in phonemic format
                 entry.replace_word(None, word.to_string());
-                match validate_word(language, &word, matches!(option,ValidateOption::Explain | ValidateOption::ExplainAndTrace), trace_cb) {
+                match validate_word(language, &word, matches!(option, ValidateOption::Explain | ValidateOption::ExplainAndTrace), trace_cb) {
                     Ok(Ok(())) => {
-                        entry.set_attribute(VALIDATED_ATTR.to_owned(),"Valid".to_owned());
-                        for (i,orthography) in language.orthographies().iter().enumerate() {
+                        entry.set_attribute(VALIDATED_ATTR.to_owned(), "Valid".to_owned());
+                        for (i, orthography) in language.orthographies().iter().enumerate() {
                             entry.set_attribute((*orthography).to_owned(), language.spell_word(&word, i));
                         }
                     },
                     Ok(Err(())) => {
-                        entry.set_attribute(VALIDATED_ATTR.to_owned(),"!! Invalid".to_owned());
+                        entry.set_attribute(VALIDATED_ATTR.to_owned(), "!! Invalid".to_owned());
                         invalid_found = true;
                     },
                     Err(err) => {
                         eprintln!("!!!! Can't validate word: {err}");
                         process::exit(1)
-                    },
+                    }
                 }
             },
             Err(err) => {
@@ -139,9 +131,8 @@ pub(crate) fn validate_words(language: &Language, mut words: WordTable, option: 
     }
 }
 
-
 pub(crate) fn show_phonemes(grid_style: Option<&Format>, language: &Language, table: Option<&String>) {
-    let style = grid_style.unwrap_or(&Format::Terminal{ spans: true });
+    let style = grid_style.unwrap_or(&Format::Terminal { spans: true });
     let result = match table {
         Some(table) => match language.build_phoneme_table(table) {
             Ok(Some(grid)) => {
@@ -151,32 +142,28 @@ pub(crate) fn show_phonemes(grid_style: Option<&Format>, language: &Language, ta
             Ok(None) => {
                 eprintln!("No phoneme table named {table}. Try singular or lower-case?");
                 Ok(())
-            }
-            Err(err) => Err(err),
+            },
+            Err(err) => Err(err)
         },
         None => match language.build_all_phoneme_tables() {
             Ok(grids) => {
                 for grid in grids {
-                    println!("{}",grid.1.caption());
+                    println!("{}", grid.1.caption());
                     grid.1.into_output(style).print_to_stdout();
                     println!();
-
                 }
 
                 Ok(())
             },
-            Err(err) => Err(err),
-        },
+            Err(err) => Err(err)
+        }
     };
 
     if let Err(err) = result {
         eprintln!("!!! Couldn't display phonemes: {err}");
         process::exit(1)
-
     }
 }
-
-
 
 pub(crate) fn show_spelling(grid_style: Option<&Format>, language: &Language, columns: usize) {
     match language.display_spelling(columns) {
@@ -190,17 +177,14 @@ pub(crate) fn show_spelling(grid_style: Option<&Format>, language: &Language, co
     }
 }
 
-
-
 pub(crate) fn format_lexicon(format: &Format, style: &LexiconStyle, language: &Language, path: &WordTable, ortho_index: usize) {
     if ortho_index >= language.orthographies().len() {
-        panic!("Language only has {} orthographies.",language.orthographies().len())
+        panic!("Language only has {} orthographies.", language.orthographies().len())
     }
 
-    match language.load_lexicon(path,ortho_index,style) {
+    match language.load_lexicon(path, ortho_index, style) {
         Ok(lexicon) => {
             lexicon.print_to_stdout(format);
-
         },
         Err(err) => {
             eprintln!("!!! Couldn't process lexicon: {err}");
@@ -209,39 +193,35 @@ pub(crate) fn format_lexicon(format: &Format, style: &LexiconStyle, language: &L
     }
 }
 
-
-pub(crate) fn transform_and_validate_word(word: &Word, transformation: &Transformation, validator: Option<&Language>, explain: bool, transformation_trace_cb: Option<&TransformationTraceCallback>, validation_trace_cb: Option<&ValidationTraceCallback>) -> Result<(Word,Option<bool>),ElbieError> {
-
+pub(crate) fn transform_and_validate_word(word: &Word, transformation: &Transformation, validator: Option<&Language>, explain: bool, transformation_trace_cb: Option<&TransformationTraceCallback>,
+                                          validation_trace_cb: Option<&ValidationTraceCallback>)
+                                          -> Result<(Word, Option<bool>), ElbieError> {
     let transformed = transformation.transform(word, transformation_trace_cb)?;
 
     if let Some(validator) = validator {
         let valid = validate_word(validator, &transformed, explain, validation_trace_cb)?.is_ok();
-        Ok((transformed,Some(valid)))
+        Ok((transformed, Some(valid)))
     } else {
-        Ok((transformed,None))
+        Ok((transformed, None))
     }
-
 }
 
 /// replace_word: if this is true, and there is only one transformation, the original word will be moved into a new attribute, and the transformation creates the word for the word entry. Otherwise, each transformation is added as an attribute and the original word is kept. If there is not exactly one transformation, replace_word will be set to false no matter what the input value is.
 pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransformation], mut words: WordTable, replace_word: bool, option: &TransformationOption, output_format: &Format) {
-
     const ERROR_ATTR: &str = "Error";
 
     let mut invalid_found = false;
 
-    let validation_trace_cb: Option<&ValidationTraceCallback> = if matches!(option,TransformationOption::Trace | TransformationOption::ExplainAndTrace) {
-      Some(&|level,message| {
-        eprintln!("{}{}",str::repeat(" ",level*2),message);
-      })
+    let validation_trace_cb: Option<&ValidationTraceCallback> = if matches!(option, TransformationOption::Trace | TransformationOption::ExplainAndTrace) {
+        Some(&|level, message| {
+            eprintln!("{}{}", str::repeat(" ", level * 2), message);
+        })
     } else {
         None
     };
 
-    let transformation_trace_cb: Option<&TransformationTraceCallback> = if matches!(option,TransformationOption::Trace | TransformationOption::ExplainAndTrace) {
-        Some(&|message| {
-            eprintln!("{message}")
-        })
+    let transformation_trace_cb: Option<&TransformationTraceCallback> = if matches!(option, TransformationOption::Trace | TransformationOption::ExplainAndTrace) {
+        Some(&|message| eprintln!("{message}"))
     } else {
         None
     };
@@ -266,7 +246,6 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
     for entry in &mut words.entries_mut() {
         let error = match from.read_word(entry.word()) {
             Ok(word) => {
-
                 // The original word might not be in phonemic notation, make sure it is now for consistency...
                 entry.replace_word(None, word.to_string());
 
@@ -274,9 +253,14 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
                 let mut last_failure = None;
 
                 for item in transformations {
-
-                    match transform_and_validate_word(&word, item.transformation, item.validator, matches!(option,TransformationOption::Explain | TransformationOption::ExplainAndTrace), transformation_trace_cb, validation_trace_cb) {
-                        Ok((transformed,validated)) => {
+                    match transform_and_validate_word(&word,
+                                                      item.transformation,
+                                                      item.validator,
+                                                      matches!(option, TransformationOption::Explain | TransformationOption::ExplainAndTrace),
+                                                      transformation_trace_cb,
+                                                      validation_trace_cb)
+                    {
+                        Ok((transformed, validated)) => {
                             if replace_word {
                                 // replace that word with the transformed and move the original to a new attribute
                                 entry.replace_word(Some(original_word_attr.to_owned()), transformed.to_string());
@@ -290,13 +274,11 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
                             // these should be errors in programming the transformation and validator, not just an invalid word.
                             eprintln!("!!! Error transforming and validating word {word}: {err}");
                             process::exit(1)
-                        },
+                        }
                     }
-
                 }
 
                 last_failure
-
             },
             Err(err) => {
                 // this is an error in the data, I don't want to stop the whole batch, that could be a problem later.
@@ -306,7 +288,7 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
                 } // else leave the transformed attribute blank.
 
                 Some(format!("Can't read word: {err}"))
-            },
+            }
         };
 
         if let Some(error) = error {
@@ -325,5 +307,4 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
         eprintln!("Look for errors in Error column.");
         process::exit(1)
     }
-
 }

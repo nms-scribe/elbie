@@ -17,14 +17,12 @@ pub(crate) enum SpellingBehavior {
 }
 
 impl fmt::Debug for SpellingBehavior {
-
-    fn fmt(&self, f: &mut Formatter) -> Result<(),fmt::Error> {
-        write!(f,"PhonemeBehavior::")?;
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(f, "PhonemeBehavior::")?;
         match self {
-            Self::Default => write!(f,"Default"),
-            Self::Text(text) => write!(f,"Text({text})"),
-            Self::Callback(_) => write!(f,"Callback(<...>)"),
+            Self::Default => write!(f, "Default"),
+            Self::Text(text) => write!(f, "Text({text})"),
+            Self::Callback(_) => write!(f, "Callback(<...>)")
         }
-
     }
 }

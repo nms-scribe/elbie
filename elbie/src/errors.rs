@@ -4,7 +4,7 @@ use crate::phoneme_table::Axis;
 use crate::phoneme_table::TableOption;
 use core::panic::Location;
 
-#[derive(Debug,Clone,Error)]
+#[derive(Debug, Clone, Error)]
 pub enum ElbieError {
     #[error("Set {0} has no phonemes.")]
     SetIsEmpty(&'static str),
@@ -22,9 +22,9 @@ pub enum ElbieError {
     SetAlreadyExists(&'static str),
     #[error("A phoneme already exists with the set name {0}")]
     PhonemeExistsWithSetName(&'static str),
-    #[error( "Environment {0} already exists.")]
+    #[error("Environment {0} already exists.")]
     EnvironmentAlreadyExists(&'static str),
-    #[error( "Pattern {0} already exists.")]
+    #[error("Pattern {0} already exists.")]
     PatternAlreadyExists(&'static str),
     #[error("Unknown environment {0}.")]
     UnknownEnvironment(&'static str),
@@ -33,7 +33,7 @@ pub enum ElbieError {
     #[error("Environment {0} is missing some possible branches.")]
     IncompleteBranches(&'static str),
     #[error("Phoneme '{0}' was added with {2} spellings, but {1} were expected.")]
-    MismatchedSpellingsForPhoneme(&'static str, usize,usize),
+    MismatchedSpellingsForPhoneme(&'static str, usize, usize),
 
     // word generation errors
     #[error("Phoneme added after termination pattern.")]
@@ -51,13 +51,13 @@ pub enum ElbieError {
 
     // word reading errors //
     #[error("In word '{0}': unknown phoneme starting at '{1}'.")]
-    UnknownPhonemeWhileReading(String,String),
+    UnknownPhonemeWhileReading(String, String),
 
     // table def errors //
     #[error("Invalid option for phoneme table: '{0:?}'.")]
     InvalidOptionForTable(TableOption),
     #[error("Duplicate phoneme {0:?} definition: '{1:?}'.")]
-    DuplicateTableHeaderDef(Axis,HeaderDef),
+    DuplicateTableHeaderDef(Axis, HeaderDef),
     #[error("Duplicate table definition for id '{0}'.")]
     DuplicateTableDef(String),
     #[error("Phoneme set was not added as an {0:?} to the phoneme table.")]
@@ -73,18 +73,18 @@ pub enum ElbieError {
     #[error("Language '{0}' was already added.")]
     LanguageAlreadyAdded(String),
     #[error("Transformation for '{0}' to '{1}' was already added.")]
-    TransformationAlreadyAdded(String,String),
+    TransformationAlreadyAdded(String, String),
     #[error("Unknown language '{0}'")]
     UnknownLanguage(String),
     #[error("Language '{0}' needs to be loaded before it can be accessed.")]
     LanguageNotLoaded(String),
     #[error("No transformation available for '{0}' => '{1}'")]
-    UnknownTransformation(String,String),
+    UnknownTransformation(String, String),
     #[error("Transformation for '{0}' => '{1}' needs to be loaded before it can be accessed.")]
-    TransformationNotLoaded(String,String),
+    TransformationNotLoaded(String, String),
     #[error("No default language available.")]
-    NoDefaultLanguage,
+    NoDefaultLanguage
 }
 
-#[deprecated(since="0.2.2",note="Use `ElbieError` instead.")]
+#[deprecated(since = "0.2.2", note = "Use `ElbieError` instead.")]
 pub type LanguageError = ElbieError;

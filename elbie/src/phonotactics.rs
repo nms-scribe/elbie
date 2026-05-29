@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use crate::errors::ElbieError;
 
-
 /*
 FUTURE: This is relatively easy, but it's also hard to wrap ones head around how this works. One option to fix this is to do the same thing here than I'm doing in transformations, turn it into functions.
 
@@ -18,29 +17,27 @@ The Validator ignores the weightings, but uses the commands to match a word and 
 
 */
 
-#[derive(Debug,Clone)]
-#[deprecated(since="0.4.0",note="Please use patterns instead.")]
+#[derive(Debug, Clone)]
+#[deprecated(since = "0.4.0", note = "Please use patterns instead.")]
 pub enum EnvironmentChoice {
     Done,
-    Continuing(&'static str,&'static str,bool),// set to generate next phoneme from, next environment to follow, whether to allow duplicate phoneme to be generated
+    Continuing(&'static str, &'static str, bool) // set to generate next phoneme from, next environment to follow, whether to allow duplicate phoneme to be generated
 }
 
-#[derive(Debug,Clone)]
-#[deprecated(since="0.4.0",note="Please use patterns instead.")]
+#[derive(Debug, Clone)]
+#[deprecated(since = "0.4.0", note = "Please use patterns instead.")]
 #[allow(deprecated)]
 pub struct EnvironmentBranch(&'static str, WeightedVec<EnvironmentChoice>);
 
 #[allow(deprecated)]
 impl EnvironmentBranch {
-
     #[must_use]
-    pub fn new(set_check: &'static str, choices: &[(EnvironmentChoice,usize)]) -> Self {
+    pub fn new(set_check: &'static str, choices: &[(EnvironmentChoice, usize)]) -> Self {
         let mut vec = WeightedVec::new();
         for choice in choices {
-            vec.push(choice.0.clone(),choice.1)
-        };
-        Self(set_check,vec)
-
+            vec.push(choice.0.clone(), choice.1)
+        }
+        Self(set_check, vec)
     }
 
     pub(crate) const fn set(&self) -> &'static str {
@@ -50,9 +47,7 @@ impl EnvironmentBranch {
     pub(crate) const fn choices(&self) -> &WeightedVec<EnvironmentChoice> {
         &self.1
     }
-
 }
-
 
 #[derive(Debug)]
 pub(crate) struct Sequence {
@@ -76,12 +71,10 @@ pub(crate) struct Optional {
     pub defined_at: Location<'static>
 }
 
-
 #[derive(Debug)]
 pub(crate) struct ChoiceBranch {
     pub body: Pattern
 }
-
 
 #[derive(Debug)]
 pub(crate) struct Choice {
@@ -96,13 +89,10 @@ pub(crate) struct AddPhoneme {
     pub defined_at: Location<'static>
 }
 
-
-
-
 #[derive(Debug)]
 pub(crate) struct CaseEnvironmentBranch {
     pub condition_set: &'static str,
-    pub body: Pattern,
+    pub body: Pattern
 }
 
 #[derive(Debug)]
@@ -124,20 +114,16 @@ pub(crate) struct Case {
     pub defined_at: Location<'static>
 }
 
-
-
 #[derive(Debug)]
 pub(crate) struct TerminateWord {
     pub defined_at: Location<'static>
 }
-
 
 #[derive(Debug)]
 pub(crate) struct RuleReference {
     pub name: &'static str,
     pub defined_at: Location<'static>
 }
-
 
 #[derive(Debug)]
 pub(crate) enum Pattern {
@@ -154,7 +140,6 @@ pub(crate) enum Pattern {
 }
 
 impl Pattern {
-
     pub(crate) fn defined_at(&self) -> Location<'static> {
         match self {
             Self::Sequence(sequence) => sequence.defined_at,
@@ -164,25 +149,21 @@ impl Pattern {
             Self::Case(case) => case.defined_at,
             Self::RuleReference(reference) => reference.defined_at,
             Self::Set(add_phoneme) => add_phoneme.defined_at,
-            Self::Terminate(terminate_word) => terminate_word.defined_at,
+            Self::Terminate(terminate_word) => terminate_word.defined_at
         }
     }
-
 }
 
-struct PatternList<Extra>(Vec<(Pattern,Extra)>);
+struct PatternList<Extra>(Vec<(Pattern, Extra)>);
 
 impl<Extra> PatternList<Extra> {
-
     fn seq<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, defined_at: Location<'static>, callback: PatternCallback, extra: Extra) {
         let mut builder = PatternBuilder::new();
         callback(&mut builder);
-        self.0.push((Pattern::Sequence(Sequence {
-            patterns: builder.patterns(),
-            defined_at,
-        }),extra));
+        self.0.push((Pattern::Sequence(Sequence { patterns: builder.patterns(),
+                                                  defined_at }),
+                     extra));
     }
-
 
     fn series<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, defined_at: Location<'static>, probability: u8, callback: PatternCallback, minimum: usize, maximum: Option<usize>, extra: Extra) {
         if maximum.is_some_and(|max| max < minimum) {
@@ -192,25 +173,22 @@ impl<Extra> PatternList<Extra> {
         let mut pattern = PatternBuilder::new();
         callback(&mut pattern);
         let pattern = pattern.flatten(defined_at);
-        self.0.push((Pattern::Series(Box::new(Series {
-            pattern,
-            probability,
-            minimum,
-            maximum,
-            defined_at
-        })),extra));
+        self.0.push((Pattern::Series(Box::new(Series { pattern,
+                                                       probability,
+                                                       minimum,
+                                                       maximum,
+                                                       defined_at })),
+                     extra));
     }
-
 
     fn opt<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, defined_at: Location<'static>, probability: u8, callback: PatternCallback, extra: Extra) {
         let mut pattern = PatternBuilder::new();
         callback(&mut pattern);
         let pattern = pattern.flatten(defined_at);
-        self.0.push((Pattern::Option(Box::new(Optional {
-            pattern,
-            probability,
-            defined_at
-        })),extra));
+        self.0.push((Pattern::Option(Box::new(Optional { pattern,
+                                                         probability,
+                                                         defined_at })),
+                     extra));
     }
 
     /**
@@ -225,83 +203,66 @@ impl<Extra> PatternList<Extra> {
             // I don't want to return an error here, as that would add undue complications on the closures used to build patterns. FUTURE: reconsider?
             panic!("Branches are empty.")
         }
-        self.0.push((Pattern::Choice(Choice {
-            branches: builder.choices(),
-            defined_at
-        }),extra));
+        self.0.push((Pattern::Choice(Choice { branches: builder.choices(),
+                                              defined_at }),
+                     extra));
     }
 
-    fn case_opt<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, defined_at: Location<'static>, initial_phoneme: &'static str, avoid_duplicates: bool, callback: BranchCallback, extra: Extra) {
+    fn case_opt<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, defined_at: Location<'static>, initial_phoneme: &'static str, avoid_duplicates: bool, callback: BranchCallback,
+                                                                 extra: Extra) {
         let mut builder = CaseEnvironmentBuilder::new();
         callback(&mut builder);
-        let environment = NamedOrInlineEnvironment::Environment(CaseEnvironment {
-            branches: builder.branches(),
-            defined_at,
-        });
+        let environment = NamedOrInlineEnvironment::Environment(CaseEnvironment { branches: builder.branches(),
+                                                                                  defined_at });
 
-        self.0.push((Pattern::Case(Box::new(Case {
-            initial: AddPhoneme {
-                name: initial_phoneme,
-                avoid_duplicates,
-                defined_at
-            },
-            environment,
-            defined_at,
-        })),extra));
+        self.0.push((Pattern::Case(Box::new(Case { initial: AddPhoneme { name: initial_phoneme,
+                                                                         avoid_duplicates,
+                                                                         defined_at },
+                                                   environment,
+                                                   defined_at })),
+                     extra));
     }
 
-    fn case_env_opt(&mut self, defined_at: Location<'static>, initial_phoneme: &'static str, avoid_duplicates: bool, environment: &'static str,extra: Extra) {
+    fn case_env_opt(&mut self, defined_at: Location<'static>, initial_phoneme: &'static str, avoid_duplicates: bool, environment: &'static str, extra: Extra) {
         let environment = NamedOrInlineEnvironment::Named(environment);
 
-        self.0.push((Pattern::Case(Box::new(Case {
-            initial: AddPhoneme {
-                name: initial_phoneme,
-                avoid_duplicates,
-                defined_at
-            },
-            environment,
-            defined_at,
-        })),extra));
+        self.0.push((Pattern::Case(Box::new(Case { initial: AddPhoneme { name: initial_phoneme,
+                                                                         avoid_duplicates,
+                                                                         defined_at },
+                                                   environment,
+                                                   defined_at })),
+                     extra));
     }
 
     fn rule(&mut self, defined_at: Location<'static>, name: &'static str, extra: Extra) {
-        self.0.push((Pattern::RuleReference(RuleReference {
-            name,
-            defined_at,
-        }),extra));
+        self.0.push((Pattern::RuleReference(RuleReference { name,
+                                                            defined_at }),
+                     extra));
     }
 
     fn set_opt(&mut self, defined_at: Location<'static>, name: &'static str, avoid_duplicates: bool, extra: Extra) {
-        self.0.push((Pattern::Set(AddPhoneme {
-            name,
-            avoid_duplicates,
-            defined_at,
-        }),extra));
+        self.0.push((Pattern::Set(AddPhoneme { name,
+                                               avoid_duplicates,
+                                               defined_at }),
+                     extra));
     }
 
     fn done(&mut self, defined_at: Location<'static>, extra: Extra) {
-        self.0.push((Pattern::Terminate(TerminateWord {
-            defined_at
-        }),extra));
+        self.0.push((Pattern::Terminate(TerminateWord { defined_at }), extra));
     }
-
 }
-
 
 pub struct PatternBuilder {
     pattern_list: PatternList<()>
 }
 
 impl PatternBuilder {
-
     const fn new() -> Self {
-        Self {
-            pattern_list: PatternList(Vec::new())
-        }
+        Self { pattern_list: PatternList(Vec::new()) }
     }
 
     fn patterns(self) -> Vec<Pattern> {
-        self.pattern_list.0.into_iter().map(|(p,())| p).collect()
+        self.pattern_list.0.into_iter().map(|(p, ())| p).collect()
     }
 
     fn flatten(mut self, defined_at: Location<'static>) -> Pattern {
@@ -309,10 +270,8 @@ impl PatternBuilder {
         if len == 1 {
             self.pattern_list.0.remove(0).0
         } else {
-            Pattern::Sequence(Sequence {
-                patterns: self.patterns(),
-                defined_at
-            })
+            Pattern::Sequence(Sequence { patterns: self.patterns(),
+                                         defined_at })
         }
     }
 
@@ -353,7 +312,6 @@ impl PatternBuilder {
         self.pattern_list.choice(*Location::caller(), callback, ());
     }
 
-
     #[track_caller]
     pub fn case<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, initial_phoneme: &'static str, callback: BranchCallback) {
         self.pattern_list.case_opt(*Location::caller(), initial_phoneme, false, callback, ());
@@ -363,7 +321,6 @@ impl PatternBuilder {
     pub fn case_nodup<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, initial_phoneme: &'static str, callback: BranchCallback) {
         self.pattern_list.case_opt(*Location::caller(), initial_phoneme, true, callback, ());
     }
-
 
     #[track_caller]
     pub fn case_env(&mut self, initial_phoneme: &'static str, environment: &'static str) {
@@ -394,7 +351,6 @@ impl PatternBuilder {
     pub fn done(&mut self) {
         self.pattern_list.done(*Location::caller(), ());
     }
-
 }
 
 pub struct ChoiceBuilder {
@@ -402,19 +358,14 @@ pub struct ChoiceBuilder {
 }
 
 impl ChoiceBuilder {
-
     const fn new() -> Self {
-        Self {
-            pattern_list: PatternList(Vec::new())
-        }
+        Self { pattern_list: PatternList(Vec::new()) }
     }
 
     fn choices(self) -> WeightedVec<ChoiceBranch> {
         let mut result = WeightedVec::new();
-        for (p,weight) in self.pattern_list.0 {
-            result.push(ChoiceBranch {
-                body: p
-            }, weight);
+        for (p, weight) in self.pattern_list.0 {
+            result.push(ChoiceBranch { body: p }, weight);
         }
         result
     }
@@ -459,7 +410,6 @@ impl ChoiceBuilder {
         self.pattern_list.choice(*Location::caller(), callback, weight);
     }
 
-
     #[track_caller]
     pub fn case<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, weight: usize, initial_phoneme: &'static str, callback: BranchCallback) {
         self.pattern_list.case_opt(*Location::caller(), initial_phoneme, false, callback, weight);
@@ -469,7 +419,6 @@ impl ChoiceBuilder {
     pub fn case_nodup<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, weight: usize, initial_phoneme: &'static str, callback: BranchCallback) {
         self.pattern_list.case_opt(*Location::caller(), initial_phoneme, true, callback, weight);
     }
-
 
     #[track_caller]
     pub fn case_env(&mut self, weight: usize, initial_phoneme: &'static str, environment: &'static str) {
@@ -500,27 +449,20 @@ impl ChoiceBuilder {
     pub fn done(&mut self, weight: usize) {
         self.pattern_list.done(*Location::caller(), weight);
     }
-
-
 }
 
 pub struct CaseEnvironmentBuilder {
-    pattern_list: PatternList<&'static str>,
+    pattern_list: PatternList<&'static str>
 }
 
 impl CaseEnvironmentBuilder {
-
     const fn new() -> Self {
-        Self {
-            pattern_list: PatternList(Vec::new())
-        }
-
+        Self { pattern_list: PatternList(Vec::new()) }
     }
-
 
     fn branches(self) -> Vec<CaseEnvironmentBranch> {
         let mut result = Vec::new();
-        for (p,condition_set) in self.pattern_list.0 {
+        for (p, condition_set) in self.pattern_list.0 {
             result.push(CaseEnvironmentBranch {
                 condition_set,
                 body: p,
@@ -570,7 +512,6 @@ impl CaseEnvironmentBuilder {
         self.pattern_list.choice(*Location::caller(), callback, condition_set);
     }
 
-
     #[track_caller]
     pub fn case<BranchCallback: Fn(&mut Self)>(&mut self, condition_set: &'static str, initial_phoneme: &'static str, callback: BranchCallback) {
         self.pattern_list.case_opt(*Location::caller(), initial_phoneme, false, callback, condition_set);
@@ -580,7 +521,6 @@ impl CaseEnvironmentBuilder {
     pub fn case_nodup<BranchCallback: Fn(&mut Self)>(&mut self, condition_set: &'static str, initial_phoneme: &'static str, callback: BranchCallback) {
         self.pattern_list.case_opt(*Location::caller(), initial_phoneme, true, callback, condition_set);
     }
-
 
     #[track_caller]
     pub fn case_env(&mut self, condition_set: &'static str, initial_phoneme: &'static str, environment: &'static str) {
@@ -611,45 +551,39 @@ impl CaseEnvironmentBuilder {
     pub fn done(&mut self, condition_set: &'static str) {
         self.pattern_list.done(*Location::caller(), condition_set);
     }
-
-
 }
 
 #[derive(Debug)]
 pub(crate) struct PatternSet {
-    pub patterns: HashMap<String,Pattern>,
-    pub case_environments: HashMap<String,CaseEnvironment>,
+    pub patterns: HashMap<String, Pattern>,
+    pub case_environments: HashMap<String, CaseEnvironment>,
     pub initial: Pattern
 }
 
 impl PatternSet {
-
     #[track_caller]
     pub(crate) fn new<Callback: Fn(&mut PatternBuilder)>(initial_cb: Callback) -> Self {
         let mut builder = PatternBuilder::new();
         initial_cb(&mut builder);
         let initial = builder.flatten(*Location::caller());
-        Self {
-            patterns: HashMap::new(),
-            case_environments: HashMap::new(),
-            initial
-        }
-
+        Self { patterns: HashMap::new(),
+               case_environments: HashMap::new(),
+               initial }
     }
 
     #[track_caller]
-    pub(crate) fn pattern<Callback: Fn(&mut PatternBuilder)>(&mut self, name: &'static str, callback: Callback) -> Result<(),ElbieError> {
+    pub(crate) fn pattern<Callback: Fn(&mut PatternBuilder)>(&mut self, name: &'static str, callback: Callback) -> Result<(), ElbieError> {
         let mut builder = PatternBuilder::new();
         callback(&mut builder);
         let pattern = builder.flatten(*Location::caller());
         match self.patterns.entry(name.to_owned()) {
             Entry::Occupied(_) => return Err(ElbieError::PatternAlreadyExists(name)),
-            Entry::Vacant(vacant_entry) => _ = vacant_entry.insert(pattern),
+            Entry::Vacant(vacant_entry) => _ = vacant_entry.insert(pattern)
         }
         Ok(())
     }
 
-    pub(crate) fn get(&self, name: &'static str) -> Result<&Pattern,ElbieError> {
+    pub(crate) fn get(&self, name: &'static str) -> Result<&Pattern, ElbieError> {
         if let Some(pattern) = self.patterns.get(name) {
             Ok(pattern)
         } else {
@@ -658,26 +592,23 @@ impl PatternSet {
     }
 
     #[track_caller]
-    pub(crate) fn case_environment<Callback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, name: &'static str, callback: Callback) -> Result<(),ElbieError> {
+    pub(crate) fn case_environment<Callback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, name: &'static str, callback: Callback) -> Result<(), ElbieError> {
         let mut builder = CaseEnvironmentBuilder::new();
         callback(&mut builder);
-        let environment = CaseEnvironment {
-            branches: builder.branches(),
-            defined_at: *Location::caller(),
-        };
+        let environment = CaseEnvironment { branches: builder.branches(),
+                                            defined_at: *Location::caller() };
         match self.case_environments.entry(name.to_owned()) {
             Entry::Occupied(_) => return Err(ElbieError::EnvironmentAlreadyExists(name)),
-            Entry::Vacant(vacant_entry) => _ = vacant_entry.insert(environment),
+            Entry::Vacant(vacant_entry) => _ = vacant_entry.insert(environment)
         }
         Ok(())
     }
 
-    pub(crate) fn get_case_environment(&self, name: &'static str) -> Result<&CaseEnvironment,ElbieError> {
+    pub(crate) fn get_case_environment(&self, name: &'static str) -> Result<&CaseEnvironment, ElbieError> {
         if let Some(pattern) = self.case_environments.get(name) {
             Ok(pattern)
         } else {
             Err(ElbieError::UnknownEnvironment(name))
         }
     }
-
 }

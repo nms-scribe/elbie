@@ -6,19 +6,15 @@ pub(crate) struct PhonemeBehavior {
 }
 
 impl PhonemeBehavior {
-
     pub(crate) const fn new(spelling: Vec<SpellingBehavior>) -> Self {
-        Self {
-            spelling
-        }
+        Self { spelling }
     }
 
     pub(crate) fn spelling(&self) -> &[SpellingBehavior] {
-      &self.spelling
+        &self.spelling
     }
 
     pub(crate) const fn spelling_len(&self) -> usize {
-      self.spelling.len()
+        self.spelling.len()
     }
-
 }

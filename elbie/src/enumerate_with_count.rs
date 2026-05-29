@@ -11,12 +11,9 @@ pub(crate) struct EnumerateCount<Inner> {
 }
 
 impl<Inner: Iterator> EnumerateCount<Inner> {
-
     pub(crate) fn new(inner: Inner) -> Self {
-        Self {
-            inner: inner.enumerate(),
-            next_index: 0
-        }
+        Self { inner: inner.enumerate(),
+               next_index: 0 }
     }
 
     pub(crate) const fn next_index(&self) -> usize {
@@ -24,19 +21,15 @@ impl<Inner: Iterator> EnumerateCount<Inner> {
     }
 }
 
-impl<Iter> Iterator for EnumerateCount<Iter>
-where
-    Iter: Iterator,
-{
+impl<Iter> Iterator for EnumerateCount<Iter> where Iter: Iterator {
     type Item = (usize, <Iter as Iterator>::Item);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some((index,item)) = self.inner.next() {
+        if let Some((index, item)) = self.inner.next() {
             self.next_index = index + 1;
-            Some((index,item))
+            Some((index, item))
         } else {
             None
         }
     }
-
 }

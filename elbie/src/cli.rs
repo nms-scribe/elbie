@@ -23,51 +23,46 @@ use core::convert::identity;
 // Gumdrop kind of makes showing usage difficult. The only way it works is if you have a --help flag on each command, and then only if it's discovered in `parse_args_or_exit`. And I'm not calling that because I want to be able to supply my own arguments. I would prefer to have a help command that takes an optional command name parameter anyway.
 fn show_usage<Command: Options>(program: &str, selected_command: Option<&str>) {
     let sub_commands = Command::command_list();
-    match (selected_command,sub_commands) {
+    match (selected_command, sub_commands) {
         (None, None) => println!("usage: {program} [ARGUMENTS]"),
         (None, Some(_)) => println!("usage: {program} [ARGUMENTS] [COMMAND]"),
         (Some(subcommand), None) => println!("usage: {program} {subcommand} [ARGUMENTS]"),
-        (Some(subcommand), Some(_)) => println!("usage: {program} {subcommand} [ARGUMENTS] [COMMAND]"),
+        (Some(subcommand), Some(_)) => println!("usage: {program} {subcommand} [ARGUMENTS] [COMMAND]")
     }
     println!();
     // FUTURE: It would be nice to have some way to control this formatting as well.
     // FUTURE: Also, to be able to tell if the Options have positional, required, or optional arguments so I can change the usage header above.
-    println!("{}",Command::usage());
+    println!("{}", Command::usage());
     println!();
     if let Some(commands) = sub_commands {
         println!("Available commands:");
         println!("{commands}")
     }
-
 }
 
 trait DoIt {
-
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),Box<dyn Error>>;
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(), Box<dyn Error>>;
 }
 
 #[derive(Options)]
 /// Generates words for a language. Options allow specifying the count and the output format.
 pub struct GenerateWords {
-
-    #[options(default="1")]
+    #[options(default = "1")]
     /// The number of words to generate.
     count: usize,
 
-    #[options(default="plain")]
+    #[options(default = "plain")]
     #[options(no_short)]
     /// Changes the format of grid output. Values include "plain", "terminal", "markdown", "html", "json", and "csv".
     format: Format,
 
     #[options(no_short)]
     /// Turns off column and row spanning in headers of grid output.
-    no_spans: bool,
-
+    no_spans: bool
 }
 
 impl DoIt for GenerateWords {
-
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),Box<dyn Error>>  {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(), Box<dyn Error>> {
         let grid_style = if self.no_spans {
             &self.format.with_no_spans()
         } else {
@@ -89,7 +84,6 @@ impl DoIt for GenerateWords {
 #[derive(Options)]
 /// Validate a list of words for a language, verifying that it would be possible to generate them. Pass a list of words to process at the end of the command. Options allow getting more detail about the validation. When validating from a file, the file should be in CSV format, with a header indicating field names. If there is more than one field, the one named "word" will be used.
 pub struct ValidateWords {
-
     #[options(no_short)]
     /// Traces the validation through all branches and patterns
     trace: bool,
@@ -98,11 +92,10 @@ pub struct ValidateWords {
     /// On success, traces the validation through only successful branches and patterns
     explain: bool,
 
-    #[options(default="plain")]
+    #[options(default = "plain")]
     #[options(no_short)]
     /// Changes the format of grid output. Values include "plain", "terminal", "markdown", "html", "json", and "csv".
     format: Format,
-
 
     /// Read the list of words from CSV files, can be specified multiple times to merge multiple files.
     file: Vec<String>,
@@ -110,13 +103,10 @@ pub struct ValidateWords {
     #[options(free)]
     /// Words to validate
     words: Vec<String>
-
 }
 
 impl DoIt for ValidateWords {
-
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),Box<dyn Error>>  {
-
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(), Box<dyn Error>> {
         let mut family = family()?;
 
         family.load_language_or_default(language.as_deref())?;
@@ -132,43 +122,39 @@ impl DoIt for ValidateWords {
             word_data.combine_with(data);
         }
 
-
-        validate_words(language, word_data, &match (self.explain,self.trace)  {
-            (true, true) => ValidateOption::ExplainAndTrace,
-            (true, false) => ValidateOption::Explain,
-            (false, true) => ValidateOption::Trace,
-            (false, false) => ValidateOption::Simple,
-        },
-        &self.format);
+        validate_words(language,
+                       word_data,
+                       &match (self.explain, self.trace) {
+                           (true, true) => ValidateOption::ExplainAndTrace,
+                           (true, false) => ValidateOption::Explain,
+                           (false, true) => ValidateOption::Trace,
+                           (false, false) => ValidateOption::Simple
+                       },
+                       &self.format);
 
         Ok(())
     }
-
 }
 
 #[derive(Options)]
 /// Prints out tables of phonemes for a language. Options allow limiting to one table, and controlling the output format.
 pub struct ShowPhonemes {
-
     #[options(no_short)]
     /// A specific phoneme table to show. If not specified all tables will be shown.
     table: Option<String>,
 
-    #[options(default="terminal")]
+    #[options(default = "terminal")]
     #[options(no_short)]
     /// Changes the format of grid output. Values include "plain", "terminal", "markdown", "html", "json", and "csv".
     format: Format,
 
     #[options(no_short)]
     /// Turns off column and row spanning in headers of grid output.
-    no_spans: bool,
-
+    no_spans: bool
 }
 
 impl DoIt for ShowPhonemes {
-
-
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),Box<dyn Error>>  {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(), Box<dyn Error>> {
         let grid_style = if self.no_spans {
             &self.format.with_no_spans()
         } else {
@@ -190,26 +176,23 @@ impl DoIt for ShowPhonemes {
 #[derive(Options)]
 /// Prints out a table of orthographies for a language. Options include controlling the output format and breaking the table into extra columns.
 pub struct ShowSpelling {
-
     #[options(no_short)]
-    #[options(default="1")]
+    #[options(default = "1")]
     /// If more than 1, breaks table and splits it across the specified number of column groups for easier formatting.
     columns: usize,
 
-    #[options(default="terminal")]
+    #[options(default = "terminal")]
     #[options(no_short)]
     /// Changes the format of grid output. Values include "plain", "terminal", "markdown", "html", "json", and "csv".
     format: Format,
 
     #[options(no_short)]
     /// Turns off column and row spanning in headers of grid output.
-    no_spans: bool,
-
+    no_spans: bool
 }
 
 impl DoIt for ShowSpelling {
-
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),Box<dyn Error>>  {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(), Box<dyn Error>> {
         let grid_style = if self.no_spans {
             &self.format.with_no_spans()
         } else {
@@ -231,8 +214,6 @@ impl DoIt for ShowSpelling {
 #[derive(Options)]
 /// Loads a lexicon of words in CSV format for a language, validates them and prints out a formatted listing. Requires a file name to load and an orthography index to spell the main entries. Options allow controlling the output format and style. The format specifies the markup format for the output. The style specifies whether a list or a table is required. The input CSV must have a "word" column containing the phonetic transcription of the word, and a "definition" column containing arbitrary text.
 pub struct FormatLexicon {
-
-
     #[options(required)]
     /// Read the list of words from CSV files, can be specified multiple times to merge multiple files.
     file: Vec<String>,
@@ -242,23 +223,22 @@ pub struct FormatLexicon {
     spelling: usize,
 
     /// Changes the format of output. Values include "plain", "terminal", "markdown", "html", "json", and "csv". "plain" and "terminal" have the same output when `--style` is "list".
-    #[options(default="plain")]
+    #[options(default = "plain")]
     #[options(no_short)]
     format: Format,
 
     /// Changes the style of the output. Values are "table" or "list". This has no effect on CSV or JSON format.
-    #[options(default="list")]
+    #[options(default = "list")]
     #[options(no_short)]
     style: LexiconStyle,
 
     #[options(no_short)]
     /// Turns off column and row spanning in headers of grid output.
-    no_spans: bool,
+    no_spans: bool
 }
 
 impl DoIt for FormatLexicon {
-
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),Box<dyn Error>> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(), Box<dyn Error>> {
         let grid_style = if self.no_spans {
             &self.format.with_no_spans()
         } else {
@@ -284,20 +264,15 @@ impl DoIt for FormatLexicon {
 
         let word_data = word_data.ok_or("Please specify at least one file to load.")?;
 
-
         format_lexicon(grid_style, &self.style, language, &word_data, self.spelling);
 
         Ok(())
-
     }
-
-
 }
 
 #[derive(Options)]
 /// Transforms words from a source language to another. Options allow for control of validating the words after transformation. When transforming from a file, the file should be in CSV format, with a header indicating field names. If there is more than one field, the one named "word" will be used.
 pub struct Transform {
-
     #[options(required)]
     /// The target transformation. Used to lookup the transformation even if dont_validate is true.
     target: String,
@@ -306,7 +281,7 @@ pub struct Transform {
     /// Requests that the words not be validated after transformation.
     dont_validate: bool,
 
-    #[options(no_short,required)]
+    #[options(no_short, required)]
     /// If the transformation is not a set, and `true` is passed to this option, then the transformation will be output as the word, and the original will be in a separate column. This option is required as legacy behavior doing this automatically without an option. Eventually, this will default to false and the option will no longer be required.
     replace_word: Option<bool>,
 
@@ -318,7 +293,7 @@ pub struct Transform {
     /// Provides detailed explanation of valid phonemes on success.
     explain: bool,
 
-    #[options(default="plain")]
+    #[options(default = "plain")]
     #[options(no_short)]
     /// Changes the format of grid output. Values include "plain", "terminal", "markdown", "html", "json", and "csv".
     format: Format,
@@ -329,14 +304,11 @@ pub struct Transform {
     #[options(free)]
     /// Words to validate
     words: Vec<String>
-
 }
 
 impl DoIt for Transform {
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),Box<dyn Error>> {
-
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(), Box<dyn Error>> {
         let mut family = family()?;
-
 
         let source_language = language.or_else(|| family.default_language_name().map(ToOwned::to_owned)).ok_or(ElbieError::NoDefaultLanguage)?;
 
@@ -345,7 +317,7 @@ impl DoIt for Transform {
 
         let source_language = family.get_language(&source_language)?;
 
-        let transformations = family.get_transformations(source_language.name(),&self.target,!self.dont_validate)?;
+        let transformations = family.get_transformations(source_language.name(), &self.target, !self.dont_validate)?;
 
         let mut word_data = WordTable::default();
 
@@ -357,36 +329,29 @@ impl DoIt for Transform {
         }
 
         transform_words(source_language,
-            &transformations,
-            word_data,
-            self.replace_word.is_some_and(identity),
-            &match (self.explain,self.trace)  {
-                (true, true) => TransformationOption::ExplainAndTrace,
-                (true, false) => TransformationOption::Explain,
-                (false, true) => TransformationOption::Trace,
-                (false, false) => TransformationOption::Simple,
-            },
-            &self.format);
+                        &transformations,
+                        word_data,
+                        self.replace_word.is_some_and(identity),
+                        &match (self.explain, self.trace) {
+                            (true, true) => TransformationOption::ExplainAndTrace,
+                            (true, false) => TransformationOption::Explain,
+                            (false, true) => TransformationOption::Trace,
+                            (false, false) => TransformationOption::Simple
+                        },
+                        &self.format);
 
         Ok(())
-
-
-
     }
 }
 
 #[derive(Options)]
 /// Print the languages and transformations available in the tool.
-#[expect(clippy::empty_structs_with_brackets,reason="Options won't derive a unit struct")]
-pub struct ShowInformation {
-}
+#[expect(clippy::empty_structs_with_brackets, reason = "Options won't derive a unit struct")]
+pub struct ShowInformation {}
 
 impl DoIt for ShowInformation {
-
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, _: Option<String>) -> Result<(),Box<dyn Error>> {
-
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, _: Option<String>) -> Result<(), Box<dyn Error>> {
         let family = family()?;
-
 
         let mut languages = family.language_keys();
         if !languages.is_empty() {
@@ -419,37 +384,28 @@ impl DoIt for ShowInformation {
                 println!();
             }
             println!("TRANSFORMATIONS:");
-            for (from,to) in transformations {
+            for (from, to) in transformations {
                 println!("{from} 🡺 {to}");
-                if let Some(list) = family.transformation_set_contents(&from,&to)? {
-                    println!("  set of {}",list.join(", "))
+                if let Some(list) = family.transformation_set_contents(&from, &to)? {
+                    println!("  set of {}", list.join(", "))
                 }
-
-
             }
         }
 
-
         Ok(())
-
     }
-
-
 }
 
 #[derive(Options)]
 /// Print out this information. Use 'help COMMAND' to get help on a specific command.
 pub struct FamilyShowUsage {
-
     #[options(free)]
     /// A command to display specific help for
-    command: Option<String>,
-
+    command: Option<String>
 }
 
 impl DoIt for FamilyShowUsage {
-
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, _: FamilyCreator, _: Option<String>) -> Result<(),Box<dyn Error>> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, _: FamilyCreator, _: Option<String>) -> Result<(), Box<dyn Error>> {
         let exe_name = env::current_exe().ok().as_deref().and_then(Path::file_name).map(OsStr::display).as_ref().map(ToString::to_string);
         let program = exe_name.as_deref().unwrap_or("elbie");
 
@@ -496,9 +452,8 @@ pub enum FamilyCommand {
     /// Print the information about the available languages.
     Information(ShowInformation),
     /// Print out this information. Use 'help COMMAND' to get help on a specific command.
-    Help(FamilyShowUsage),
+    Help(FamilyShowUsage)
 }
-
 
 impl Default for FamilyCommand {
     fn default() -> Self {
@@ -507,27 +462,23 @@ impl Default for FamilyCommand {
 }
 
 impl DoIt for FamilyCommand {
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),Box<dyn Error>> {
-
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(), Box<dyn Error>> {
         match self {
-            Self::Generate(command) => command.doit(family,language),
-            Self::Validate(command) => command.doit(family,language),
-            Self::Phonemes(command) => command.doit(family,language),
-            Self::Spelling(command) => command.doit(family,language),
-            Self::Lexicon(command) => command.doit(family,language),
-            Self::Transform(command) => command.doit(family,language),
-            Self::Information(command) => command.doit(family,language),
-            Self::Help(command) => command.doit(family,language),
+            Self::Generate(command) => command.doit(family, language),
+            Self::Validate(command) => command.doit(family, language),
+            Self::Phonemes(command) => command.doit(family, language),
+            Self::Spelling(command) => command.doit(family, language),
+            Self::Lexicon(command) => command.doit(family, language),
+            Self::Transform(command) => command.doit(family, language),
+            Self::Information(command) => command.doit(family, language),
+            Self::Help(command) => command.doit(family, language)
         }
-
     }
 }
-
 
 #[derive(Options)]
 #[options(no_help_flag)]
 pub struct FamilyArguments {
-
     /// prints out the text '<!-- Content auto-generated by Elbie -->' before any output. To change the name of the generator, use `--creator`.
     comment: bool,
     /// prints out the text '<!-- Content auto-generated by {{0}} -->' before any output, where '{{0}}' is replaced by the specified text. Also see `--comment`.
@@ -540,23 +491,18 @@ pub struct FamilyArguments {
 
     #[options(command)]
     command: Option<FamilyCommand>
-
 }
-
 
 #[derive(Options)]
 /// Print out this information. Use 'help COMMAND' to get help on a specific command.
 pub struct LanguageShowUsage {
-
     #[options(free)]
     /// A command to display specific help for
-    command: Option<String>,
-
+    command: Option<String>
 }
 
 impl DoIt for LanguageShowUsage {
-
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, _: FamilyCreator, _: Option<String>) -> Result<(),Box<dyn Error>> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, _: FamilyCreator, _: Option<String>) -> Result<(), Box<dyn Error>> {
         let exe_name = env::current_exe().ok().as_deref().and_then(Path::file_name).map(OsStr::display).as_ref().map(ToString::to_string);
         let program = exe_name.as_deref().unwrap_or("elbie");
 
@@ -597,7 +543,7 @@ pub enum LanguageCommand {
     /// Loads a lexicon of words in CSV format for a language, validates them and prints out a formatted listing.
     Lexicon(FormatLexicon),
     /// Print out this information. Use 'help COMMAND' to get help on a specific command.
-    Help(LanguageShowUsage),
+    Help(LanguageShowUsage)
 }
 
 impl Default for LanguageCommand {
@@ -607,24 +553,21 @@ impl Default for LanguageCommand {
 }
 
 impl DoIt for LanguageCommand {
-    fn doit<FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(),Box<dyn Error>> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(), Box<dyn Error>> {
         match self {
-            Self::Generate(command) => command.doit(family,language),
-            Self::Validate(command) => command.doit(family,language),
-            Self::Phonemes(command) => command.doit(family,language),
-            Self::Spelling(command) => command.doit(family,language),
-            Self::Lexicon(command) => command.doit(family,language),
-            Self::Help(command) => command.doit(family,language),
-
+            Self::Generate(command) => command.doit(family, language),
+            Self::Validate(command) => command.doit(family, language),
+            Self::Phonemes(command) => command.doit(family, language),
+            Self::Spelling(command) => command.doit(family, language),
+            Self::Lexicon(command) => command.doit(family, language),
+            Self::Help(command) => command.doit(family, language)
         }
-
     }
 }
 
 #[derive(Options)]
 #[options(no_help_flag)]
 pub struct LanguageArguments {
-
     /// prints out the text '<!-- Content auto-generated by Elbie -->' before any output. To change the name of the generator, use `--creator`.
     comment: bool,
     /// prints out the text '<!-- Content auto-generated by {{0}} -->' before any output, where '{{0}}' is replaced by the specified text. Also see `--comment`.
@@ -632,11 +575,9 @@ pub struct LanguageArguments {
 
     #[options(command)]
     command: Option<LanguageCommand>
-
 }
 
-
-fn run_command<FamilyCreator: FnOnce() -> Result<Family,ElbieError>, Command: DoIt + Default>(comment: Option<String>, language: Option<String>, command: Option<Command>, family: FamilyCreator) {
+fn run_command<FamilyCreator: FnOnce() -> Result<Family, ElbieError>, Command: DoIt + Default>(comment: Option<String>, language: Option<String>, command: Option<Command>, family: FamilyCreator) {
     if let Some(comment) = comment {
         println!("<!-- Content auto-generated by {comment} -->")
     }
@@ -650,44 +591,31 @@ fn run_command<FamilyCreator: FnOnce() -> Result<Family,ElbieError>, Command: Do
 }
 
 /// The first argument (program name) should not be included.
-pub fn run_family<S: AsRef<str>, FamilyCreator: FnOnce() -> Result<Family,ElbieError>>(args: &[S], family: FamilyCreator) {
-
+pub fn run_family<S: AsRef<str>, FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(args: &[S], family: FamilyCreator) {
     match FamilyArguments::parse_args_default(args) {
         Ok(arguments) => {
-
             run_command(arguments.creator.or_else(|| arguments.comment.then(|| "Elbie".to_owned())), arguments.language, arguments.command, family);
-
         },
         Err(err) => {
             eprintln!("{err}");
             process::exit(1)
-        },
+        }
     }
 }
 
-
-
 /// Use this to run a command line that only works with one language. The arguments are the same as the usual, except that there is no language option, and the transform command is not available.
-pub fn run_language<S: AsRef<str>, Creator: FnOnce() -> Result<Language,ElbieError> + 'static>(args: &[S], name: &'static str, language: Creator) {
-
+pub fn run_language<S: AsRef<str>, Creator: FnOnce() -> Result<Language, ElbieError> + 'static>(args: &[S], name: &'static str, language: Creator) {
     match LanguageArguments::parse_args_default(args) {
         Ok(arguments) => {
-
-            run_command(
-                arguments.creator.or_else(|| arguments.comment.then(|| "Elbie".to_owned())),
-                Some(name.to_owned()),
-                arguments.command,
-                move || {
-                    let mut family = Family::default();
-                    family.default_language(name, language)?;
-                    Ok(family)
-                }
-            );
-
+            run_command(arguments.creator.or_else(|| arguments.comment.then(|| "Elbie".to_owned())), Some(name.to_owned()), arguments.command, move || {
+                let mut family = Family::default();
+                family.default_language(name, language)?;
+                Ok(family)
+            });
         },
         Err(err) => {
             eprintln!("{err}");
             process::exit(1)
-        },
+        }
     }
 }
