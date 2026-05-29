@@ -62,17 +62,17 @@ fn sort_phonemes_by_length_descending(a: &Rc<Phoneme>, b: &Rc<Phoneme>)  -> Orde
 
 #[derive(Debug)]
 pub struct Language {
-  name: &'static str,
-  inventory: Inventory,
-  // These are kept separate from the phoneme structure to reduce some type dependencies.
-  // For example, if this were part of the Phoneme structure, the ORTHOGRAPHIES parameter would be required on almost everything.
-  // But also, keeping this separate allows me to have a separate Inventory object which is useful for phonemes out of a language context
-  // (such as temporary phonemes during transformations)
-  phoneme_behavior: HashMap<Rc<Phoneme>,PhonemeBehavior>,
-  orthographies: Vec<&'static str>,
-  #[allow(deprecated)]
-  patterns: PatternSet,
-  tables: Vec<TableEntry>
+    name: &'static str,
+    inventory: Inventory,
+    // These are kept separate from the phoneme structure to reduce some type dependencies.
+    // For example, if this were part of the Phoneme structure, the ORTHOGRAPHIES parameter would be required on almost everything.
+    // But also, keeping this separate allows me to have a separate Inventory object which is useful for phonemes out of a language context
+    // (such as temporary phonemes during transformations)
+    phoneme_behavior: HashMap<Rc<Phoneme>,PhonemeBehavior>,
+    orthographies: Vec<&'static str>,
+    #[allow(deprecated)]
+    patterns: PatternSet,
+    tables: Vec<TableEntry>
 }
 
 impl Language {

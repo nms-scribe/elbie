@@ -16,18 +16,18 @@ use crate::transformation::PreparedTransformation;
 use crate::validation::ValidationTraceCallback;
 
 pub(crate) enum ValidateOption {
-  Simple,
-  Explain,
-  Trace,
-  ExplainAndTrace
+    Simple,
+    Explain,
+    Trace,
+    ExplainAndTrace
 }
 
 
 pub(crate) enum TransformationOption {
-  Simple,
-  Explain,
-  Trace,
-  ExplainAndTrace
+    Simple,
+    Explain,
+    Trace,
+    ExplainAndTrace
 }
 
 
@@ -193,20 +193,20 @@ pub(crate) fn show_spelling(grid_style: Option<&Format>, language: &Language, co
 
 
 pub(crate) fn format_lexicon(format: &Format, style: &LexiconStyle, language: &Language, path: &WordTable, ortho_index: usize) {
-  if ortho_index >= language.orthographies().len() {
+    if ortho_index >= language.orthographies().len() {
         panic!("Language only has {} orthographies.",language.orthographies().len())
-  }
-
-  match language.load_lexicon(path,ortho_index,style) {
-    Ok(lexicon) => {
-        lexicon.print_to_stdout(format);
-
-    },
-    Err(err) => {
-      eprintln!("!!! Couldn't process lexicon: {err}");
-      process::exit(1)
     }
-  }
+
+    match language.load_lexicon(path,ortho_index,style) {
+        Ok(lexicon) => {
+            lexicon.print_to_stdout(format);
+
+        },
+        Err(err) => {
+            eprintln!("!!! Couldn't process lexicon: {err}");
+            process::exit(1)
+        }
+    }
 }
 
 

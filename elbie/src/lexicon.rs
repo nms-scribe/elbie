@@ -31,9 +31,9 @@ impl FromStr for LexiconStyle {
 
 
 pub(crate) struct LexiconEntry {
-  word: Word,
-  spelling: Vec<String>,
-  definition: String
+    word: Word,
+    spelling: Vec<String>,
+    definition: String
 }
 
 impl LexiconEntry {

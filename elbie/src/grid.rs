@@ -25,26 +25,26 @@ This is what I needed:
 - several different styles of table, including plain and markdown
 
 - tabled https://crates.io/crates/tabled
-  - CON: The architecture is oddly typed and makes this difficult to work with
+    - CON: The architecture is oddly typed and makes this difficult to work with
     - Instead of just having methods that are specific to what you want to do, they have methods like 'with' that take traits that could change anything from styling to borders to specific cell options.
     - The builder pattern they use depends on methods that return &mut Self instead of Self, which is really difficult to work with:
       - I can't put them all in one line because the first builder method returns a reference that is immediately dropped.
       - Every once in a while, if you're not careful, you run into errors because you're trying to borrow mutably more than once.
     - The Border and Style types are generically typed based on whether borders (left, right, top, bottom) are turned on and off, among other things. This makes it more difficult to apply an arbitrary border style, as well as make it difficult to override the styles for the cells.
-  - CON: The cell-specific options are specified as options separately from the cells. Meaning that when I want to span, I have to track columns and rows in an array, and add the spanning later, instead of having a 'span' option on the cell itself.
-  - CON: Attempting to remove the left border to merge cells somehow completely changes the upper-left and lower-left border to something else, and I have to do a lot of other unexpected tweaking because of that.
+    - CON: The cell-specific options are specified as options separately from the cells. Meaning that when I want to span, I have to track columns and rows in an array, and add the spanning later, instead of having a 'span' option on the cell itself.
+    - CON: Attempting to remove the left border to merge cells somehow completely changes the upper-left and lower-left border to something else, and I have to do a lot of other unexpected tweaking because of that.
 - prettytable https://crates.io/crates/prettytable-rs/0.10.0
-  - CON: Appears to be several years old, not sure how well it's maintained
-  - CON: Can't support turning off borders for specific cells
-  - PRO: Very simple architecture with few dependencies.
+    - CON: Appears to be several years old, not sure how well it's maintained
+    - CON: Can't support turning off borders for specific cells
+    - PRO: Very simple architecture with few dependencies.
 - comfytable https://crates.io/crates/comfy-table
-  - CON: Spans are not supported *at all*, and documentation says that it will never be
+    - CON: Spans are not supported *at all*, and documentation says that it will never be
 - cli-table https://crates.io/crates/cli-table
-  - CON: spans are not supported
+    - CON: spans are not supported
 - text-tables https://crates.io/crates/text-tables
-  - CON: Does not support any sort of customization (it just renders a Vec<Vec<Str>> to a writer)
-  - CON: Repository is gone
-  - PRO: It's 153 lines of text, so I could just grab it.
+    - CON: Does not support any sort of customization (it just renders a Vec<Vec<Str>> to a writer)
+    - CON: Repository is gone
+    - PRO: It's 153 lines of text, so I could just grab it.
 
 Decision: I ended up going with pretty table, as it required the least customization. I can live without rowspans. And I found a way to remove borders, it just takes a bit of convoluted pre-processing. FUTURE: Consider taking the code and rewriting it to allow rowspanning and cell-specific border customization.
 

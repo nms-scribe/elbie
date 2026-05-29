@@ -30,97 +30,97 @@ pub(crate) struct Arguments {
 }
 
 pub(crate) fn parse_args<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Args) -> Arguments {
-  let mut command = None;
-  let mut grid_style = None;
-  let mut spanning = true;
-  let mut comment = None;
+    let mut command = None;
+    let mut grid_style = None;
+    let mut spanning = true;
+    let mut comment = None;
 
-  macro_rules! set_grid_style {
-      ($style: expr) => {
-        if grid_style.is_some() {
-          panic!("Too many grid styles");
-        } else {
-          grid_style = Some($style);
-        }
-      };
-  }
-
-  macro_rules! set_command {
-      ($command: expr) => {
-        if command.is_some() {
-          panic!("Too many commands");
-        } else {
-          command = Some($command);
-        }
-      };
-  }
-
-  while let Some(arg) = args.next() {
-    match arg.as_ref() {
-      "--format=plain" => set_grid_style!(Format::Plain),
-      "--format=terminal" => set_grid_style!(Format::Terminal{ spans: spanning }),
-      "--format=markdown" => set_grid_style!(Format::Markdown),
-      "--format=html" => set_grid_style!(Format::HTML { spans: spanning }),
-      "--format=json" => set_grid_style!(Format::JSON),
-      "--no-spans" => if let Some(style) = &mut grid_style {
-          match style {
-            Format::Plain |
-            Format::JSON |
-            Format::Markdown |
-            Format::CSV => (),
-            Format::Terminal { spans } |
-            Format::HTML { spans } => if *spans {
-                *spans = false
+    macro_rules! set_grid_style {
+        ($style: expr) => {
+            if grid_style.is_some() {
+                panic!("Too many grid styles");
             } else {
-                panic!("--no-spans specified twice")
+                grid_style = Some($style);
             }
-        }
-      } else {
-          spanning = false
-      },
-      "--comment" => {
-          if let Some(text) = args.next() {
-              comment = Some(text.as_ref().to_owned())
-          } else {
-              comment = Some("Elbie".to_owned())
-          }
-      },
-      "--generate" => set_command!(Command::GenerateWords(args.next().expect("Generate count required").as_ref().parse().expect("Argument should be a number"))),
-      "--validate" => {
-        let mut words = vec![args.next().expect("No words to validate").as_ref().to_owned()];
-        words.extend(args.map(|x| x.as_ref().to_owned()));
-        set_command!(Command::ValidateWords(words,ValidateOption::Simple));
-      },
-      "--validate=explain" => {
-        let mut words = vec![args.next().expect("No words to validate").as_ref().to_owned()];
-        words.extend(args.map(|x| x.as_ref().to_owned()));
-        set_command!(Command::ValidateWords(words,ValidateOption::Explain));
-      },
-      "--validate=trace" => {
-        let mut words = vec![args.next().expect("No words to validate").as_ref().to_owned()];
-        words.extend(args.map(|x| x.as_ref().to_owned()));
-        set_command!(Command::ValidateWords(words,ValidateOption::Trace));
-      },
-      "--phonemes" => set_command!(Command::ShowPhonemes(None)),
-      a if a.starts_with("--phonemes=") => set_command!(Command::ShowPhonemes(Some(a.trim_start_matches("--phonemes=").to_owned()))),
-      "--spelling" => set_command!(Command::ShowSpelling(1)),
-      a if a.starts_with("--spelling=") => set_command!(Command::ShowSpelling(a.trim_start_matches("--spelling=").parse::<usize>().expect("Parameter should be a number").clamp(1,usize::MAX))),
-      "--lexicon" => {
-        let path = args.next().expect("No lexicon filename given").as_ref().to_owned();
-        let spelling_index = args.next().expect("No orthography index given").as_ref().parse().expect("orthography index must be a number");
-        set_command!(Command::ProcessLexicon(path,spelling_index))
-      },
-      "--help" => set_command!(Command::ShowUsage),
-      _ => panic!("Unknown command {}",arg.as_ref())
-
+        };
     }
-  }
 
-  Arguments {
-      grid_style,
-      comment,
-      command: command.unwrap_or(Command::GenerateWords(1))
-  }
+    macro_rules! set_command {
+        ($command: expr) => {
+            if command.is_some() {
+                panic!("Too many commands");
+            } else {
+                command = Some($command);
+            }
+        };
+    }
+
+    while let Some(arg) = args.next() {
+        match arg.as_ref() {
+            "--format=plain" => set_grid_style!(Format::Plain),
+            "--format=terminal" => set_grid_style!(Format::Terminal{ spans: spanning }),
+            "--format=markdown" => set_grid_style!(Format::Markdown),
+            "--format=html" => set_grid_style!(Format::HTML { spans: spanning }),
+            "--format=json" => set_grid_style!(Format::JSON),
+            "--no-spans" => if let Some(style) = &mut grid_style {
+                match style {
+                    Format::Plain |
+                    Format::JSON |
+                    Format::Markdown |
+                    Format::CSV => (),
+                    Format::Terminal { spans } |
+                    Format::HTML { spans } => if *spans {
+                        *spans = false
+                    } else {
+                        panic!("--no-spans specified twice")
+                    }
+                }
+            } else {
+                spanning = false
+            },
+            "--comment" => {
+                if let Some(text) = args.next() {
+                    comment = Some(text.as_ref().to_owned())
+                } else {
+                    comment = Some("Elbie".to_owned())
+                }
+            },
+            "--generate" => set_command!(Command::GenerateWords(args.next().expect("Generate count required").as_ref().parse().expect("Argument should be a number"))),
+            "--validate" => {
+                let mut words = vec![args.next().expect("No words to validate").as_ref().to_owned()];
+                words.extend(args.map(|x| x.as_ref().to_owned()));
+                set_command!(Command::ValidateWords(words,ValidateOption::Simple));
+            },
+            "--validate=explain" => {
+                let mut words = vec![args.next().expect("No words to validate").as_ref().to_owned()];
+                words.extend(args.map(|x| x.as_ref().to_owned()));
+                set_command!(Command::ValidateWords(words,ValidateOption::Explain));
+            },
+            "--validate=trace" => {
+                let mut words = vec![args.next().expect("No words to validate").as_ref().to_owned()];
+                words.extend(args.map(|x| x.as_ref().to_owned()));
+                set_command!(Command::ValidateWords(words,ValidateOption::Trace));
+            },
+            "--phonemes" => set_command!(Command::ShowPhonemes(None)),
+            a if a.starts_with("--phonemes=") => set_command!(Command::ShowPhonemes(Some(a.trim_start_matches("--phonemes=").to_owned()))),
+            "--spelling" => set_command!(Command::ShowSpelling(1)),
+            a if a.starts_with("--spelling=") => set_command!(Command::ShowSpelling(a.trim_start_matches("--spelling=").parse::<usize>().expect("Parameter should be a number").clamp(1,usize::MAX))),
+            "--lexicon" => {
+                let path = args.next().expect("No lexicon filename given").as_ref().to_owned();
+                let spelling_index = args.next().expect("No orthography index given").as_ref().parse().expect("orthography index must be a number");
+                set_command!(Command::ProcessLexicon(path,spelling_index))
+            },
+            "--help" => set_command!(Command::ShowUsage),
+            _ => panic!("Unknown command {}",arg.as_ref())
+
+        }
+    }
+
+    Arguments {
+        grid_style,
+        comment,
+        command: command.unwrap_or(Command::GenerateWords(1))
+    }
 
 }
 
@@ -160,41 +160,41 @@ pub(crate) fn show_usage(program: &str) {
 
 
 pub fn run<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Args, language: Result<Language,ElbieError>) {
-  let arguments = parse_args(&mut args.skip(1));
+    let arguments = parse_args(&mut args.skip(1));
 
-  if let Some(comment) = arguments.comment {
-      println!("<!-- Content auto-generated by {comment} -->")
-  }
+    if let Some(comment) = arguments.comment {
+        println!("<!-- Content auto-generated by {comment} -->")
+    }
 
-  match language {
-      Ok(language) => {
+    match language {
+        Ok(language) => {
 
-        match arguments.command {
-            Command::GenerateWords(count) => generate_words(arguments.grid_style.as_ref(), &language, count),
-            Command::ValidateWords(words,option) => {
-                let mut words_data = WordTable::default();
-                words_data.add_words(&words);
-                validate_words(&language, words_data, &option, &Format::Plain)
-            },
-            Command::ShowPhonemes(table) => show_phonemes(arguments.grid_style.as_ref(), &language, table.as_ref()),
-            Command::ShowSpelling(columns) => show_spelling(arguments.grid_style.as_ref(), &language, columns),
-            Command::ProcessLexicon(path,ortho_index) => {
-                // NOTE: I'm doing an expect here because this whole 'run' function is deprecated anyway, so I'm not going to change it's signature.
-                let Ok(words_data) = WordTable::read(&path) else {
-                    eprintln!("!!! Couldn't read input lexicon");
-                    return;
-                };
-                format_lexicon(arguments.grid_style.as_ref().unwrap_or(&Format::Plain), &LexiconStyle::List, &language, &words_data, ortho_index)
-            },
-            Command::ShowUsage => {
-                let exe_name = env::current_exe().ok().as_deref().and_then(Path::file_name).map(OsStr::display).as_ref().map(ToString::to_string);
-                let program = exe_name.as_deref().unwrap_or_else(|| language.name());
-                show_usage(program)
-            },
-        }
+            match arguments.command {
+                Command::GenerateWords(count) => generate_words(arguments.grid_style.as_ref(), &language, count),
+                Command::ValidateWords(words,option) => {
+                    let mut words_data = WordTable::default();
+                    words_data.add_words(&words);
+                    validate_words(&language, words_data, &option, &Format::Plain)
+                },
+                Command::ShowPhonemes(table) => show_phonemes(arguments.grid_style.as_ref(), &language, table.as_ref()),
+                Command::ShowSpelling(columns) => show_spelling(arguments.grid_style.as_ref(), &language, columns),
+                Command::ProcessLexicon(path,ortho_index) => {
+                    // NOTE: I'm doing an expect here because this whole 'run' function is deprecated anyway, so I'm not going to change it's signature.
+                    let Ok(words_data) = WordTable::read(&path) else {
+                        eprintln!("!!! Couldn't read input lexicon");
+                        return;
+                    };
+                    format_lexicon(arguments.grid_style.as_ref().unwrap_or(&Format::Plain), &LexiconStyle::List, &language, &words_data, ortho_index)
+                },
+                Command::ShowUsage => {
+                    let exe_name = env::current_exe().ok().as_deref().and_then(Path::file_name).map(OsStr::display).as_ref().map(ToString::to_string);
+                    let program = exe_name.as_deref().unwrap_or_else(|| language.name());
+                    show_usage(program)
+                },
+            }
 
-      },
-      Err(err) => eprintln!("!!! Language Incomplete: {err}")
+        },
+        Err(err) => eprintln!("!!! Language Incomplete: {err}")
     }
 
 

@@ -21,23 +21,23 @@ pub const EMPTY: &str = "empty";
 // Another reason I may have originally had these objects was that I had an idea of keeping their "sets" on the phoneme itself. However, I don't need that to happen. And it seems like phonemes only make sense to have sets in the specific context of a language. Outside of that context, having a set is meaningless. (This is based on the definition of phonemes in linguistics, at least as I understand it)
 // So, I feel like it would be better not to have separate Phonemes, and just use Rc<str> or Box<str> as the phoneme. The Inventory would have a Set instead of a Map. And it would simplify a bunch of the code since I could even have phonemes that didn't exist in an inventory.
 pub struct Phoneme {
-  pub name: &'static str
+    pub name: &'static str
 }
 
 impl Phoneme {
-  pub(crate) fn new(name: &'static str) -> Rc<Self> {
-    Rc::new(Self {
-      name
-    })
-  }
+    pub(crate) fn new(name: &'static str) -> Rc<Self> {
+        Rc::new(Self {
+            name
+        })
+    }
 
 }
 
 impl Display for Phoneme {
 
-  fn fmt(&self, f: &mut Formatter) -> Result<(),fmt::Error> {
-    write!(f,"/{}/",self.name)
-  }
+    fn fmt(&self, f: &mut Formatter) -> Result<(),fmt::Error> {
+        write!(f,"/{}/",self.name)
+    }
 
 }
 
@@ -59,8 +59,8 @@ pub trait InventoryLoader {
 
 #[derive(Debug)]
 pub struct Inventory {
-  phonemes: HashMap<&'static str,Rc<Phoneme>>,
-  sets: HashMap<&'static str,Bag<Rc<Phoneme>>>, // It seems like a hashset would be better, but I can't pick randomly from it without converting to vec anyway.
+    phonemes: HashMap<&'static str,Rc<Phoneme>>,
+    sets: HashMap<&'static str,Bag<Rc<Phoneme>>>, // It seems like a hashset would be better, but I can't pick randomly from it without converting to vec anyway.
 }
 
 impl Default for Inventory {

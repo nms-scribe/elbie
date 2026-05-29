@@ -12,21 +12,21 @@ use crate::word::Word;
 
 
 pub(crate) enum TransformationTraceMessage {
-  StartTransformation(Word),
-  MatchedRule(&'static str,Word,Word),
-  UnmatchedRule(&'static str)
+    StartTransformation(Word),
+    MatchedRule(&'static str,Word,Word),
+    UnmatchedRule(&'static str)
 }
 
 impl Display for TransformationTraceMessage {
 
-  fn fmt(&self, f: &mut Formatter) -> Result<(),fmt::Error> {
-    match self {
-      Self::StartTransformation(word) => write!(f,"Tracing Transformation: '{word}'"),
-      Self::MatchedRule(name,from,to) => write!(f,"Matched '{name}': {from} 🡺 {to}"),
-      Self::UnmatchedRule(name) => write!(f,"Did not match '{name}'"),
-    }
+    fn fmt(&self, f: &mut Formatter) -> Result<(),fmt::Error> {
+        match self {
+            Self::StartTransformation(word) => write!(f,"Tracing Transformation: '{word}'"),
+            Self::MatchedRule(name,from,to) => write!(f,"Matched '{name}': {from} 🡺 {to}"),
+            Self::UnmatchedRule(name) => write!(f,"Did not match '{name}'"),
+        }
 
-  }
+    }
 }
 
 

@@ -1154,37 +1154,37 @@ The good news is that this doesn't limit the language if the user wants somethin
 */
 #[derive(Debug)]
 pub(crate) enum TableDef {
-  OneCell(Table0DDef),
-  ListTable(Table1DDef),
-  SimpleTable(Table2DDef),
-  TableWithSubcolumns(Table3DDef),
-  TableWithSubcolumnsAndSubrows(Table4DDef)
+    OneCell(Table0DDef),
+    ListTable(Table1DDef),
+    SimpleTable(Table2DDef),
+    TableWithSubcolumns(Table3DDef),
+    TableWithSubcolumnsAndSubrows(Table4DDef)
 }
 
 
 impl TableDef {
 
-  pub(crate) fn set_option(&mut self, option: &TableOption) -> Result<(),ElbieError> {
-      match (self,&option) {
-        (Self::TableWithSubcolumnsAndSubrows(definition), TableOption::HideSubcolumnCaptions) => {
-            definition.hide_subcolumn_captions(true);
-        },
-        (Self::TableWithSubcolumnsAndSubrows(definition), TableOption::HideSubrowCaptions) => {
-            definition.hide_subrow_captions(true);
-        },
-        (Self::TableWithSubcolumns(definition), TableOption::HideSubcolumnCaptions) => {
-            definition.hide_subcolumn_captions(true);
-        },
-        (Self::TableWithSubcolumns(_) |
-         Self::OneCell(_) |
-         Self::ListTable(_) |
-         Self::SimpleTable(_), TableOption::HideSubrowCaptions) |
-        (Self::OneCell(_) |
-         Self::ListTable(_) |
-         Self::SimpleTable(_), TableOption::HideSubcolumnCaptions) => return Err(ElbieError::InvalidOptionForTable(option.clone()))
-    }
-    Ok(())
+    pub(crate) fn set_option(&mut self, option: &TableOption) -> Result<(),ElbieError> {
+        match (self,&option) {
+            (Self::TableWithSubcolumnsAndSubrows(definition), TableOption::HideSubcolumnCaptions) => {
+                definition.hide_subcolumn_captions(true);
+            },
+            (Self::TableWithSubcolumnsAndSubrows(definition), TableOption::HideSubrowCaptions) => {
+                definition.hide_subrow_captions(true);
+            },
+            (Self::TableWithSubcolumns(definition), TableOption::HideSubcolumnCaptions) => {
+                definition.hide_subcolumn_captions(true);
+            },
+            (Self::TableWithSubcolumns(_) |
+                Self::OneCell(_) |
+                Self::ListTable(_) |
+                Self::SimpleTable(_), TableOption::HideSubrowCaptions) |
+            (Self::OneCell(_) |
+                Self::ListTable(_) |
+                Self::SimpleTable(_), TableOption::HideSubcolumnCaptions) => return Err(ElbieError::InvalidOptionForTable(option.clone()))
+        }
+        Ok(())
 
-  }
+    }
 
 }

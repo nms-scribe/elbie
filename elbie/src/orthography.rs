@@ -10,21 +10,21 @@ pub(crate) type SpellingCallback = fn(&Language, &Rc<Phoneme>, &mut String, Opti
 
 #[derive(Default)]
 pub(crate) enum SpellingBehavior {
-  #[default]
-  Default, // default behavior is to spell the phoneme
-  Text(&'static str),
-  Callback(SpellingCallback)
+    #[default]
+    Default, // default behavior is to spell the phoneme
+    Text(&'static str),
+    Callback(SpellingCallback)
 }
 
 impl fmt::Debug for SpellingBehavior {
 
-  fn fmt(&self, f: &mut Formatter) -> Result<(),fmt::Error> {
-    write!(f,"PhonemeBehavior::")?;
-    match self {
-      Self::Default => write!(f,"Default"),
-      Self::Text(text) => write!(f,"Text({text})"),
-      Self::Callback(_) => write!(f,"Callback(<...>)"),
-    }
+    fn fmt(&self, f: &mut Formatter) -> Result<(),fmt::Error> {
+        write!(f,"PhonemeBehavior::")?;
+        match self {
+            Self::Default => write!(f,"Default"),
+            Self::Text(text) => write!(f,"Text({text})"),
+            Self::Callback(_) => write!(f,"Callback(<...>)"),
+        }
 
-  }
+    }
 }
