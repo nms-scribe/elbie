@@ -1,10 +1,10 @@
 use core::fmt;
-use core::fmt::Formatter;
 use core::fmt::Display;
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
-use std::rc::Rc;
+use core::fmt::Formatter;
 use rand::rngs::ThreadRng;
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
+use std::rc::Rc;
 
 use crate::bag::Bag;
 use crate::errors::ElbieError;

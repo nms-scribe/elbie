@@ -1,24 +1,24 @@
-use crate::errors::ElbieError;
-use crate::format::Format;
+use crate::cli_functions::TransformationOption;
+use crate::cli_functions::ValidateOption;
+use crate::cli_functions::format_lexicon;
 use crate::cli_functions::generate_words;
-use crate::cli_functions::validate_words;
 use crate::cli_functions::show_phonemes;
 use crate::cli_functions::show_spelling;
-use crate::cli_functions::format_lexicon;
-use crate::cli_functions::ValidateOption;
-use std::path::Path;
-use std::ffi::OsStr;
-use gumdrop::Options;
-use std::process;
-use crate::family::Family;
-use crate::language::Language;
 use crate::cli_functions::transform_words;
-use crate::cli_functions::TransformationOption;
-use core::error::Error;
-use std::env;
+use crate::cli_functions::validate_words;
+use crate::errors::ElbieError;
+use crate::family::Family;
+use crate::format::Format;
+use crate::language::Language;
 use crate::lexicon::LexiconStyle;
 use crate::word_table::WordTable;
 use core::convert::identity;
+use core::error::Error;
+use gumdrop::Options;
+use std::env;
+use std::ffi::OsStr;
+use std::path::Path;
+use std::process;
 
 // Gumdrop kind of makes showing usage difficult. The only way it works is if you have a --help flag on each command, and then only if it's discovered in `parse_args_or_exit`. And I'm not calling that because I want to be able to supply my own arguments. I would prefer to have a help command that takes an optional command name parameter anyway.
 fn show_usage<Command: Options>(program: &str, selected_command: Option<&str>) {

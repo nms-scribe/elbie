@@ -1,7 +1,7 @@
-use core::fmt;
-use core::fmt::Formatter;
-use core::fmt::Display;
 use crate::phoneme::Phoneme;
+use core::fmt;
+use core::fmt::Display;
+use core::fmt::Formatter;
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]

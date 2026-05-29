@@ -20,9 +20,8 @@ indent_style = "Visual"
 trailing_comma = "Never"
 use_field_init_shorthand = true
 use_small_heuristics = "Max"
-imports_granularity = "One"
-# TODO: Turn this back on once I'm sure about rustfmt configuration.
-reorder_imports = false
+imports_granularity = "Item"
+reorder_imports = true
 single_line_if_else_max_width = 0
 single_line_let_else_max_width = 0
 struct_lit_single_line = false

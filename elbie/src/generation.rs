@@ -1,22 +1,22 @@
-use crate::language::Language;
-use crate::word::Word;
-use rand::rngs::ThreadRng;
-use std::rc::Rc;
-use crate::phoneme::Phoneme;
 use crate::errors::ElbieError;
-use crate::phonotactics::Sequence;
-use crate::phonotactics::Series;
+use crate::language::Language;
+use crate::phoneme::Phoneme;
+use crate::phonotactics::AddPhoneme;
+use crate::phonotactics::Case;
+use crate::phonotactics::CaseEnvironment;
+use crate::phonotactics::Choice;
+use crate::phonotactics::NamedOrInlineEnvironment;
 use crate::phonotactics::Optional;
 use crate::phonotactics::Pattern;
-use rand::Rng as _;
-use crate::phonotactics::Choice;
-use crate::phonotactics::AddPhoneme;
-use crate::phonotactics::CaseEnvironment;
-use crate::phonotactics::Case;
-use crate::phonotactics::NamedOrInlineEnvironment;
-use crate::phonotactics::TerminateWord;
-use crate::phonotactics::RuleReference;
 use crate::phonotactics::PatternSet;
+use crate::phonotactics::RuleReference;
+use crate::phonotactics::Sequence;
+use crate::phonotactics::Series;
+use crate::phonotactics::TerminateWord;
+use crate::word::Word;
+use rand::Rng as _;
+use rand::rngs::ThreadRng;
+use std::rc::Rc;
 
 // TODO: Time to set up rustfmt so that I can make it easier to contribute to. As long as I can check the config into git to force users to use the same. And also, find some way to force it to run before a git commit, but not on every save. (Although, would it really be bad to do on every save? As long as rustfmt isn't using AI, right?)
 

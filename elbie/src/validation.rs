@@ -1,25 +1,25 @@
-use std::rc::Rc;
-use crate::phoneme::Phoneme;
-use core::fmt::Display;
-use core::fmt;
-use core::panic::Location;
-use crate::language::Language;
 use crate::enumerate_with_count::EnumerateCount;
-use core::slice::Iter;
 use crate::errors::ElbieError;
-use crate::phonotactics::Sequence;
-use crate::phonotactics::Series;
-use crate::phonotactics::Optional;
-use crate::phonotactics::Choice;
+use crate::language::Language;
+use crate::phoneme::Phoneme;
 use crate::phonotactics::AddPhoneme;
-use crate::phonotactics::CaseEnvironment;
 use crate::phonotactics::Case;
+use crate::phonotactics::CaseEnvironment;
+use crate::phonotactics::Choice;
 use crate::phonotactics::NamedOrInlineEnvironment;
-use crate::phonotactics::TerminateWord;
-use crate::phonotactics::RuleReference;
+use crate::phonotactics::Optional;
 use crate::phonotactics::Pattern;
 use crate::phonotactics::PatternSet;
+use crate::phonotactics::RuleReference;
+use crate::phonotactics::Sequence;
+use crate::phonotactics::Series;
+use crate::phonotactics::TerminateWord;
 use crate::word::Word;
+use core::fmt;
+use core::fmt::Display;
+use core::panic::Location;
+use core::slice::Iter;
+use std::rc::Rc;
 
 #[derive(Clone)]
 pub(crate) enum ValidationFailure {

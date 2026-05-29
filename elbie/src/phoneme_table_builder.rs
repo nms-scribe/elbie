@@ -1,13 +1,13 @@
+use crate::errors::ElbieError;
 use crate::language::Language;
 use crate::phoneme_table::Table0DDef;
 use crate::phoneme_table::Table1DDef;
 use crate::phoneme_table::Table2DDef;
 use crate::phoneme_table::Table3DDef;
-use crate::errors::ElbieError;
-use crate::phoneme_table::TableOption;
 use crate::phoneme_table::Table4DDef;
-use std::collections::HashSet;
 use crate::phoneme_table::TableDef;
+use crate::phoneme_table::TableOption;
+use std::collections::HashSet;
 
 #[derive(Debug)]
 pub(crate) struct TableEntry {

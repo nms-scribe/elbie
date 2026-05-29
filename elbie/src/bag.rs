@@ -1,6 +1,6 @@
+use core::cmp::Ordering;
 use rand::prelude::ThreadRng;
 use rand::seq::IndexedRandom as _;
-use core::cmp::Ordering;
 
 // A set that I can random access. It's more efficient than random access of a HashSet (which can't retrieve by index), and also allows retaining insert order.
 // But probably could be better.

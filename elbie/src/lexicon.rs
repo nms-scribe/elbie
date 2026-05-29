@@ -1,15 +1,15 @@
-use core::fmt::Write as _;
-use crate::word::Word;
 use crate::format::Format;
-use crate::grid::Grid;
-use crate::grid::TableClass;
+use crate::grid::Cell;
 use crate::grid::ColumnHeader;
+use crate::grid::Grid;
 use crate::grid::GridRow;
 use crate::grid::TRBodyClass;
-use crate::grid::Cell;
+use crate::grid::TableClass;
 use crate::grid::TableOutput;
-use html_builder::Html5 as _;
+use crate::word::Word;
+use core::fmt::Write as _;
 use core::str::FromStr;
+use html_builder::Html5 as _;
 
 pub(crate) enum LexiconStyle {
     Table,

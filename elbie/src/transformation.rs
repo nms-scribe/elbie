@@ -1,14 +1,14 @@
-use core::fmt;
-use core::iter::Peekable;
-use core::fmt::Display;
-use core::fmt::Formatter;
-use std::rc::Rc;
-use core::slice::Iter;
 use crate::errors::ElbieError;
 use crate::language::Language;
 use crate::phoneme::Inventory;
 use crate::phoneme::Phoneme;
 use crate::word::Word;
+use core::fmt;
+use core::fmt::Display;
+use core::fmt::Formatter;
+use core::iter::Peekable;
+use core::slice::Iter;
+use std::rc::Rc;
 
 pub(crate) enum TransformationTraceMessage {
     StartTransformation(Word),

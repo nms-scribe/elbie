@@ -1,17 +1,17 @@
-use crate::errors::ElbieError;
-use crate::language::Language;
-use crate::format::Format;
+use crate::cli_functions::ValidateOption;
+use crate::cli_functions::format_lexicon;
 use crate::cli_functions::generate_words;
-use crate::cli_functions::validate_words;
 use crate::cli_functions::show_phonemes;
 use crate::cli_functions::show_spelling;
-use crate::cli_functions::format_lexicon;
-use crate::cli_functions::ValidateOption;
-use std::path::Path;
-use std::ffi::OsStr;
-use std::env;
+use crate::cli_functions::validate_words;
+use crate::errors::ElbieError;
+use crate::format::Format;
+use crate::language::Language;
 use crate::lexicon::LexiconStyle;
 use crate::word_table::WordTable;
+use std::env;
+use std::ffi::OsStr;
+use std::path::Path;
 
 pub(crate) enum Command {
     GenerateWords(usize),                       // number of words to generate

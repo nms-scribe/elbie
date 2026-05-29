@@ -1,5 +1,5 @@
-use rand::prelude::ThreadRng;
 use rand::Rng as _;
+use rand::prelude::ThreadRng;
 
 #[derive(Debug, Clone)]
 pub(crate) struct WeightedVec<ItemType> {

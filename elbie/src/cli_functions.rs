@@ -1,19 +1,19 @@
+use crate::errors::ElbieError;
 use crate::format::Format;
-use crate::language::Language;
+use crate::grid::Cell;
 use crate::grid::Grid;
-use crate::grid::TableClass;
 use crate::grid::GridRow;
 use crate::grid::TRBodyClass;
-use crate::grid::Cell;
-use std::process;
-use crate::word::Word;
+use crate::grid::TableClass;
+use crate::language::Language;
+use crate::lexicon::LexiconStyle;
+use crate::transformation::PreparedTransformation;
 use crate::transformation::Transformation;
 use crate::transformation::TransformationTraceCallback;
-use crate::errors::ElbieError;
-use crate::lexicon::LexiconStyle;
-use crate::word_table::WordTable;
-use crate::transformation::PreparedTransformation;
 use crate::validation::ValidationTraceCallback;
+use crate::word::Word;
+use crate::word_table::WordTable;
+use std::process;
 
 pub(crate) enum ValidateOption {
     Simple,

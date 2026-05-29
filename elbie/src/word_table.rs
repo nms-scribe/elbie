@@ -1,16 +1,16 @@
-use std::collections::HashMap;
-use core::mem;
-use core::error::Error;
-use std::path::Path;
-use csv::Reader;
 use crate::format::Format;
-use crate::grid::TableClass;
+use crate::grid::Cell;
+use crate::grid::ColumnHeader;
 use crate::grid::Grid;
 use crate::grid::GridRow;
 use crate::grid::TRBodyClass;
-use crate::grid::Cell;
-use crate::grid::ColumnHeader;
+use crate::grid::TableClass;
+use core::error::Error;
 use core::iter;
+use core::mem;
+use csv::Reader;
+use std::collections::HashMap;
+use std::path::Path;
 
 pub(crate) struct WordTableEntry {
     word: String,

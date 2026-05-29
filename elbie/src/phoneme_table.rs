@@ -1,21 +1,21 @@
+use crate::bag::Bag;
+use crate::errors::ElbieError;
+use crate::grid::Grid;
+use crate::grid::GridRow;
+use crate::grid::RowHeader;
 use crate::grid::SubrowHeader;
 use crate::grid::TDClass;
 use crate::grid::TRBodyClass;
 use crate::grid::TableClass;
-use crate::bag::Bag;
 use crate::language::Language;
 use crate::phoneme::Phoneme;
-use crate::grid::Grid;
-use crate::grid::GridRow;
-use crate::grid::RowHeader;
 use crate::phoneme_table::sealed::InnerTable as _;
-use crate::errors::ElbieError;
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::collections::hash_map::Entry;
 use core::fmt;
 use core::fmt::Debug;
 use core::fmt::Display;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::collections::hash_map::Entry;
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
@@ -60,9 +60,9 @@ mod sealed {
     use crate::grid::TDClass;
     use crate::phoneme_table::PhonemeDisplay;
     // Basically, I want to keep the functions on InnerTable private, and since trait functions are automatically public, this is the convoluted way I have to do it.
-    use crate::phoneme_table::Axis;
     use crate::grid::Cell;
     use crate::grid::Grid;
+    use crate::phoneme_table::Axis;
     use crate::phoneme_table::HeaderDef;
     use std::collections::HashSet;
 

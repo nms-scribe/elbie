@@ -1,8 +1,8 @@
+use crate::errors::ElbieError;
 use crate::weighted_vec::WeightedVec;
 use core::panic::Location;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use crate::errors::ElbieError;
 
 /*
 FUTURE: This is relatively easy, but it's also hard to wrap ones head around how this works. One option to fix this is to do the same thing here than I'm doing in transformations, turn it into functions.

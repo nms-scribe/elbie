@@ -1,19 +1,19 @@
-use core::fmt::Write as _;
-use std::fmt;
+use crate::format::Format;
 use core::fmt::Display;
+use core::fmt::Write as _;
 use core::num::NonZeroUsize;
 use html_builder::Html5 as _;
-use prettytable::format::consts::FORMAT_BOX_CHARS;
-use prettytable::format::consts::FORMAT_CLEAN;
+use prettytable::Cell as PrettyCell;
+use prettytable::Row as PrettyRow;
+use prettytable::Table as PrettyTable;
 use prettytable::format::FormatBuilder as PrettyFormatBuilder;
 use prettytable::format::LinePosition;
 use prettytable::format::LineSeparator;
 use prettytable::format::TableFormat as PrettyTableFormat;
-use prettytable::Table as PrettyTable;
-use prettytable::Row as PrettyRow;
-use prettytable::Cell as PrettyCell;
+use prettytable::format::consts::FORMAT_BOX_CHARS;
+use prettytable::format::consts::FORMAT_CLEAN;
+use std::fmt;
 use std::io;
-use crate::format::Format;
 
 /*
 NOTE: On my decision for text output tables:

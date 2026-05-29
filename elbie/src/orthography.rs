@@ -1,9 +1,9 @@
-use core::fmt;
-use core::fmt::Formatter;
-use core::slice::Iter;
-use core::iter::Peekable;
 use crate::language::Language;
 use crate::phoneme::Phoneme;
+use core::fmt;
+use core::fmt::Formatter;
+use core::iter::Peekable;
+use core::slice::Iter;
 use std::rc::Rc;
 
 pub(crate) type SpellingCallback = fn(&Language, &Rc<Phoneme>, &mut String, Option<&mut Peekable<Iter<Rc<Phoneme>>>>);
