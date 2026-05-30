@@ -3,6 +3,7 @@
 Color_Off='\033[0m'
 Red='\033[0;31m'
 Yellow='\033[0;33m'
+Green='\033[0;32m'
 
 if output=$(git status --porcelain) && [ -z "$output" ]; then
     printf "${BWhite}Working directory clean.${Color_Off}\n"
@@ -22,6 +23,8 @@ if ! cargo +nightly fmt --check; then
   printf "${Red}Please run rustfmt before pushing and recommit.${Color_Off}\n"
   exit 1
 fi
+
+printf "${Green}Everything's good. Permission to push granted.${Color_Off}\n"
 
 # -- code from original sample script (found in .git/hooks/pre-push.sample)
 ## An example hook script to verify what is about to be pushed.  Called by "git
