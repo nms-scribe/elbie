@@ -2,10 +2,10 @@ use crate::errors::ElbieError;
 use crate::language::Language;
 use crate::phoneme::Phoneme;
 use crate::phonotactics::AddPhoneme;
-use crate::phonotactics::Case;
-use crate::phonotactics::CaseEnvironment;
+use crate::phonotactics::Tree;
+use crate::phonotactics::TreeBranches;
 use crate::phonotactics::Choice;
-use crate::phonotactics::NamedOrInlineEnvironment;
+use crate::phonotactics::NamedOrInlineBranches;
 use crate::phonotactics::Optional;
 use crate::phonotactics::Pattern;
 use crate::phonotactics::PatternSet;
@@ -99,7 +99,7 @@ impl GenerateWord for AddPhoneme {
     }
 }
 
-impl CaseEnvironment {
+impl TreeBranches {
     // not a GeneratePattern trait because it requires the phoneme information that was just added.
     fn extend_word(&self, phoneme: &Rc<Phoneme>, language: &Language, rng: &mut ThreadRng, is_complete: &mut bool, result: &mut Word) -> Result<(), ElbieError> {
         for branch in &self.branches {
@@ -111,12 +111,12 @@ impl CaseEnvironment {
     }
 }
 
-impl GenerateWord for Case {
+impl GenerateWord for Tree {
     fn extend_word(&self, language: &Language, rng: &mut ThreadRng, is_complete: &mut bool, result: &mut Word) -> Result<(), ElbieError> {
         let phoneme = self.initial.extend_with_phoneme(language, rng, *is_complete, result)?;
         let environment = match &self.environment {
-            NamedOrInlineEnvironment::Environment(environment) => environment,
-            NamedOrInlineEnvironment::Named(name) => language.patterns().get_case_environment(name)?
+            NamedOrInlineBranches::Inline(environment) => environment,
+            NamedOrInlineBranches::Named(name) => language.patterns().get_named_branches(name)?
         };
         environment.extend_word(&phoneme, language, rng, is_complete, result)
     }
@@ -143,7 +143,7 @@ impl GenerateWord for Pattern {
             Self::Series(series) => series.extend_word(language, rng, is_complete, result),
             Self::Option(optional) => optional.extend_word(language, rng, is_complete, result),
             Self::Choice(choice) => choice.extend_word(language, rng, is_complete, result),
-            Self::Case(switch) => switch.extend_word(language, rng, is_complete, result),
+            Self::Tree(switch) => switch.extend_word(language, rng, is_complete, result),
             Self::RuleReference(reference) => reference.extend_word(language, rng, is_complete, result),
             Self::Set(set) => set.extend_word(language, rng, is_complete, result),
             Self::Terminate(terminate) => terminate.extend_word(language, rng, is_complete, result)

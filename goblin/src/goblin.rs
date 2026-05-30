@@ -144,7 +144,7 @@ fn spell_eng(_: &Language, _: &Rc<Phoneme>, result: &mut String, next: Option<&m
 
 pub(crate) fn create_goblin_language() -> Result<Language, ElbieError> {
     let mut language = Language::with_pattern(GOBLIN, vec!["Transcription"], |pattern| {
-        pattern.case_env(INITIAL_ONSET_PHONEME, ONSET);
+        pattern.tree_named(INITIAL_ONSET_PHONEME, ONSET);
     });
 
     _ = language.add_phoneme(M, &[CONSONANT, LABIAL, BILABIAL, NASAL, UNASPIRATED, VOICED])?;
@@ -210,41 +210,41 @@ pub(crate) fn create_goblin_language() -> Result<Language, ElbieError> {
 
     language.add_pattern_environment(ONSET, |environment| {
                 environment.choice(VOWEL, |choice| {
-                               choice.case_env(10, ONSET_CONSONANT, ONSET);
-                               choice.case_env(50, CODA_CONSONANT, CODA);
+                               choice.tree_named(10, ONSET_CONSONANT, ONSET);
+                               choice.tree_named(50, CODA_CONSONANT, CODA);
                                choice.done(50)
                            });
                 environment.choice(OBSTRUENT_EXCEPT_GLOTTAL, |choice| {
-                               choice.case_env(50, APPROXIMANT, ONSET);
-                               choice.case_env(50, VOWEL, ONSET)
+                               choice.tree_named(50, APPROXIMANT, ONSET);
+                               choice.tree_named(50, VOWEL, ONSET)
                            });
-                environment.case_env(PHONEME, VOWEL, ONSET);
+                environment.tree_named(PHONEME, VOWEL, ONSET);
             })?;
 
     language.add_pattern_environment(CODA, |environment| {
-                environment.case_env(TAP_OR_GLOTTAL, VOWEL, ONSET);
+                environment.tree_named(TAP_OR_GLOTTAL, VOWEL, ONSET);
                 environment.choice(LABIAL_NASAL, |choice| {
-                               choice.case_env(10, CODA_LABIAL_OBSTRUENT, CODA);
-                               choice.case_env_nodup(10, ONSET_PHONEME, ONSET);
+                               choice.tree_named(10, CODA_LABIAL_OBSTRUENT, CODA);
+                               choice.tree_named_nodup(10, ONSET_PHONEME, ONSET);
                                choice.done(80);
                            });
                 environment.choice(CORONAL_NASAL, |choice| {
-                               choice.case_env(10, CODA_CORONAL_OBSTRUENT, CODA);
-                               choice.case_env_nodup(10, ONSET_PHONEME, ONSET);
+                               choice.tree_named(10, CODA_CORONAL_OBSTRUENT, CODA);
+                               choice.tree_named_nodup(10, ONSET_PHONEME, ONSET);
                                choice.done(80);
                            });
                 environment.choice(DORSAL_NASAL, |choice| {
-                               choice.case_env(10, CODA_DORSAL_OBSTRUENT, CODA);
-                               choice.case_env_nodup(10, ONSET_PHONEME, ONSET);
+                               choice.tree_named(10, CODA_DORSAL_OBSTRUENT, CODA);
+                               choice.tree_named_nodup(10, ONSET_PHONEME, ONSET);
                                choice.done(80);
                            });
                 environment.choice(APPROXIMANT, |choice| {
-                               choice.case_env(10, CODA_AFTER_APPROXIMANT, CODA);
-                               choice.case_env_nodup(10, ONSET_PHONEME, ONSET);
+                               choice.tree_named(10, CODA_AFTER_APPROXIMANT, CODA);
+                               choice.tree_named_nodup(10, ONSET_PHONEME, ONSET);
                                choice.done(80);
                            });
                 environment.choice(PHONEME, |choice| {
-                               choice.case_env_nodup(20, ONSET_PHONEME, ONSET);
+                               choice.tree_named_nodup(20, ONSET_PHONEME, ONSET);
                                choice.done(80);
                            });
             })?;

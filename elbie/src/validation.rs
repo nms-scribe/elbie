@@ -3,10 +3,10 @@ use crate::errors::ElbieError;
 use crate::language::Language;
 use crate::phoneme::Phoneme;
 use crate::phonotactics::AddPhoneme;
-use crate::phonotactics::Case;
-use crate::phonotactics::CaseEnvironment;
+use crate::phonotactics::Tree;
+use crate::phonotactics::TreeBranches;
 use crate::phonotactics::Choice;
-use crate::phonotactics::NamedOrInlineEnvironment;
+use crate::phonotactics::NamedOrInlineBranches;
 use crate::phonotactics::Optional;
 use crate::phonotactics::Pattern;
 use crate::phonotactics::PatternSet;
@@ -375,7 +375,7 @@ impl ValidateWord for AddPhoneme {
 }
 
 #[allow(clippy::multiple_inherent_impl, reason = "I want to separate validation and generation from the patterns")]
-impl CaseEnvironment {
+impl TreeBranches {
     // not a ValidatePattern trait because it requires the phoneme information from the previous pattern.
     fn validate_word(&self, phoneme: &Rc<Phoneme>, language: &Language, word: &mut EnumerateCount<Iter<Rc<Phoneme>>>, trace: &mut ValidationTraceReporter, explanation: &mut Vec<ValidWordElement>)
                      -> Result<Result<(), ()>, ElbieError> {
@@ -401,12 +401,12 @@ impl CaseEnvironment {
     }
 }
 
-impl ValidateWord for Case {
+impl ValidateWord for Tree {
     fn validate_word(&self, language: &Language, word: &mut EnumerateCount<Iter<Rc<Phoneme>>>, trace: &mut ValidationTraceReporter, explanation: &mut Vec<ValidWordElement>)
                      -> Result<Result<(), ()>, ElbieError> {
         let (environment, name) = match &self.environment {
-            NamedOrInlineEnvironment::Environment(environment) => (environment, None),
-            NamedOrInlineEnvironment::Named(name) => (language.patterns().get_case_environment(name)?, Some(*name))
+            NamedOrInlineBranches::Inline(environment) => (environment, None),
+            NamedOrInlineBranches::Named(name) => (language.patterns().get_named_branches(name)?, Some(*name))
         };
         trace.start(self.defined_at, word.next_index(), ValidationTraceStart::Case(name), explanation);
         if let Ok(phoneme) = self.initial.validate_with_phoneme(language, word, trace, explanation)? {
@@ -460,7 +460,7 @@ impl ValidateWord for Pattern {
             Self::Series(series) => series.validate_word(language, word, trace, explanation),
             Self::Option(optional) => optional.validate_word(language, word, trace, explanation),
             Self::Choice(choice) => choice.validate_word(language, word, trace, explanation),
-            Self::Case(switch) => switch.validate_word(language, word, trace, explanation),
+            Self::Tree(switch) => switch.validate_word(language, word, trace, explanation),
             Self::RuleReference(reference) => reference.validate_word(language, word, trace, explanation),
             Self::Set(set) => set.validate_word(language, word, trace, explanation),
             Self::Terminate(terminate) => terminate.validate_word(language, word, trace, explanation)

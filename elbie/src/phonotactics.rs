@@ -4,18 +4,6 @@ use core::panic::Location;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
-/*
-FUTURE: This is relatively easy, but it's also hard to wrap ones head around how this works. One option to fix this is to do the same thing here than I'm doing in transformations, turn it into functions.
-
-My idea would be to return functions that take an implentation of a trait, say: trait Phonotactics. The trait would have methods for matching phonemes in sets, similar to the way transformations work. But it would also have more stuff, like repeats which couldn't be done with loops, and weighting of choices.
-
-The trait would be implemented by two objects: A Generator and a Validator. That way the user still only has to write one function.
-
-The Generator uses the commands (and their weightings) to "choose" the phonemes to output.
-
-The Validator ignores the weightings, but uses the commands to match a word and make sure it is valid. It might make use of a rule-name argument to help with tracing.
-
-*/
 
 #[derive(Debug, Clone)]
 #[deprecated(since = "0.4.0", note = "Please use patterns instead.")]
@@ -90,27 +78,27 @@ pub(crate) struct AddPhoneme {
 }
 
 #[derive(Debug)]
-pub(crate) struct CaseEnvironmentBranch {
+pub(crate) struct Branch {
     pub condition_set: &'static str,
     pub body: Pattern
 }
 
 #[derive(Debug)]
-pub(crate) struct CaseEnvironment {
-    pub branches: Vec<CaseEnvironmentBranch>,
+pub(crate) struct TreeBranches {
+    pub branches: Vec<Branch>,
     pub defined_at: Location<'static>
 }
 
 #[derive(Debug)]
-pub(crate) enum NamedOrInlineEnvironment {
-    Environment(CaseEnvironment),
+pub(crate) enum NamedOrInlineBranches {
+    Inline(TreeBranches),
     Named(&'static str)
 }
 
 #[derive(Debug)]
-pub(crate) struct Case {
+pub(crate) struct Tree {
     pub initial: AddPhoneme,
-    pub environment: NamedOrInlineEnvironment,
+    pub environment: NamedOrInlineBranches,
     pub defined_at: Location<'static>
 }
 
@@ -131,7 +119,7 @@ pub(crate) enum Pattern {
     Series(Box<Series>),
     Option(Box<Optional>),
     Choice(Choice),
-    Case(Box<Case>),
+    Tree(Box<Tree>),
     RuleReference(RuleReference),
     Set(AddPhoneme),
     // This can be used to force completion in certain situations, such as not allowing a series to continue, or disallowing an option.
@@ -146,7 +134,7 @@ impl Pattern {
             Self::Series(series) => series.defined_at,
             Self::Option(optional) => optional.defined_at,
             Self::Choice(choice) => choice.defined_at,
-            Self::Case(case) => case.defined_at,
+            Self::Tree(tree) => tree.defined_at,
             Self::RuleReference(reference) => reference.defined_at,
             Self::Set(add_phoneme) => add_phoneme.defined_at,
             Self::Terminate(terminate_word) => terminate_word.defined_at
@@ -208,14 +196,14 @@ impl<Extra> PatternList<Extra> {
                      extra));
     }
 
-    fn case_opt<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, defined_at: Location<'static>, initial_phoneme: &'static str, avoid_duplicates: bool, callback: BranchCallback,
+    fn tree_opt<BranchCallback: Fn(&mut TreeBranchesBuilder)>(&mut self, defined_at: Location<'static>, initial_phoneme: &'static str, avoid_duplicates: bool, callback: BranchCallback,
                                                                  extra: Extra) {
-        let mut builder = CaseEnvironmentBuilder::new();
+        let mut builder = TreeBranchesBuilder::new();
         callback(&mut builder);
-        let environment = NamedOrInlineEnvironment::Environment(CaseEnvironment { branches: builder.branches(),
+        let environment = NamedOrInlineBranches::Inline(TreeBranches { branches: builder.branches(),
                                                                                   defined_at });
 
-        self.0.push((Pattern::Case(Box::new(Case { initial: AddPhoneme { name: initial_phoneme,
+        self.0.push((Pattern::Tree(Box::new(Tree { initial: AddPhoneme { name: initial_phoneme,
                                                                          avoid_duplicates,
                                                                          defined_at },
                                                    environment,
@@ -223,10 +211,10 @@ impl<Extra> PatternList<Extra> {
                      extra));
     }
 
-    fn case_env_opt(&mut self, defined_at: Location<'static>, initial_phoneme: &'static str, avoid_duplicates: bool, environment: &'static str, extra: Extra) {
-        let environment = NamedOrInlineEnvironment::Named(environment);
+    fn branches_opt(&mut self, defined_at: Location<'static>, initial_phoneme: &'static str, avoid_duplicates: bool, environment: &'static str, extra: Extra) {
+        let environment = NamedOrInlineBranches::Named(environment);
 
-        self.0.push((Pattern::Case(Box::new(Case { initial: AddPhoneme { name: initial_phoneme,
+        self.0.push((Pattern::Tree(Box::new(Tree { initial: AddPhoneme { name: initial_phoneme,
                                                                          avoid_duplicates,
                                                                          defined_at },
                                                    environment,
@@ -313,23 +301,23 @@ impl PatternBuilder {
     }
 
     #[track_caller]
-    pub fn case<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, initial_phoneme: &'static str, callback: BranchCallback) {
-        self.pattern_list.case_opt(*Location::caller(), initial_phoneme, false, callback, ());
+    pub fn tree<BranchCallback: Fn(&mut TreeBranchesBuilder)>(&mut self, initial_phoneme: &'static str, callback: BranchCallback) {
+        self.pattern_list.tree_opt(*Location::caller(), initial_phoneme, false, callback, ());
     }
 
     #[track_caller]
-    pub fn case_nodup<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, initial_phoneme: &'static str, callback: BranchCallback) {
-        self.pattern_list.case_opt(*Location::caller(), initial_phoneme, true, callback, ());
+    pub fn tree_nodup<BranchCallback: Fn(&mut TreeBranchesBuilder)>(&mut self, initial_phoneme: &'static str, callback: BranchCallback) {
+        self.pattern_list.tree_opt(*Location::caller(), initial_phoneme, true, callback, ());
     }
 
     #[track_caller]
-    pub fn case_env(&mut self, initial_phoneme: &'static str, environment: &'static str) {
-        self.pattern_list.case_env_opt(*Location::caller(), initial_phoneme, false, environment, ());
+    pub fn tree_named(&mut self, initial_phoneme: &'static str, environment: &'static str) {
+        self.pattern_list.branches_opt(*Location::caller(), initial_phoneme, false, environment, ());
     }
 
     #[track_caller]
-    pub fn case_env_nodup(&mut self, initial_phoneme: &'static str, environment: &'static str) {
-        self.pattern_list.case_env_opt(*Location::caller(), initial_phoneme, true, environment, ());
+    pub fn tree_named_nodup(&mut self, initial_phoneme: &'static str, environment: &'static str) {
+        self.pattern_list.branches_opt(*Location::caller(), initial_phoneme, true, environment, ());
     }
 
     #[track_caller]
@@ -411,23 +399,23 @@ impl ChoiceBuilder {
     }
 
     #[track_caller]
-    pub fn case<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, weight: usize, initial_phoneme: &'static str, callback: BranchCallback) {
-        self.pattern_list.case_opt(*Location::caller(), initial_phoneme, false, callback, weight);
+    pub fn tree<BranchCallback: Fn(&mut TreeBranchesBuilder)>(&mut self, weight: usize, initial_phoneme: &'static str, callback: BranchCallback) {
+        self.pattern_list.tree_opt(*Location::caller(), initial_phoneme, false, callback, weight);
     }
 
     #[track_caller]
-    pub fn case_nodup<BranchCallback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, weight: usize, initial_phoneme: &'static str, callback: BranchCallback) {
-        self.pattern_list.case_opt(*Location::caller(), initial_phoneme, true, callback, weight);
+    pub fn tree_nodup<BranchCallback: Fn(&mut TreeBranchesBuilder)>(&mut self, weight: usize, initial_phoneme: &'static str, callback: BranchCallback) {
+        self.pattern_list.tree_opt(*Location::caller(), initial_phoneme, true, callback, weight);
     }
 
     #[track_caller]
-    pub fn case_env(&mut self, weight: usize, initial_phoneme: &'static str, environment: &'static str) {
-        self.pattern_list.case_env_opt(*Location::caller(), initial_phoneme, false, environment, weight);
+    pub fn tree_named(&mut self, weight: usize, initial_phoneme: &'static str, environment: &'static str) {
+        self.pattern_list.branches_opt(*Location::caller(), initial_phoneme, false, environment, weight);
     }
 
     #[track_caller]
-    pub fn case_env_nodup(&mut self, weight: usize, initial_phoneme: &'static str, environment: &'static str) {
-        self.pattern_list.case_env_opt(*Location::caller(), initial_phoneme, true, environment, weight);
+    pub fn tree_named_nodup(&mut self, weight: usize, initial_phoneme: &'static str, environment: &'static str) {
+        self.pattern_list.branches_opt(*Location::caller(), initial_phoneme, true, environment, weight);
     }
 
     #[track_caller]
@@ -451,19 +439,19 @@ impl ChoiceBuilder {
     }
 }
 
-pub struct CaseEnvironmentBuilder {
+pub struct TreeBranchesBuilder {
     pattern_list: PatternList<&'static str>
 }
 
-impl CaseEnvironmentBuilder {
+impl TreeBranchesBuilder {
     const fn new() -> Self {
         Self { pattern_list: PatternList(Vec::new()) }
     }
 
-    fn branches(self) -> Vec<CaseEnvironmentBranch> {
+    fn branches(self) -> Vec<Branch> {
         let mut result = Vec::new();
         for (p, condition_set) in self.pattern_list.0 {
-            result.push(CaseEnvironmentBranch {
+            result.push(Branch {
                 condition_set,
                 body: p,
                 //defined_at,
@@ -513,23 +501,23 @@ impl CaseEnvironmentBuilder {
     }
 
     #[track_caller]
-    pub fn case<BranchCallback: Fn(&mut Self)>(&mut self, condition_set: &'static str, initial_phoneme: &'static str, callback: BranchCallback) {
-        self.pattern_list.case_opt(*Location::caller(), initial_phoneme, false, callback, condition_set);
+    pub fn tree<BranchCallback: Fn(&mut Self)>(&mut self, condition_set: &'static str, initial_phoneme: &'static str, callback: BranchCallback) {
+        self.pattern_list.tree_opt(*Location::caller(), initial_phoneme, false, callback, condition_set);
     }
 
     #[track_caller]
-    pub fn case_nodup<BranchCallback: Fn(&mut Self)>(&mut self, condition_set: &'static str, initial_phoneme: &'static str, callback: BranchCallback) {
-        self.pattern_list.case_opt(*Location::caller(), initial_phoneme, true, callback, condition_set);
+    pub fn tree_nodup<BranchCallback: Fn(&mut Self)>(&mut self, condition_set: &'static str, initial_phoneme: &'static str, callback: BranchCallback) {
+        self.pattern_list.tree_opt(*Location::caller(), initial_phoneme, true, callback, condition_set);
     }
 
     #[track_caller]
-    pub fn case_env(&mut self, condition_set: &'static str, initial_phoneme: &'static str, environment: &'static str) {
-        self.pattern_list.case_env_opt(*Location::caller(), initial_phoneme, false, environment, condition_set);
+    pub fn tree_named(&mut self, condition_set: &'static str, initial_phoneme: &'static str, environment: &'static str) {
+        self.pattern_list.branches_opt(*Location::caller(), initial_phoneme, false, environment, condition_set);
     }
 
     #[track_caller]
-    pub fn case_env_nodup(&mut self, condition_set: &'static str, initial_phoneme: &'static str, environment: &'static str) {
-        self.pattern_list.case_env_opt(*Location::caller(), initial_phoneme, true, environment, condition_set);
+    pub fn tree_named_nodup(&mut self, condition_set: &'static str, initial_phoneme: &'static str, environment: &'static str) {
+        self.pattern_list.branches_opt(*Location::caller(), initial_phoneme, true, environment, condition_set);
     }
 
     #[track_caller]
@@ -556,7 +544,7 @@ impl CaseEnvironmentBuilder {
 #[derive(Debug)]
 pub(crate) struct PatternSet {
     pub patterns: HashMap<String, Pattern>,
-    pub case_environments: HashMap<String, CaseEnvironment>,
+    pub branches: HashMap<String, TreeBranches>,
     pub initial: Pattern
 }
 
@@ -567,7 +555,7 @@ impl PatternSet {
         initial_cb(&mut builder);
         let initial = builder.flatten(*Location::caller());
         Self { patterns: HashMap::new(),
-               case_environments: HashMap::new(),
+               branches: HashMap::new(),
                initial }
     }
 
@@ -592,20 +580,20 @@ impl PatternSet {
     }
 
     #[track_caller]
-    pub(crate) fn case_environment<Callback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, name: &'static str, callback: Callback) -> Result<(), ElbieError> {
-        let mut builder = CaseEnvironmentBuilder::new();
+    pub(crate) fn named_branches<Callback: Fn(&mut TreeBranchesBuilder)>(&mut self, name: &'static str, callback: Callback) -> Result<(), ElbieError> {
+        let mut builder = TreeBranchesBuilder::new();
         callback(&mut builder);
-        let environment = CaseEnvironment { branches: builder.branches(),
+        let environment = TreeBranches { branches: builder.branches(),
                                             defined_at: *Location::caller() };
-        match self.case_environments.entry(name.to_owned()) {
+        match self.branches.entry(name.to_owned()) {
             Entry::Occupied(_) => return Err(ElbieError::EnvironmentAlreadyExists(name)),
             Entry::Vacant(vacant_entry) => _ = vacant_entry.insert(environment)
         }
         Ok(())
     }
 
-    pub(crate) fn get_case_environment(&self, name: &'static str) -> Result<&CaseEnvironment, ElbieError> {
-        if let Some(pattern) = self.case_environments.get(name) {
+    pub(crate) fn get_named_branches(&self, name: &'static str) -> Result<&TreeBranches, ElbieError> {
+        if let Some(pattern) = self.branches.get(name) {
             Ok(pattern)
         } else {
             Err(ElbieError::UnknownEnvironment(name))

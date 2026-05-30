@@ -26,7 +26,7 @@ use crate::phoneme_table::Table4D;
 use crate::phoneme_table::TableDef;
 use crate::phoneme_table_builder::TableBuilder;
 use crate::phoneme_table_builder::TableEntry;
-use crate::phonotactics::CaseEnvironmentBuilder;
+use crate::phonotactics::TreeBranchesBuilder;
 #[allow(deprecated)]
 use crate::phonotactics::EnvironmentBranch;
 #[allow(deprecated)]
@@ -82,7 +82,7 @@ impl Language {
         let tables = vec![];
         let patterns = PatternSet::new(|rules| {
             #[allow(deprecated)]
-            rules.case_env(initial_phoneme_set, initial_environment);
+            rules.tree_named(initial_phoneme_set, initial_environment);
         });
         Self { name,
                inventory,
@@ -198,7 +198,7 @@ impl Language {
                  note = "Use the new patterns API available with `add_pattern` and `add_pattern_environment` instead. If you don't have time to convert yours, make sure you check out the crate from git with tag 'v0.3.2'.")]
     #[allow(deprecated)]
     pub fn add_environment(&mut self, name: &'static str, environment: &[EnvironmentBranch]) -> Result<(), ElbieError> {
-        self.patterns.case_environment(name, |rule| {
+        self.patterns.named_branches(name, |rule| {
                          for branch in environment {
                              let set = branch.set();
                              let choices = branch.choices();
@@ -210,10 +210,10 @@ impl Language {
                                              EnvironmentChoice::Continuing(generate_set, next_environment, allow_duplicates) => {
                                                  if *allow_duplicates {
                                                      #[allow(deprecated)]
-                                                     choice.case_env(*weight, generate_set, next_environment);
+                                                     choice.tree_named(*weight, generate_set, next_environment);
                                                  } else {
                                                      #[allow(deprecated)]
-                                                     choice.case_env_nodup(*weight, generate_set, next_environment);
+                                                     choice.tree_named_nodup(*weight, generate_set, next_environment);
                                                  }
                                              },
                                          }
@@ -231,8 +231,8 @@ impl Language {
 
     // track caller allows us to catch the locations of the calls, to help the user debug.
     #[track_caller]
-    pub fn add_pattern_environment<Callback: Fn(&mut CaseEnvironmentBuilder)>(&mut self, name: &'static str, callback: Callback) -> Result<(), ElbieError> {
-        self.patterns.case_environment(name, callback)
+    pub fn add_pattern_environment<Callback: Fn(&mut TreeBranchesBuilder)>(&mut self, name: &'static str, callback: Callback) -> Result<(), ElbieError> {
+        self.patterns.named_branches(name, callback)
     }
 
     pub fn new_table(&mut self, id: &'static str, set: &'static str, caption: &'static str) -> TableBuilder<'_> {
