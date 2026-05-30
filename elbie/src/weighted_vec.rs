@@ -9,12 +9,12 @@ pub(crate) struct WeightedVec<ItemType> {
 
 impl<ItemType> WeightedVec<ItemType> {
     pub(crate) const fn new() -> Self {
-        Self { items: vec![],
+           WeightedVec { items: vec![],
                total_weight: 0 }
     }
 
     pub(crate) const fn items(&self) -> &Vec<(ItemType, usize)> {
-        &self.items
+          &self.items
     }
 
     pub(crate) fn choose(&self, rng: &mut ThreadRng) -> Option<&ItemType> {
