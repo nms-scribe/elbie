@@ -1,3 +1,0 @@
-[submodule "rust-term-grid"]
-	path = rust-term-grid
-	url = git@github.com:nms-scribe/rust-term-grid.git
