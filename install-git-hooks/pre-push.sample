@@ -2,7 +2,7 @@
 
 Color_Off='\033[0m'
 Red='\033[0;31m'
-BWhite='\033[1;37m'
+Yellow='\033[0;33m'
 
 if output=$(git status --porcelain) && [ -z "$output" ]; then
     printf "${BWhite}Working directory clean.${Color_Off}\n"
@@ -11,13 +11,13 @@ else
     exit 1
 fi
 
-printf "${BWhite}Running Clippy...${Color_Off}\n"
+printf "${Yellow}Running Clippy...${Color_Off}\n"
 if ! cargo clippy -- -Dwarnings; then
   printf "${Red}Clippy isn't happy! Please clean up warnings and recommit.${Color_Off}\n"
   exit 1
 fi
 
-printf "${BWhite}Checking format...${Color_Off}\n"
+printf "${Yellow}Checking format...${Color_Off}\n"
 if ! cargo +nightly fmt --check; then
   printf "${Red}Please run rustfmt before pushing and recommit.${Color_Off}\n"
   exit 1
