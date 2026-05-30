@@ -11,13 +11,13 @@ else
     exit 1
 fi
 
-printf "${BWhite}Running Clippy...${Color_Off}"
+printf "${BWhite}Running Clippy...${Color_Off}\n"
 if ! cargo clippy -- -Dwarnings; then
   printf "${Red}Clippy isn't happy! Please clean up warnings and recommit.${Color_Off}\n"
   exit 1
 fi
 
-echo "${BWhite}Checking format...${Color_Off}"
+printf "${BWhite}Checking format...${Color_Off}\n"
 if ! cargo +nightly fmt --check; then
   printf "${Red}Please run rustfmt before pushing and recommit.${Color_Off}\n"
   exit 1

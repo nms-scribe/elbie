@@ -9,7 +9,7 @@ pub(crate) struct WeightedVec<ItemType> {
 
 impl<ItemType> WeightedVec<ItemType> {
     pub(crate) const fn new() -> Self {
-           WeightedVec { items: vec![],
+           Self { items: vec![],
                total_weight: 0 }
     }
 
