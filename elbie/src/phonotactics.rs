@@ -4,7 +4,6 @@ use core::panic::Location;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
-
 #[derive(Debug, Clone)]
 #[deprecated(since = "0.4.0", note = "Please use patterns instead.")]
 pub enum EnvironmentChoice {
@@ -196,12 +195,11 @@ impl<Extra> PatternList<Extra> {
                      extra));
     }
 
-    fn tree_opt<BranchCallback: Fn(&mut TreeBranchesBuilder)>(&mut self, defined_at: Location<'static>, initial_phoneme: &'static str, avoid_duplicates: bool, callback: BranchCallback,
-                                                                 extra: Extra) {
+    fn tree_opt<BranchCallback: Fn(&mut TreeBranchesBuilder)>(&mut self, defined_at: Location<'static>, initial_phoneme: &'static str, avoid_duplicates: bool, callback: BranchCallback, extra: Extra) {
         let mut builder = TreeBranchesBuilder::new();
         callback(&mut builder);
         let environment = NamedOrInlineBranches::Inline(TreeBranches { branches: builder.branches(),
-                                                                                  defined_at });
+                                                                       defined_at });
 
         self.0.push((Pattern::Tree(Box::new(Tree { initial: AddPhoneme { name: initial_phoneme,
                                                                          avoid_duplicates,
@@ -584,7 +582,7 @@ impl PatternSet {
         let mut builder = TreeBranchesBuilder::new();
         callback(&mut builder);
         let environment = TreeBranches { branches: builder.branches(),
-                                            defined_at: *Location::caller() };
+                                         defined_at: *Location::caller() };
         match self.branches.entry(name.to_owned()) {
             Entry::Occupied(_) => return Err(ElbieError::EnvironmentAlreadyExists(name)),
             Entry::Vacant(vacant_entry) => _ = vacant_entry.insert(environment)

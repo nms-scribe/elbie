@@ -26,13 +26,13 @@ use crate::phoneme_table::Table4D;
 use crate::phoneme_table::TableDef;
 use crate::phoneme_table_builder::TableBuilder;
 use crate::phoneme_table_builder::TableEntry;
-use crate::phonotactics::TreeBranchesBuilder;
 #[allow(deprecated)]
 use crate::phonotactics::EnvironmentBranch;
 #[allow(deprecated)]
 use crate::phonotactics::EnvironmentChoice;
 use crate::phonotactics::PatternBuilder;
 use crate::phonotactics::PatternSet;
+use crate::phonotactics::TreeBranchesBuilder;
 use crate::validation::ValidWordElement;
 use crate::validation::ValidationTraceCallback;
 use crate::word::Word;
