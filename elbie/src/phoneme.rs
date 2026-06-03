@@ -8,6 +8,7 @@ use std::rc::Rc;
 
 use crate::bag::Bag;
 use crate::errors::ElbieError;
+use unicode_normalization::is_nfd;
 
 pub mod ipa;
 
@@ -26,6 +27,10 @@ pub struct Phoneme {
 impl Phoneme {
     pub(crate) fn new(name: &'static str) -> Rc<Self> {
         Rc::new(Self { name })
+    }
+
+    pub(crate) fn check_normalized(&self) -> Result<(), ElbieError> {
+        is_nfd(self.name).then_some(()).ok_or(ElbieError::PhonemeNotNormalized(self.name))
     }
 }
 
@@ -50,7 +55,8 @@ pub trait InventoryLoader {
 #[derive(Debug)]
 pub struct Inventory {
     phonemes: HashMap<&'static str, Rc<Phoneme>>,
-    sets: HashMap<&'static str, Bag<Rc<Phoneme>>> // It seems like a hashset would be better, but I can't pick randomly from it without converting to vec anyway.
+    sets: HashMap<&'static str, Bag<Rc<Phoneme>>>, // It seems like a hashset would be better, but I can't pick randomly from it without converting to vec anyway.
+    normalize_phonemes: bool                       // see Language::set_normalize_phonemes
 }
 
 impl Default for Inventory {
@@ -60,7 +66,8 @@ impl Default for Inventory {
         _ = sets.insert(EMPTY, Bag::new());
         let phonemes = HashMap::new();
         Self { phonemes,
-               sets }
+               sets,
+               normalize_phonemes: false }
     }
 }
 
@@ -68,6 +75,15 @@ impl Inventory {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// If this is true, phonemes added to the language must be unicode [normalized](https://www.unicode.org/reports/tr15/) (canonical decomposition), and words will be normalized before they are read. This simplifies certain processes when reading in phonemes from external sources.
+    pub(crate) const fn set_normalize_phonemes(&mut self, value: bool) {
+        self.normalize_phonemes = value
+    }
+
+    pub(crate) const fn normalize_phonemes(&self) -> bool {
+        self.normalize_phonemes
     }
 
     pub(crate) const fn phonemes(&self) -> &HashMap<&'static str, Rc<Phoneme>> {
@@ -134,6 +150,10 @@ impl Inventory {
         #[expect(clippy::iter_over_hash_type, reason = "Order for this doesn't matter")]
         for (name, bag) in &other.sets {
             for phoneme in bag.iter() {
+                if self.normalize_phonemes {
+                    // just in case the other language doesn't normalize and this one does
+                    phoneme.check_normalized()?;
+                }
                 let phoneme = self.phonemes.entry(phoneme.name).or_insert_with(|| phoneme.clone()).clone();
                 self.add_phoneme_to_set(name, phoneme)?;
             }
@@ -142,6 +162,10 @@ impl Inventory {
         // make sure any phonemes that weren't in sets are added, and also add the phoneme to the containing set.
         #[expect(clippy::iter_over_hash_type, reason = "Order for this doesn't matter")]
         for (name, phoneme) in other.phonemes() {
+            if self.normalize_phonemes {
+                // just in case the other language doesn't normalize and this one does
+                phoneme.check_normalized()?;
+            }
             let phoneme = self.phonemes.entry(name).or_insert_with(|| phoneme.clone()).clone();
             self.add_phoneme_to_set(containing_set, phoneme)?;
         }
@@ -158,6 +182,11 @@ impl InventoryLoader for Inventory {
             Err(ElbieError::SetExistsWithPhonemeName(phoneme))
         } else {
             let phoneme = Phoneme::new(phoneme);
+
+            if self.normalize_phonemes {
+                phoneme.check_normalized()?;
+            }
+
             _ = self.phonemes.insert(phoneme.name, phoneme.clone());
             self.add_phoneme_to_set(PHONEME, phoneme.clone())?;
             for class in sets {

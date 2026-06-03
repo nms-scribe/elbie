@@ -44,6 +44,7 @@ use core::iter::Peekable;
 use core::slice::Iter;
 use std::collections::HashMap;
 use std::rc::Rc;
+use unicode_normalization::UnicodeNormalization as _;
 
 fn sort_phonemes_by_length_descending(a: &Rc<Phoneme>, b: &Rc<Phoneme>) -> Ordering {
     let name_a = a.name;
@@ -103,6 +104,11 @@ impl Language {
                orthographies,
                patterns,
                tables }
+    }
+
+    /// If this is true, phonemes added to the language must be unicode [normalized](https://www.unicode.org/reports/tr15/) (canonical decomposition), and words will be normalized before they are read. This simplifies certain processes when reading in phonemes from external sources.
+    pub const fn set_normalize_phonemes(&mut self, value: bool) {
+        self.inventory.set_normalize_phonemes(value);
     }
 
     pub(crate) const fn inventory(&self) -> &Inventory {
@@ -248,13 +254,18 @@ impl Language {
 
     pub(crate) fn read_word(&self, input: &str) -> Result<Word, ElbieError> {
         // not an efficient algorithm, but it works...
+        // FUTURE: This should be "cached" somehow to speed up the process. Perhaps by using a BTreeMap instead of a HashMap, and forcing insertion in order when adding phonemes to it.
         let mut phonemes: Vec<Rc<Phoneme>> = self.inventory.phonemes().values().cloned().collect();
         // sort the phonemes so that longer phonemes come first. This should avoid longer graphemes from matching the shorter graphemes accidentally. For example, say there were phonemes "aw" and "a". If "aw" is sorted first for the match, then if it's found in the word it won't be mistaken for an "a" followed by a "w".
         phonemes.sort_by(sort_phonemes_by_length_descending);
 
         let mut word: Vec<Rc<Phoneme>> = vec![];
 
-        let mut source = input;
+        let mut source = if self.inventory.normalize_phonemes() {
+            &input.nfd().collect::<String>()
+        } else {
+            input
+        };
 
         'outer: while !source.is_empty() {
             for phoneme in &phonemes {

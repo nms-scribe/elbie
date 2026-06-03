@@ -16,6 +16,8 @@ pub enum ElbieError {
     UnknownPhoneme(&'static str),
     #[error("Phoneme {0} already exists.")]
     PhonemeAlreadyExists(&'static str),
+    #[error("Phoneme {0} is not unicode-normalized (NFD form), and the inventory requires it to be normalized.")]
+    PhonemeNotNormalized(&'static str),
     #[error("A set already exists with the phoneme name {0}")]
     SetExistsWithPhonemeName(&'static str),
     #[error("Set {0} already exists.")]
