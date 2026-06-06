@@ -147,6 +147,8 @@ pub(crate) fn create_goblin_language() -> Result<Language, ElbieError> {
         pattern.tree_named(INITIAL_ONSET_PHONEME, ONSET);
     });
 
+    language.set_normalize_phonemes(true);
+
     _ = language.add_phoneme(M, &[CONSONANT, LABIAL, BILABIAL, NASAL, UNASPIRATED, VOICED])?;
     _ = language.add_phoneme(N, &[CONSONANT, CORONAL, ALVEOLAR, NASAL, UNASPIRATED, VOICED])?;
     _ = language.add_phoneme_with_spelling(LEFT_TAIL_N_AT_LEFT, &["ny"], &[CONSONANT, DORSAL, PALATAL, NASAL, UNASPIRATED, VOICED])?;
