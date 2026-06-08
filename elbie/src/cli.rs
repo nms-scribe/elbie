@@ -212,7 +212,7 @@ impl DoIt for ShowSpelling {
 }
 
 #[derive(Options)]
-/// Loads a lexicon of words in CSV format for a language, validates them and prints out a formatted listing. Requires a file name to load and an orthography index to spell the main entries. Options allow controlling the output format and style. The format specifies the markup format for the output. The style specifies whether a list or a table is required. The input CSV must have a "word" column containing the phonetic transcription of the word, and a "definition" column containing arbitrary text.
+/// Loads a lexicon of words in CSV format for a language, expecting legal phonemes, and prints out a formatted listing. Requires a file name to load and an orthography index to spell the main entries. Options allow controlling the output format and style. The format specifies the markup format for the output. The style specifies whether a list or a table is required. The input CSV must have a "word" column containing the phonetic transcription of the word, and a "definition" column containing arbitrary text.
 pub struct FormatLexicon {
     #[options(required)]
     /// Read the list of words from CSV files, can be specified multiple times to merge multiple files.

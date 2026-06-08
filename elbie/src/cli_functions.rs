@@ -80,7 +80,7 @@ fn validate_word(language: &Language, word: &Word, explain: bool, trace_cb: Opti
 pub(crate) fn validate_words(language: &Language, mut words: WordTable, option: &ValidateOption, output_format: &Format) {
     const VALIDATED_ATTR: &str = "Validated";
 
-    let mut invalid_found = false;
+    let mut invalid_count = 0;
     let trace_cb: Option<&ValidationTraceCallback> = if matches!(option, ValidateOption::Trace | ValidateOption::ExplainAndTrace) {
         Some(&|level, message| {
             eprintln!("{}{}", str::repeat(" ", level * 2), message);
@@ -108,7 +108,7 @@ pub(crate) fn validate_words(language: &Language, mut words: WordTable, option: 
                     },
                     Ok(Err(())) => {
                         entry.set_attribute(VALIDATED_ATTR.to_owned(), "!! Invalid".to_owned());
-                        invalid_found = true;
+                        invalid_count += 1;
                     },
                     Err(err) => {
                         eprintln!("!!!! Can't validate word: {err}");
@@ -125,8 +125,8 @@ pub(crate) fn validate_words(language: &Language, mut words: WordTable, option: 
 
     words.print_to_stdout(output_format);
 
-    if invalid_found {
-        eprintln!("!!!! invalid words found");
+    if invalid_count > 0 {
+        eprintln!("!!!! {invalid_count} invalid words found");
         process::exit(1);
     }
 }
