@@ -432,6 +432,12 @@ impl ChoiceBuilder {
     }
 
     #[track_caller]
+    // allows quickly adding an 'empty' sequence as a choice.
+    pub fn empty(&mut self, weight: usize) {
+        self.pattern_list.seq(*Location::caller(), |_| {}, weight);
+    }
+
+    #[track_caller]
     pub fn done(&mut self, weight: usize) {
         self.pattern_list.done(*Location::caller(), weight);
     }
@@ -531,6 +537,11 @@ impl TreeBranchesBuilder {
     #[track_caller]
     pub fn set_nodup(&mut self, condition_set: &'static str, name: &'static str) {
         self.pattern_list.set_opt(*Location::caller(), name, true, condition_set);
+    }
+
+    #[track_caller]
+    pub fn empty(&mut self, condition_set: &'static str) {
+        self.pattern_list.seq(*Location::caller(), |_| {}, condition_set);
     }
 
     #[track_caller]
