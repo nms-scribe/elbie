@@ -15,7 +15,8 @@ impl Word {
         Self { phonemes }
     }
 
-    pub(crate) const fn phonemes(&self) -> &Vec<Rc<Phoneme>> {
+    #[must_use]
+    pub const fn phonemes(&self) -> &Vec<Rc<Phoneme>> {
         &self.phonemes
     }
 
