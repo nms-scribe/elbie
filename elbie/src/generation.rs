@@ -26,8 +26,9 @@ Probabilities in the patterns below are marked by u8 instead of f64. To check a 
 
 */
 
-fn is_probable(probability: u8, rng: &mut ThreadRng) -> bool {
-    rng.random::<u8>() <= probability
+fn is_probable(probability: f32, rng: &mut ThreadRng) -> bool {
+    rng.random_range(0.0..1.0) <= probability
+    //rng.random::<u8>() <= probability
 }
 
 trait GenerateWord {

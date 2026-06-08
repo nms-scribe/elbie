@@ -45,7 +45,7 @@ pub(crate) struct Sequence {
 #[derive(Debug)]
 pub(crate) struct Series {
     pub pattern: Pattern,
-    pub probability: u8,
+    pub probability: f32,
     pub minimum: usize,
     pub maximum: Option<usize>,
     pub defined_at: Location<'static>
@@ -54,7 +54,7 @@ pub(crate) struct Series {
 #[derive(Debug)]
 pub(crate) struct Optional {
     pub pattern: Pattern,
-    pub probability: u8,
+    pub probability: f32,
     pub defined_at: Location<'static>
 }
 
@@ -152,7 +152,7 @@ impl<Extra> PatternList<Extra> {
                      extra));
     }
 
-    fn series<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, defined_at: Location<'static>, probability: u8, callback: PatternCallback, minimum: usize, maximum: Option<usize>, extra: Extra) {
+    fn series<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, defined_at: Location<'static>, probability: f32, callback: PatternCallback, minimum: usize, maximum: Option<usize>, extra: Extra) {
         if maximum.is_some_and(|max| max < minimum) {
             // I don't want to return an error here, as that would add undue complications on the closures used to build patterns. FUTURE: reconsider?
             panic!("Maximum length of series is less than minimum.")
@@ -168,7 +168,7 @@ impl<Extra> PatternList<Extra> {
                      extra));
     }
 
-    fn opt<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, defined_at: Location<'static>, probability: u8, callback: PatternCallback, extra: Extra) {
+    fn opt<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, defined_at: Location<'static>, probability: f32, callback: PatternCallback, extra: Extra) {
         let mut pattern = PatternBuilder::new();
         callback(&mut pattern);
         let pattern = pattern.flatten(defined_at);
@@ -264,27 +264,27 @@ impl PatternBuilder {
     // NOTE: no seq on the sequence, because you want to avoid nested sequences in the long run.
 
     #[track_caller]
-    pub fn ser_min_max<PatternCallback: Fn(&mut Self)>(&mut self, probability: u8, callback: PatternCallback, minimum: usize, maximum: usize) {
+    pub fn ser_min_max<PatternCallback: Fn(&mut Self)>(&mut self, probability: f32, callback: PatternCallback, minimum: usize, maximum: usize) {
         self.pattern_list.series(*Location::caller(), probability, callback, minimum, Some(maximum), ());
     }
 
     #[track_caller]
-    pub fn ser_min<PatternCallback: Fn(&mut Self)>(&mut self, probability: u8, callback: PatternCallback, minimum: usize) {
+    pub fn ser_min<PatternCallback: Fn(&mut Self)>(&mut self, probability: f32, callback: PatternCallback, minimum: usize) {
         self.pattern_list.series(*Location::caller(), probability, callback, minimum, None, ());
     }
 
     #[track_caller]
-    pub fn ser_max<PatternCallback: Fn(&mut Self)>(&mut self, probability: u8, callback: PatternCallback, maximum: usize) {
+    pub fn ser_max<PatternCallback: Fn(&mut Self)>(&mut self, probability: f32, callback: PatternCallback, maximum: usize) {
         self.pattern_list.series(*Location::caller(), probability, callback, 0, Some(maximum), ());
     }
 
     #[track_caller]
-    pub fn ser<PatternCallback: Fn(&mut Self)>(&mut self, probability: u8, callback: PatternCallback) {
+    pub fn ser<PatternCallback: Fn(&mut Self)>(&mut self, probability: f32, callback: PatternCallback) {
         self.pattern_list.series(*Location::caller(), probability, callback, 0, None, ());
     }
 
     #[track_caller]
-    pub fn opt<PatternCallback: Fn(&mut Self)>(&mut self, probability: u8, callback: PatternCallback) {
+    pub fn opt<PatternCallback: Fn(&mut Self)>(&mut self, probability: f32, callback: PatternCallback) {
         self.pattern_list.opt(*Location::caller(), probability, callback, ());
     }
 
@@ -362,27 +362,27 @@ impl ChoiceBuilder {
     }
 
     #[track_caller]
-    pub fn ser_min_max<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, weight: usize, probability: u8, callback: PatternCallback, minimum: usize, maximum: usize) {
+    pub fn ser_min_max<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, weight: usize, probability: f32, callback: PatternCallback, minimum: usize, maximum: usize) {
         self.pattern_list.series(*Location::caller(), probability, callback, minimum, Some(maximum), weight);
     }
 
     #[track_caller]
-    pub fn ser_min<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, weight: usize, probability: u8, callback: PatternCallback, minimum: usize) {
+    pub fn ser_min<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, weight: usize, probability: f32, callback: PatternCallback, minimum: usize) {
         self.pattern_list.series(*Location::caller(), probability, callback, minimum, None, weight);
     }
 
     #[track_caller]
-    pub fn ser_max<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, weight: usize, probability: u8, callback: PatternCallback, maximum: usize) {
+    pub fn ser_max<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, weight: usize, probability: f32, callback: PatternCallback, maximum: usize) {
         self.pattern_list.series(*Location::caller(), probability, callback, 0, Some(maximum), weight);
     }
 
     #[track_caller]
-    pub fn ser<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, weight: usize, probability: u8, callback: PatternCallback) {
+    pub fn ser<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, weight: usize, probability: f32, callback: PatternCallback) {
         self.pattern_list.series(*Location::caller(), probability, callback, 0, None, weight);
     }
 
     #[track_caller]
-    pub fn opt<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, weight: usize, probability: u8, callback: PatternCallback) {
+    pub fn opt<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, weight: usize, probability: f32, callback: PatternCallback) {
         self.pattern_list.opt(*Location::caller(), probability, callback, weight);
     }
 
@@ -464,27 +464,27 @@ impl TreeBranchesBuilder {
     }
 
     #[track_caller]
-    pub fn ser_min_max<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, condition_set: &'static str, probability: u8, callback: PatternCallback, minimum: usize, maximum: usize) {
+    pub fn ser_min_max<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, condition_set: &'static str, probability: f32, callback: PatternCallback, minimum: usize, maximum: usize) {
         self.pattern_list.series(*Location::caller(), probability, callback, minimum, Some(maximum), condition_set);
     }
 
     #[track_caller]
-    pub fn ser_min<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, condition_set: &'static str, probability: u8, callback: PatternCallback, minimum: usize) {
+    pub fn ser_min<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, condition_set: &'static str, probability: f32, callback: PatternCallback, minimum: usize) {
         self.pattern_list.series(*Location::caller(), probability, callback, minimum, None, condition_set);
     }
 
     #[track_caller]
-    pub fn ser_max<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, condition_set: &'static str, probability: u8, callback: PatternCallback, maximum: usize) {
+    pub fn ser_max<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, condition_set: &'static str, probability: f32, callback: PatternCallback, maximum: usize) {
         self.pattern_list.series(*Location::caller(), probability, callback, 0, Some(maximum), condition_set);
     }
 
     #[track_caller]
-    pub fn ser<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, condition_set: &'static str, probability: u8, callback: PatternCallback) {
+    pub fn ser<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, condition_set: &'static str, probability: f32, callback: PatternCallback) {
         self.pattern_list.series(*Location::caller(), probability, callback, 0, None, condition_set);
     }
 
     #[track_caller]
-    pub fn opt<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, condition_set: &'static str, probability: u8, callback: PatternCallback) {
+    pub fn opt<PatternCallback: Fn(&mut PatternBuilder)>(&mut self, condition_set: &'static str, probability: f32, callback: PatternCallback) {
         self.pattern_list.opt(*Location::caller(), probability, callback, condition_set);
     }
 
