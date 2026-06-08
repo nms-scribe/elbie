@@ -252,7 +252,7 @@ impl Language {
         self.patterns().generate(self, &mut rng)
     }
 
-    pub(crate) fn read_word(&self, input: &str) -> Result<Word, ElbieError> {
+    pub fn read_word(&self, input: &str) -> Result<Word, ElbieError> {
         // not an efficient algorithm, but it works...
         // FUTURE: This should be "cached" somehow to speed up the process. Perhaps by using a BTreeMap instead of a HashMap, and forcing insertion in order when adding phonemes to it.
         let mut phonemes: Vec<Rc<Phoneme>> = self.inventory.phonemes().values().cloned().collect();
