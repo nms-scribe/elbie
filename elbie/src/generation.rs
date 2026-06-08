@@ -27,7 +27,8 @@ Probabilities in the patterns below are marked by u8 instead of f64. To check a 
 */
 
 fn is_probable(probability: f32, rng: &mut ThreadRng) -> bool {
-    rng.random_range(0.0..1.0) <= probability
+    // use less than, because if they set a probability of 0, then it should never match, even if the pattern will validate.
+    rng.random_range(0.0..1.0) < probability
     //rng.random::<u8>() <= probability
 }
 
