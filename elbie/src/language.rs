@@ -106,6 +106,13 @@ impl Language {
                tables }
     }
 
+    #[must_use]
+    pub fn with_rule(name: &'static str, orthographies: Vec<&'static str>, initial_rule: &'static str) -> Self {
+        Self::with_pattern(name, orthographies, |pattern| {
+            pattern.rule(initial_rule);
+        })
+    }
+
     /// If this is true, phonemes added to the language must be unicode [normalized](https://www.unicode.org/reports/tr15/) (canonical decomposition), and words will be normalized before they are read. This simplifies certain processes when reading in phonemes from external sources.
     pub const fn set_normalize_phonemes(&mut self, value: bool) {
         self.inventory.set_normalize_phonemes(value);
