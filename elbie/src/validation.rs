@@ -31,12 +31,12 @@ pub(crate) enum ValidationFailure {
         count: usize
     },
     NoChoiceBranchesMatched,
-    CaseBranchBodyFailed {
+    TreeBranchFailed {
         index: usize
     },
-    NoCaseBranchesMatched,
-    CaseEnvironmentFailed,
-    CaseConditionFailed,
+    NoTreeBranchesMatched,
+    TreeBranchesFailed,
+    TreeConditionFailed,
     ReferencedRuleFailed {
         name: &'static str
     },
@@ -68,10 +68,10 @@ impl Display for ValidationFailure {
             Self::UnexpectedPhoneme { found } => write!(f, "Expected end of word, found {found}."),
             Self::UnexpectedPhonemeAfterPattern { found } => write!(f, "Found phoneme {found} after pattern was complete."),
             Self::NoChoiceBranchesMatched => write!(f, "No branches in choice matched."),
-            Self::CaseBranchBodyFailed { index } => write!(f, "Case body pattern {index} failed."),
-            Self::NoCaseBranchesMatched => write!(f, "No branches in case matched."),
-            Self::CaseEnvironmentFailed => write!(f, "Case environment failed."),
-            Self::CaseConditionFailed => write!(f, "Phoneme did not match initial set for case."),
+            Self::TreeBranchFailed { index } => write!(f, "Tree branch {index} failed."),
+            Self::NoTreeBranchesMatched => write!(f, "No branches in tree matched."),
+            Self::TreeBranchesFailed => write!(f, "All tree branches failed."),
+            Self::TreeConditionFailed => write!(f, "Phoneme did not match initial set for tree."),
             Self::ReferencedRuleFailed { name } => write!(f, "Rule '{name}' failed."),
             Self::InitialPatternFailed => write!(f, "Initial pattern failed.")
         }
@@ -85,8 +85,8 @@ pub(crate) enum ValidationTraceStart {
     Option,
     Choice,
     // If the value is Some, then the switch called a named environment.
-    Case(Option<&'static str>),
-    CaseEnvironment,
+    Tree(Option<&'static str>),
+    TreeBranches,
     RuleReference(&'static str)
 }
 
@@ -97,9 +97,9 @@ impl Display for ValidationTraceStart {
             Self::Series => write!(f, "start series"),
             Self::Option => write!(f, "start option"),
             Self::Choice => write!(f, "start choice"),
-            Self::Case(Some(case)) => write!(f, "start case for environment '{case}'"),
-            Self::Case(None) => write!(f, "start case"),
-            Self::CaseEnvironment => write!(f, "start case environment"),
+            Self::Tree(Some(tree)) => write!(f, "start branches for environment '{tree}'"),
+            Self::Tree(None) => write!(f, "start tree"),
+            Self::TreeBranches => write!(f, "start tree branches"),
             Self::RuleReference(name) => write!(f, "start rule reference '{name}'")
         }
     }
@@ -115,11 +115,11 @@ pub(crate) enum ValidationTraceEnd {
     // number indicates the current branch position
     Choice(usize),
     // If the value is Some, then the switch called a named environment.
-    Case(Option<&'static str>),
+    Tree(Option<&'static str>),
     // number indicates the current branch position, if None then this ended with the else or the initial phoneme.
-    CaseEnvironment(Option<usize>),
+    TreeBranches(Option<usize>),
     RuleReference(&'static str),
-    PhonemeFound(Rc<Phoneme>),
+    PhonemeFound(Rc<Phoneme>, &'static str),
     PhonemeNotFound,
     Terminate,
     Word
@@ -138,12 +138,12 @@ impl Display for ValidationTraceEnd {
                                                 "not"
                                             }),
             Self::Choice(branch) => write!(f, "end choice at branch {branch}"),
-            Self::Case(Some(environment)) => write!(f, "end case for environment '{environment}'"),
-            Self::Case(None) => write!(f, "end case"),
-            Self::CaseEnvironment(Some(branch)) => write!(f, "end case environment at branch {branch}"),
-            Self::CaseEnvironment(None) => write!(f, "end case environment without a branch"),
+            Self::Tree(Some(environment)) => write!(f, "end branches for environment '{environment}'"),
+            Self::Tree(None) => write!(f, "end tree"),
+            Self::TreeBranches(Some(branch)) => write!(f, "end branches at branch {branch}"),
+            Self::TreeBranches(None) => write!(f, "end branches environment without a branch"),
             Self::RuleReference(name) => write!(f, "end rule_reference '{name}'"),
-            Self::PhonemeFound(phoneme) => write!(f, "phoneme found {phoneme}"),
+            Self::PhonemeFound(phoneme, set) => write!(f, "phoneme found {phoneme}, expected set '{set}'"),
             Self::PhonemeNotFound => write!(f, "phoneme not found"),
             Self::Terminate => write!(f, "terminate"),
             Self::Word => write!(f, "word")
@@ -190,7 +190,7 @@ impl ValidationTraceReporter<'_> {
                                             pattern_source: location,
                                             event: ValidWordEvent::End(event.clone()) });
         if let Some(report) = self.report {
-            if !matches!(event, ValidationTraceEnd::PhonemeFound(_) | ValidationTraceEnd::PhonemeNotFound | ValidationTraceEnd::Terminate | ValidationTraceEnd::Word) {
+            if !matches!(event, ValidationTraceEnd::PhonemeFound(..) | ValidationTraceEnd::PhonemeNotFound | ValidationTraceEnd::Terminate | ValidationTraceEnd::Word) {
                 // The above don't have a corresponding start, so the level doesn't get changed.
                 self.level -= 1;
             }
@@ -201,7 +201,7 @@ impl ValidationTraceReporter<'_> {
     #[allow(clippy::needless_pass_by_value, reason = "Clippy is wrong, the paramter error is consumed in the call to report")]
     fn failure(&mut self, location: Location<'static>, position: usize, event: ValidationTraceEnd, error: ValidationFailure) {
         if let Some(report) = self.report {
-            if !matches!(event, ValidationTraceEnd::PhonemeFound(_) | ValidationTraceEnd::PhonemeNotFound | ValidationTraceEnd::Terminate | ValidationTraceEnd::Word) {
+            if !matches!(event, ValidationTraceEnd::PhonemeFound(..) | ValidationTraceEnd::PhonemeNotFound | ValidationTraceEnd::Terminate | ValidationTraceEnd::Word) {
                 // The above don't have a corresponding start, so the level doesn't get changed.
                 self.level -= 1;
             }
@@ -347,12 +347,12 @@ impl AddPhoneme {
                              -> Result<Result<Rc<Phoneme>, ()>, ElbieError> {
         if let Some((position, phoneme)) = word.next() {
             if language.inventory().phoneme_is(phoneme, self.name)? {
-                trace.success(self.defined_at, position, ValidationTraceEnd::PhonemeFound(phoneme.clone()), explanation);
+                trace.success(self.defined_at, position, ValidationTraceEnd::PhonemeFound(phoneme.clone(), self.name), explanation);
                 Ok(Ok(phoneme.clone()))
             } else {
                 trace.failure(self.defined_at,
                               position,
-                              ValidationTraceEnd::PhonemeFound(phoneme.clone()),
+                              ValidationTraceEnd::PhonemeFound(phoneme.clone(), self.name),
                               ValidationFailure::InvalidPhoneme { expected: self.name,
                                                                   found: phoneme.clone() });
                 Ok(Err(()))
@@ -379,24 +379,24 @@ impl TreeBranches {
     // not a ValidatePattern trait because it requires the phoneme information from the previous pattern.
     fn validate_word(&self, phoneme: &Rc<Phoneme>, language: &Language, word: &mut EnumerateCount<Iter<Rc<Phoneme>>>, trace: &mut ValidationTraceReporter, explanation: &mut Vec<ValidWordElement>)
                      -> Result<Result<(), ()>, ElbieError> {
-        trace.start(self.defined_at, word.next_index(), ValidationTraceStart::CaseEnvironment, explanation);
+        trace.start(self.defined_at, word.next_index(), ValidationTraceStart::TreeBranches, explanation);
 
         for (index, branch) in self.branches.iter().enumerate() {
             if language.inventory().phoneme_is(phoneme, branch.condition_set)? {
                 match branch.body.validate_word(language, word, trace, explanation)? {
                     Ok(()) => {
-                        trace.success(self.defined_at, word.next_index(), ValidationTraceEnd::CaseEnvironment(Some(index)), explanation);
+                        trace.success(self.defined_at, word.next_index(), ValidationTraceEnd::TreeBranches(Some(index)), explanation);
                         return Ok(Ok(()));
                     },
                     Err(err) => {
-                        trace.failure(self.defined_at, word.next_index(), ValidationTraceEnd::CaseEnvironment(Some(index)), ValidationFailure::CaseBranchBodyFailed { index });
+                        trace.failure(self.defined_at, word.next_index(), ValidationTraceEnd::TreeBranches(Some(index)), ValidationFailure::TreeBranchFailed { index });
                         return Ok(Err(err));
                     }
                 }
             }
         }
 
-        trace.failure(self.defined_at, word.next_index(), ValidationTraceEnd::CaseEnvironment(None), ValidationFailure::NoCaseBranchesMatched);
+        trace.failure(self.defined_at, word.next_index(), ValidationTraceEnd::TreeBranches(None), ValidationFailure::NoTreeBranchesMatched);
         Ok(Err(()))
     }
 }
@@ -408,17 +408,17 @@ impl ValidateWord for Tree {
             NamedOrInlineBranches::Inline(environment) => (environment, None),
             NamedOrInlineBranches::Named(name) => (language.patterns().get_named_branches(name)?, Some(*name))
         };
-        trace.start(self.defined_at, word.next_index(), ValidationTraceStart::Case(name), explanation);
+        trace.start(self.defined_at, word.next_index(), ValidationTraceStart::Tree(name), explanation);
         if let Ok(phoneme) = self.initial.validate_with_phoneme(language, word, trace, explanation)? {
             if environment.validate_word(&phoneme, language, word, trace, explanation)?.is_ok() {
-                trace.success(self.defined_at, word.next_index(), ValidationTraceEnd::Case(name), explanation);
+                trace.success(self.defined_at, word.next_index(), ValidationTraceEnd::Tree(name), explanation);
                 Ok(Ok(()))
             } else {
-                trace.failure(self.defined_at, word.next_index(), ValidationTraceEnd::Case(name), ValidationFailure::CaseEnvironmentFailed);
+                trace.failure(self.defined_at, word.next_index(), ValidationTraceEnd::Tree(name), ValidationFailure::TreeBranchesFailed);
                 Ok(Err(()))
             }
         } else {
-            trace.failure(self.defined_at, word.next_index(), ValidationTraceEnd::Case(name), ValidationFailure::CaseConditionFailed);
+            trace.failure(self.defined_at, word.next_index(), ValidationTraceEnd::Tree(name), ValidationFailure::TreeConditionFailed);
             Ok(Err(()))
         }
     }
