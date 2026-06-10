@@ -242,7 +242,7 @@ impl Language {
         self.patterns.pattern(name, pattern)
     }
 
-    pub fn format_pattern_for_debug(&mut self, name: &'static str) -> Result<String,ElbieError> {
+    pub fn format_pattern_for_debug(&mut self, name: &'static str) -> Result<String, ElbieError> {
         self.patterns.get(name).map(|p| format!("{p:?}"))
     }
 
