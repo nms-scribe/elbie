@@ -242,6 +242,10 @@ impl Language {
         self.patterns.pattern(name, pattern)
     }
 
+    pub fn format_pattern_for_debug(&mut self, name: &'static str) -> Result<String,ElbieError> {
+        self.patterns.get(name).map(|p| format!("{p:?}"))
+    }
+
     // track caller allows us to catch the locations of the calls, to help the user debug.
     #[track_caller]
     pub fn add_pattern_environment<Callback: Fn(&mut TreeBranchesBuilder)>(&mut self, name: &'static str, callback: Callback) -> Result<(), ElbieError> {
