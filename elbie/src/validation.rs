@@ -273,8 +273,8 @@ impl ValidateWord for Series {
         #[allow(clippy::assigning_clones, reason = "clone_from would require an immutable borrow")]
         while self.pattern.validate_word(language, &mut working_word, trace, &mut working_explanation)?.is_ok() {
             count += 1;
-            working_word = working_word.clone();
-            working_explanation = working_explanation.clone();
+            *word = working_word.clone();
+            *explanation = working_explanation.clone();
             if let Some(maximum) = self.maximum
                && count > maximum
             {
@@ -283,10 +283,17 @@ impl ValidateWord for Series {
             }
         }
 
+        /*
+        word = /os/
+
+        count = 1
+        working_word = /s/
+
+
+        */
+
         if count >= self.minimum {
             // reset to the last successfully matched working copy.
-            *word = working_word;
-            *explanation = working_explanation;
             trace.success(self.defined_at, word.next_index(), ValidationTraceEnd::Series(count), explanation);
             Ok(Ok(()))
         } else {
