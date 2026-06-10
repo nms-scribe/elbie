@@ -210,7 +210,7 @@ pub(crate) fn create_goblin_language() -> Result<Language, ElbieError> {
     language.add_exclusion(CODA_AFTER_APPROXIMANT, NASAL_OR_OBSTRUENT, &[LEFT_TAIL_N_AT_LEFT, V_ASPIR, Z_ASPIR, H])?;
     language.add_union(TAP_OR_GLOTTAL, &[TAP_OR_FLAP, GLOTTAL])?;
 
-    language.add_pattern_environment(ONSET, |environment| {
+    language.add_pattern_branches(ONSET, |environment| {
                 environment.choice(VOWEL, |choice| {
                                choice.tree_named(10, ONSET_CONSONANT, ONSET);
                                choice.tree_named(50, CODA_CONSONANT, CODA);
@@ -223,7 +223,7 @@ pub(crate) fn create_goblin_language() -> Result<Language, ElbieError> {
                 environment.tree_named(PHONEME, VOWEL, ONSET);
             })?;
 
-    language.add_pattern_environment(CODA, |environment| {
+    language.add_pattern_branches(CODA, |environment| {
                 environment.tree_named(TAP_OR_GLOTTAL, VOWEL, ONSET);
                 environment.choice(LABIAL_NASAL, |choice| {
                                choice.tree_named(10, CODA_LABIAL_OBSTRUENT, CODA);

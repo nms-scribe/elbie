@@ -1,5 +1,8 @@
 use crate::errors::ElbieError;
 use crate::weighted_vec::WeightedVec;
+use core::fmt;
+use core::fmt::Display;
+use core::fmt::Formatter;
 use core::panic::Location;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -42,6 +45,22 @@ pub(crate) struct Sequence {
     pub defined_at: Location<'static>
 }
 
+impl Display for Sequence {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "(")?;
+        let mut first = true;
+        for pattern in &self.patterns {
+            if first {
+                first = false;
+            } else {
+                write!(f, " + ")?;
+            }
+            write!(f, "{pattern}")?
+        }
+        write!(f, ")")
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct Series {
     pub pattern: Pattern,
@@ -51,11 +70,35 @@ pub(crate) struct Series {
     pub defined_at: Location<'static>
 }
 
+impl Display for Series {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let Self { pattern,
+                   probability,
+                   minimum,
+                   maximum,
+                   defined_at: _ } = self;
+        match (minimum, maximum) {
+            (0, None) => write!(f, "{pattern}[{probability}]*"),
+            (1.., None) => write!(f, "{pattern}[{probability}]+"),
+            (n, Some(max)) => write!(f, "{pattern}[{probability}]{{{n}..{max}}}")
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct Optional {
     pub pattern: Pattern,
     pub probability: f32,
     pub defined_at: Location<'static>
+}
+
+impl Display for Optional {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let Self { pattern,
+                   probability,
+                   defined_at: _ } = self;
+        write!(f, "{pattern}[{probability}]?")
+    }
 }
 
 #[derive(Debug)]
@@ -69,11 +112,37 @@ pub(crate) struct Choice {
     pub defined_at: Location<'static>
 }
 
+impl Display for Choice {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "(")?;
+        let mut first = true;
+        for (branch, weight) in self.branches.items() {
+            if first {
+                first = false;
+            } else {
+                write!(f, " | ")?;
+            }
+            write!(f, "{}[{weight}]", branch.body)?
+        }
+        write!(f, ")")
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct AddPhoneme {
     pub name: &'static str,
     pub avoid_duplicates: bool,
     pub defined_at: Location<'static>
+}
+
+impl Display for AddPhoneme {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "<{}>", self.name)?;
+        if self.avoid_duplicates {
+            write!(f, "[nodup]")?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
@@ -86,6 +155,23 @@ pub(crate) struct Branch {
 pub(crate) struct TreeBranches {
     pub branches: Vec<Branch>,
     pub defined_at: Location<'static>
+}
+
+impl Display for TreeBranches {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut first = true;
+        for branch in &self.branches {
+            if first {
+                first = false;
+            } else {
+                write!(f, "; ")?;
+            }
+            let Branch { condition_set,
+                         body } = branch;
+            write!(f, "{condition_set} -> {body}")?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
@@ -101,15 +187,37 @@ pub(crate) struct Tree {
     pub defined_at: Location<'static>
 }
 
+impl Display for Tree {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:", self.initial)?;
+        match &self.environment {
+            NamedOrInlineBranches::Inline(tree_branches) => write!(f, "[{tree_branches}]"),
+            NamedOrInlineBranches::Named(name) => write!(f, "\"{name}\"")
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct TerminateWord {
     pub defined_at: Location<'static>
+}
+
+impl Display for TerminateWord {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "!")
+    }
 }
 
 #[derive(Debug)]
 pub(crate) struct RuleReference {
     pub name: &'static str,
     pub defined_at: Location<'static>
+}
+
+impl Display for RuleReference {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "\"{}\"", self.name)
+    }
 }
 
 #[derive(Debug)]
@@ -124,6 +232,21 @@ pub(crate) enum Pattern {
     // This can be used to force completion in certain situations, such as not allowing a series to continue, or disallowing an option.
     // If used in a pattern before a non-optional pattern with phonemes, it will fail.
     Terminate(TerminateWord)
+}
+
+impl Display for Pattern {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Sequence(sequence) => write!(f, "{sequence}"),
+            Self::Series(series) => write!(f, "{series}"),
+            Self::Option(optional) => write!(f, "{optional}"),
+            Self::Choice(choice) => write!(f, "{choice}"),
+            Self::Tree(tree) => write!(f, "{tree}"),
+            Self::RuleReference(rule_reference) => write!(f, "{rule_reference}"),
+            Self::Set(add_phoneme) => write!(f, "{add_phoneme}"),
+            Self::Terminate(terminate_word) => write!(f, "{terminate_word}")
+        }
+    }
 }
 
 impl Pattern {
