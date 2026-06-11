@@ -1,6 +1,18 @@
 /*!
- Contains constants for various IPA symbols, macros for IPA diacrtics, as well as common 'set' names.
+ Contains constants for various IPA symbols, macros for IPA diacrtics, as well as common 'set' names. And a couple of normalization functions.
 */
+use unicode_normalization::UnicodeNormalization as _;
+use unicode_normalization::is_nfd;
+
+#[must_use]
+pub fn is_normalized(text: &str) -> bool {
+    is_nfd(text)
+}
+
+#[must_use]
+pub fn normalize(text: &str) -> String {
+    text.nfd().collect()
+}
 
 /* Some basic set names */
 pub const VOWEL: &str = "vowel";
