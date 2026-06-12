@@ -160,6 +160,15 @@ impl RuleState<'_> {
         }
     }
 
+    /// Allows maintaining state between calls to the rule. To do so, keep the state in some sort of sharable reference, like a RefCell, outside of the rule definition. Reset the state whenever peek_initial returns true.
+    pub fn mut_seq<Sequence: FnMut(&mut Self) -> Result<bool, RuleStateError>>(&mut self, sequence: &mut Sequence) -> Result<(), RuleStateError> {
+        if sequence(self)? {
+            Ok(())
+        } else {
+            Err(RuleStateError::MatchFailed)
+        }
+    }
+
     /// Uses `is` to match the current phoneme and returns true if it matches. If the match fails, it returns false and does not move the iterator.
     pub fn opt(&mut self, name: &'static str) -> Result<bool, ElbieError> {
         match self.is(name) {
