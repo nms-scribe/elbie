@@ -430,7 +430,7 @@ impl DoIt for Analyze {
         }
 
         analyze_words(source_language,
-                      word_data);
+                      &word_data);
 
         Ok(())
     }

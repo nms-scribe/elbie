@@ -469,8 +469,8 @@ impl Language {
         self.analysis_cluster_sets = Some(sets.to_vec())
     }
 
-    pub(crate) fn analysis_cluster_sets(&self) -> &Option<Vec<&'static str>> {
-        &self.analysis_cluster_sets
+    pub(crate) const fn analysis_cluster_sets(&self) -> Option<&Vec<&'static str>> {
+        self.analysis_cluster_sets.as_ref()
     }
 
     /**
@@ -483,8 +483,8 @@ impl Language {
         self.analysis_structure_sets = Some(sets.to_vec())
     }
 
-    pub(crate) fn analysis_structure_sets(&self) -> &Option<Vec<&'static str>> {
-        &self.analysis_structure_sets
+    pub(crate) const fn analysis_structure_sets(&self) -> Option<&Vec<&'static str>> {
+        self.analysis_structure_sets.as_ref()
     }
 
 }

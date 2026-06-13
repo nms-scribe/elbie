@@ -4,10 +4,11 @@ use std::rc::Rc;
 use crate::phoneme::Phoneme;
 use crate::word_table::WordTable;
 use std::collections::BTreeMap;
-use std::slice::Iter;
-use std::fmt::Display;
+use core::slice::Iter;
+use core::fmt::Display;
 use crate::word::Word;
 use std::fmt;
+use crate::phoneme_table_builder::TableEntry;
 
 
 pub(crate) struct AnalysisConfig<'language> {
@@ -18,7 +19,7 @@ pub(crate) struct AnalysisConfig<'language> {
 
 #[derive(Default)]
 struct ClusterFollowers {
-    in_cluster: BTreeMap<&'static str,(usize,ClusterFollowers)>,
+    in_cluster: BTreeMap<&'static str,(usize,Self)>,
     beyond_cluster: BTreeMap<&'static str,(usize,BTreeMap<&'static str,usize>)>,
     end_of_word: usize
 }
@@ -26,11 +27,11 @@ struct ClusterFollowers {
 impl ClusterFollowers {
     fn follow_with(&mut self, keys: &mut Iter<'_, &'static str>, next_out_of_cluster: Option<(&'static str,&'static str)>) {
         if let Some(first) = keys.next() {
-            let value = self.in_cluster.entry(first).or_insert_with(Default::default);
+            let value = self.in_cluster.entry(first).or_default();
             value.0 += 1;
             value.1.follow_with(keys,next_out_of_cluster)
         } else if let Some((cluster_type,set)) = next_out_of_cluster {
-            let value = self.beyond_cluster.entry(cluster_type).or_insert_with(Default::default);
+            let value = self.beyond_cluster.entry(cluster_type).or_default();
             value.0 += 1;
             *value.1.entry(set).or_insert(0) += 1;
 
@@ -54,8 +55,8 @@ impl ClusterFollowers {
         for (cluster_type,(count,sets)) in beyond_cluster {
             writeln!(f,"{:indent$}NEXT [{cluster_type}] {count} ->",' ')?;
             let indent = indent + 4;
-            for (set,count) in sets {
-                writeln!(f,"{:indent$}[{set}] {count}",' ')?;
+            for (set,set_count) in sets {
+                writeln!(f,"{:indent$}[{set}] {set_count}",' ')?;
             }
 
         }
@@ -71,6 +72,7 @@ impl ClusterFollowers {
 
 #[derive(Default)]
 struct ClusterInfoByStructureClasses {
+    #[allow(clippy::type_complexity,reason="Yes, you're right, but I don't want to deal with this right now.")]
     clusters: BTreeMap<Vec<&'static str>,(usize,BTreeMap<Vec<Rc<Phoneme>>,usize>)>,
     tree: BTreeMap<&'static str,(usize,ClusterFollowers)>
 }
@@ -86,8 +88,8 @@ impl Display for ClusterInfoByStructureClasses {
         writeln!(f)?;
         for (cluster,(count,info)) in clusters {
             write!(f,"\"{}\" ({count}) including: ",cluster.join(" + "))?;
-            for (phonemes,count) in info {
-                write!(f,"{} ({count}) ",Word::new(phonemes))?;
+            for (phonemes,phoneme_counts) in info {
+                write!(f,"{} ({phoneme_counts}) ",Word::new(phonemes))?;
             }
             writeln!(f)?;
 
@@ -123,15 +125,15 @@ impl ClusterInfoByStructureClasses {
                 let set = config.find_structural_set_for_phoneme(phoneme)?;
                 Ok((cluster_type,set))
             }).transpose()?;
-            let value = self.tree.entry(first).or_insert_with(Default::default);
+            let value = self.tree.entry(first).or_default();
             value.0 += 1;
             value.1.follow_with(&mut keys, next_out_of_cluster)
         }
 
 
-        let info = self.clusters.entry(key).or_insert_with(Default::default);
+        let info = self.clusters.entry(key).or_default();
         info.0 += 1;
-        let clusters = info.1.entry(phonemes).or_insert_with(Default::default);
+        let clusters = info.1.entry(phonemes).or_default();
         *clusters += 1;
 
 
@@ -214,13 +216,13 @@ pub(crate) struct AnalysisResults {
 impl AnalysisResults {
 
     fn add_cluster(&mut self, cluster: Vec<Rc<Phoneme>>, set: &'static str, initial: bool, final_: bool, next_out_of_cluster: Option<&Rc<Phoneme>>, config: &AnalysisConfig) -> Result<(), ElbieError> {
-        self.info_by_set.entry(set).or_insert(Default::default()).add_cluster(cluster,initial,final_,next_out_of_cluster, config)
+        self.info_by_set.entry(set).or_default().add_cluster(cluster,initial,final_,next_out_of_cluster, config)
     }
 
     /// Add the count of the set per word.
     fn add_cluster_counts_for_one_word(&mut self, counts: BTreeMap<&'static str, usize>) {
         for (set,count) in counts {
-            self.info_by_set.entry(set).or_insert(Default::default()).add_cluster_counts_for_one_word(count)
+            self.info_by_set.entry(set).or_default().add_cluster_counts_for_one_word(count)
         }
 
     }
@@ -243,8 +245,9 @@ impl<'language> AnalysisConfig<'language> {
     pub(crate) fn from_language(language: &'language Language) -> Self {
 
 
-        fn fill_structure_sets(structure_sets: &mut Vec<&str>, table: &crate::phoneme_table_builder::TableEntry) {
+        fn fill_structure_sets(structure_sets: &mut Vec<&str>, table: &TableEntry) {
             if let Some(rows) = table.definition().row_sets() {
+                #[allow(clippy::iter_over_hash_type,reason="Order isn't important here.")]
                 for row in rows {
                     structure_sets.push(*row);
                 }
@@ -297,7 +300,7 @@ impl AnalysisConfig<'_> {
     fn validate_set_coverage(from: &Language, phoneme: &Rc<Phoneme>, sets: &[&'static str]) -> Result<(),ElbieError> {
         let mut found_set = None;
         for set in sets {
-            if from.inventory().phoneme_is(phoneme, *set)? {
+            if from.inventory().phoneme_is(phoneme, set)? {
                 if let Some(previous_set) = found_set {
                     return Err(ElbieError::AnalysisSetIsNonExclusive(phoneme.name,set,previous_set));
                 }
@@ -312,7 +315,8 @@ impl AnalysisConfig<'_> {
 
     pub(crate) fn validate(&self, language: &Language) -> Result<(),ElbieError> {
         // make sure that the cluster_sets, and the structural_sets are exclusive:
-        for (_,phoneme) in language.inventory().phonemes() {
+        #[allow(clippy::iter_over_hash_type,reason="Order isn't important here.")]
+        for phoneme in language.inventory().phonemes().values() {
             Self::validate_set_coverage(language, phoneme, &self.cluster_sets)?;
             Self::validate_set_coverage(language, phoneme, &self.structure_sets)?;
         }
@@ -322,7 +326,7 @@ impl AnalysisConfig<'_> {
     }
 
 
-    pub(crate) fn analyze(&self, words: WordTable) -> Result<AnalysisResults,ElbieError> {
+    pub(crate) fn analyze(&self, words: &WordTable) -> Result<AnalysisResults,ElbieError> {
 
         // TODO: What if You want to "separate" clusters? There should be a way to configure, say, not clustering vowels so each vowel is a separate cluster. Making it easier to count syllables in some languages.
 
@@ -330,7 +334,7 @@ impl AnalysisConfig<'_> {
         for entry in &mut words.entries() {
             let word = entry.word();
             let word = self.language.read_word(word)?;
-            let mut phonemes = word.phonemes().into_iter();
+            let mut phonemes = word.phonemes().iter();
             let mut cluster_phonemes = Vec::new();
             let mut initial = true;
             let mut counts: BTreeMap<&str, usize> = BTreeMap::from_iter(self.cluster_sets.iter().copied().map(|set| (set,0)));
@@ -341,7 +345,7 @@ impl AnalysisConfig<'_> {
                     let next_set = self.find_cluster_set_for_phoneme(next)?;
                     if set != next_set {
                         let index = counts.get_mut(set).expect("I'm iterating through the same sets the map was generated with, this should work");
-                        results.add_cluster(cluster_phonemes, set, initial, false, Some(next), &self)?;
+                        results.add_cluster(cluster_phonemes, set, initial, false, Some(next), self)?;
                         *index += 1;
                         cluster_phonemes = Vec::new();
                         set = next_set;
@@ -353,7 +357,7 @@ impl AnalysisConfig<'_> {
                 // close off the last one...
                 let index = counts.get_mut(set).expect("I'm iterating through the same sets the map was generated with, this should work");
                 *index += 1;
-                results.add_cluster(cluster_phonemes, set, initial, true, None, &self)?;
+                results.add_cluster(cluster_phonemes, set, initial, true, None, self)?;
             }
 
             results.add_cluster_counts_for_one_word(counts);

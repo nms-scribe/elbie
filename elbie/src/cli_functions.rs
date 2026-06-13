@@ -311,7 +311,7 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
 }
 
 
-pub(crate) fn analyze_words(from: &Language, words: WordTable) {
+pub(crate) fn analyze_words(from: &Language, words: &WordTable) {
 
     // TODO: Should be able to set up custom analysis stuff on the language itself.
     let config = AnalysisConfig::from_language(from);

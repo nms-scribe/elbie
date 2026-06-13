@@ -948,11 +948,11 @@ impl TableDef {
 
     pub(crate) fn row_sets(&self) -> Option<Keys<'_, &'static str, HeaderDef>> {
         match self {
-            TableDef::OneCell(_) => None,
-            TableDef::ListTable(table1_ddef) => Some(table1_ddef.rows_by_set.keys()),
-            TableDef::SimpleTable(table2_ddef) => Some(table2_ddef.rows_by_set.keys()),
-            TableDef::TableWithSubcolumns(table3_ddef) => Some(table3_ddef.rows_by_set.keys()),
-            TableDef::TableWithSubcolumnsAndSubrows(table4_ddef) => Some(table4_ddef.rows_by_set.keys()),
+            Self::OneCell(_) => None,
+            Self::ListTable(table1_ddef) => Some(table1_ddef.rows_by_set.keys()),
+            Self::SimpleTable(table2_ddef) => Some(table2_ddef.rows_by_set.keys()),
+            Self::TableWithSubcolumns(table3_ddef) => Some(table3_ddef.rows_by_set.keys()),
+            Self::TableWithSubcolumnsAndSubrows(table4_ddef) => Some(table4_ddef.rows_by_set.keys()),
         }
     }
 }
