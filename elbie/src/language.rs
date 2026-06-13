@@ -73,7 +73,6 @@ pub struct Language {
     tables: Vec<TableEntry>,
     analysis_cluster_sets: Option<Vec<&'static str>>,
     analysis_structure_sets: Option<Vec<&'static str>>
-
 }
 
 impl Language {
@@ -486,7 +485,6 @@ impl Language {
     pub(crate) const fn analysis_structure_sets(&self) -> Option<&Vec<&'static str>> {
         self.analysis_structure_sets.as_ref()
     }
-
 }
 
 impl InventoryLoader for Language {

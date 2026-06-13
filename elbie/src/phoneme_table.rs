@@ -16,8 +16,8 @@ use core::fmt::Display;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::hash_map::Entry;
-use std::rc::Rc;
 use std::collections::hash_map::Keys;
+use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub enum Axis {
@@ -952,7 +952,7 @@ impl TableDef {
             Self::ListTable(table1_ddef) => Some(table1_ddef.rows_by_set.keys()),
             Self::SimpleTable(table2_ddef) => Some(table2_ddef.rows_by_set.keys()),
             Self::TableWithSubcolumns(table3_ddef) => Some(table3_ddef.rows_by_set.keys()),
-            Self::TableWithSubcolumnsAndSubrows(table4_ddef) => Some(table4_ddef.rows_by_set.keys()),
+            Self::TableWithSubcolumnsAndSubrows(table4_ddef) => Some(table4_ddef.rows_by_set.keys())
         }
     }
 }

@@ -275,12 +275,15 @@ pub(crate) fn create_goblin_language() -> Result<Language, ElbieError> {
             .option(TableOption::HideSubrowCaptions)
             .add()?;
 
-    language.new_table("vowel", MONOPHTHONG, "Vowels").axis(&[("Front", FRONT), ("Back", BACK)])?.axis(&[("Close", CLOSE), ("Near-close", NEAR_CLOSE), ("Open-mid", OPEN_MID), ("Open", OPEN)])?.add()?;
+    language.new_table("vowel", MONOPHTHONG, "Vowels")
+            .axis(&[("Front", FRONT), ("Back", BACK)])?
+            .axis(&[("Close", CLOSE), ("Near-close", NEAR_CLOSE), ("Open-mid", OPEN_MID), ("Open", OPEN)])?
+            .add()?;
 
     language.new_table("diphthong", DIPHTHONG, "Diphthongs").add()?;
 
-    language.set_analysis_cluster_sets(&[CONSONANT,VOWEL]);
-    language.set_analysis_structure_sets(&[ROUNDED,UNROUNDED,DIPHTHONG,NASAL,PLOSIVE,FRICATIVE,REV_AFFRICATE,APPROXIMANT,TAP_OR_FLAP]);
+    language.set_analysis_cluster_sets(&[CONSONANT, VOWEL]);
+    language.set_analysis_structure_sets(&[ROUNDED, UNROUNDED, DIPHTHONG, NASAL, PLOSIVE, FRICATIVE, REV_AFFRICATE, APPROXIMANT, TAP_OR_FLAP]);
 
     /*
 

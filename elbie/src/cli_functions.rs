@@ -1,3 +1,4 @@
+use crate::analysis::AnalysisConfig;
 use crate::errors::ElbieError;
 use crate::format::Format;
 use crate::grid::Cell;
@@ -14,7 +15,6 @@ use crate::validation::ValidationTraceCallback;
 use crate::word::Word;
 use crate::word_table::WordTable;
 use std::process;
-use crate::analysis::AnalysisConfig;
 
 pub(crate) enum ValidateOption {
     Simple,
@@ -310,9 +310,7 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
     }
 }
 
-
 pub(crate) fn analyze_words(from: &Language, words: &WordTable) {
-
     // TODO: Should be able to set up custom analysis stuff on the language itself.
     let config = AnalysisConfig::from_language(from);
 
@@ -329,13 +327,9 @@ pub(crate) fn analyze_words(from: &Language, words: &WordTable) {
         Err(err) => {
             eprintln!("{err}");
             process::exit(1);
-        },
+        }
     };
 
     println!("{analysis}")
     // TODO: Display the analysis somehow
-
-
-
-
 }

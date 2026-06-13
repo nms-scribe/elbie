@@ -89,9 +89,9 @@ pub enum ElbieError {
 
     // analysis errores
     #[error("Phoneme /{0}/ is found in both {1} and {2}.")]
-    AnalysisSetIsNonExclusive(&'static str,&'static str,&'static str),
+    AnalysisSetIsNonExclusive(&'static str, &'static str, &'static str),
     #[error("Phoneme /{0}/ is not found in any of the sets: {1}")]
-    AnalysisSetCoverageIsIncomplete(&'static str,String)
+    AnalysisSetCoverageIsIncomplete(&'static str, String)
 }
 
 #[deprecated(since = "0.2.2", note = "Use `ElbieError` instead.")]
