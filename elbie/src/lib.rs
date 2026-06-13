@@ -163,6 +163,7 @@ pub mod validation;
 pub mod phoneme_table_builder;
 pub mod language;
 pub mod transformation;
+mod analysis;
 mod cli_functions;
 #[deprecated(since = "0.2.2", note = "Use `cli::run_language` instead.")]
 pub mod language_cli;

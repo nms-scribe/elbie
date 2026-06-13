@@ -70,7 +70,10 @@ pub struct Language {
     orthographies: Vec<&'static str>,
     #[allow(deprecated)]
     patterns: PatternSet,
-    tables: Vec<TableEntry>
+    tables: Vec<TableEntry>,
+    analysis_cluster_sets: Option<Vec<&'static str>>,
+    analysis_structure_sets: Option<Vec<&'static str>>
+
 }
 
 impl Language {
@@ -85,12 +88,16 @@ impl Language {
             #[allow(deprecated)]
             rules.tree_named(initial_phoneme_set, initial_environment);
         });
+        let analysis_cluster_sets = None;
+        let analysis_structural_sets = None;
         Self { name,
                inventory,
                phoneme_behavior,
                orthographies,
                patterns,
-               tables }
+               tables,
+               analysis_cluster_sets,
+               analysis_structure_sets: analysis_structural_sets }
     }
 
     pub fn with_pattern<Pattern: Fn(&mut PatternBuilder)>(name: &'static str, orthographies: Vec<&'static str>, initial_pattern: Pattern) -> Self {
@@ -98,12 +105,16 @@ impl Language {
         let phoneme_behavior = HashMap::new();
         let tables = vec![];
         let patterns = PatternSet::new(initial_pattern);
+        let analysis_cluster_sets = None;
+        let analysis_structural_sets = None;
         Self { name,
                inventory,
                phoneme_behavior,
                orthographies,
                patterns,
-               tables }
+               tables,
+               analysis_cluster_sets,
+               analysis_structure_sets: analysis_structural_sets }
     }
 
     #[must_use]
@@ -446,6 +457,36 @@ impl Language {
 
         Ok(result)
     }
+
+    /**
+    The analyze command lets you review phonotactic information for existing words, helping you build patterns and rules out of words from an external source. Part of the analysis breaks the words into types of clusters, for example clusters of vowels or clusters of consonants. By default, these clusters are taken from the main sets for each table added to the language. If you wish to use different sets (for example, you have two different types of vowels in separate tables), you can specify them with this command.
+
+    Sets must be exclusive (each phoneme is only in one of them) and have full coverage (no phoneme exists that isn't in at least one of them).
+
+    Also see `set_analysis_structure_sets`
+    */
+    pub fn set_analysis_cluster_sets(&mut self, sets: &[&'static str]) {
+        self.analysis_cluster_sets = Some(sets.to_vec())
+    }
+
+    pub(crate) fn analysis_cluster_sets(&self) -> &Option<Vec<&'static str>> {
+        &self.analysis_cluster_sets
+    }
+
+    /**
+    See `set_analysis_cluster_sets`. The analysis tool described there also builds trees of phoneme patterns based on their structural set. So, for example, you will be able to see how many fricatives follow plosives in a consonant cluster. The structure sets determine how to classify phonemes, so you don't just have a complex tree of individual phonemes. By default the structure sets are taken from the sets for the rows of every table (or the main set for a 0-dimensional table). If you want to override them (for example, to split or join some of the rows, or to take a different window into the phonemes), you can specify them with this command.
+
+    Sets must be exclusive (each phoneme is only in one of them) and have full coverage (no phoneme exists that isn't in at least one of them).
+
+    */
+    pub fn set_analysis_structure_sets(&mut self, sets: &[&'static str]) {
+        self.analysis_structure_sets = Some(sets.to_vec())
+    }
+
+    pub(crate) fn analysis_structure_sets(&self) -> &Option<Vec<&'static str>> {
+        &self.analysis_structure_sets
+    }
+
 }
 
 impl InventoryLoader for Language {

@@ -103,6 +103,7 @@ const OBSTRUENT: &str = "obstruent";
 
 // vowel categories
 const DIPHTHONG: &str = "diphthong";
+const MONOPHTHONG: &str = "monophthong";
 
 // complex categories
 const INITIAL_ONSET_PHONEME: &str = "any phoneme except unvoiced or nasal velar, reversed affricate, and tap)";
@@ -180,13 +181,13 @@ pub(crate) fn create_goblin_language() -> Result<Language, ElbieError> {
     _ = language.add_phoneme_with_spelling(BREVE_SMALL_CAP_G, &["gg"], &[CONSONANT, DORSAL, UVULAR, TAP_OR_FLAP, UNASPIRATED, VOICED])?;
     _ = language.add_phoneme(L, &[CONSONANT, CORONAL, ALVEOLAR, LATERAL, APPROXIMANT, UNASPIRATED, VOICED])?;
 
-    _ = language.add_phoneme_with_spelling(I, &["ee"], &[VOWEL, FRONT, CLOSE, UNROUNDED])?;
-    _ = language.add_phoneme_with_spelling(U, &["oo"], &[VOWEL, BACK, CLOSE, ROUNDED])?;
-    _ = language.add_phoneme_with_spelling(SMALL_CAP_I, &["i"], &[VOWEL, FRONT, NEAR_CLOSE, UNROUNDED])?;
-    _ = language.add_phoneme_with_spelling(EPSILON, &["e"], &[VOWEL, FRONT, OPEN_MID, UNROUNDED])?;
-    _ = language.add_phoneme_with_spelling(OPEN_O, &["u"], &[VOWEL, BACK, OPEN_MID, ROUNDED])?;
-    _ = language.add_phoneme(A, &[VOWEL, FRONT, OPEN, UNROUNDED])?;
-    _ = language.add_phoneme_with_spelling(TURNED_SCRIPT_A, &["o"], &[VOWEL, BACK, OPEN, ROUNDED])?;
+    _ = language.add_phoneme_with_spelling(I, &["ee"], &[VOWEL, FRONT, CLOSE, UNROUNDED, MONOPHTHONG])?;
+    _ = language.add_phoneme_with_spelling(U, &["oo"], &[VOWEL, BACK, CLOSE, ROUNDED, MONOPHTHONG])?;
+    _ = language.add_phoneme_with_spelling(SMALL_CAP_I, &["i"], &[VOWEL, FRONT, NEAR_CLOSE, UNROUNDED, MONOPHTHONG])?;
+    _ = language.add_phoneme_with_spelling(EPSILON, &["e"], &[VOWEL, FRONT, OPEN_MID, UNROUNDED, MONOPHTHONG])?;
+    _ = language.add_phoneme_with_spelling(OPEN_O, &["u"], &[VOWEL, BACK, OPEN_MID, ROUNDED, MONOPHTHONG])?;
+    _ = language.add_phoneme(A, &[VOWEL, FRONT, OPEN, UNROUNDED, MONOPHTHONG])?;
+    _ = language.add_phoneme_with_spelling(TURNED_SCRIPT_A, &["o"], &[VOWEL, BACK, OPEN, ROUNDED, MONOPHTHONG])?;
     _ = language.add_phoneme_with_spelling(DIPH_EPSILON_U, &["eu"], &[VOWEL, DIPHTHONG])?;
     _ = language.add_phoneme_with_spelling(DIPH_A_U, &["ou"], &[VOWEL, DIPHTHONG])?;
     _ = language.add_phoneme_with_spelling(DIPH_TURNED_SCRIPT_A_I, &["oi"], &[VOWEL, DIPHTHONG])?;
@@ -274,9 +275,47 @@ pub(crate) fn create_goblin_language() -> Result<Language, ElbieError> {
             .option(TableOption::HideSubrowCaptions)
             .add()?;
 
-    language.new_table("vowel", VOWEL, "Vowels").axis(&[("Front", FRONT), ("Back", BACK)])?.axis(&[("Close", CLOSE), ("Near-close", NEAR_CLOSE), ("Open-mid", OPEN_MID), ("Open", OPEN)])?.add()?;
+    language.new_table("vowel", MONOPHTHONG, "Vowels").axis(&[("Front", FRONT), ("Back", BACK)])?.axis(&[("Close", CLOSE), ("Near-close", NEAR_CLOSE), ("Open-mid", OPEN_MID), ("Open", OPEN)])?.add()?;
 
     language.new_table("diphthong", DIPHTHONG, "Diphthongs").add()?;
+
+    language.set_analysis_cluster_sets(&[CONSONANT,VOWEL]);
+    language.set_analysis_structure_sets(&[ROUNDED,UNROUNDED,DIPHTHONG,NASAL,PLOSIVE,FRICATIVE,REV_AFFRICATE,APPROXIMANT,TAP_OR_FLAP]);
+
+    /*
+
+    _ = language.add_phoneme(M, &[CONSONANT, LABIAL, BILABIAL, NASAL, UNASPIRATED, VOICED])?;
+    _ = language.add_phoneme(N, &[CONSONANT, CORONAL, ALVEOLAR, NASAL, UNASPIRATED, VOICED])?;
+    _ = language.add_phoneme_with_spelling(LEFT_TAIL_N_AT_LEFT, &["ny"], &[CONSONANT, DORSAL, PALATAL, NASAL, UNASPIRATED, VOICED])?;
+    _ = language.add_phoneme_with_spelling_fn(ENG, &[spell_eng], &[CONSONANT, DORSAL, VELAR, NASAL, UNASPIRATED, VOICED])?;
+    _ = language.add_phoneme(P, &[CONSONANT, LABIAL, BILABIAL, PLOSIVE, UNVOICED, UNASPIRATED, OBSTRUENT])?;
+    _ = language.add_phoneme(B, &[CONSONANT, LABIAL, BILABIAL, PLOSIVE, UNASPIRATED, VOICED, OBSTRUENT])?;
+    _ = language.add_phoneme(T, &[CONSONANT, CORONAL, ALVEOLAR, PLOSIVE, UNVOICED, UNASPIRATED, OBSTRUENT])?;
+    _ = language.add_phoneme(D, &[CONSONANT, CORONAL, ALVEOLAR, PLOSIVE, UNASPIRATED, VOICED, OBSTRUENT])?;
+    _ = language.add_phoneme(K, &[CONSONANT, DORSAL, VELAR, PLOSIVE, UNVOICED, UNASPIRATED, OBSTRUENT])?;
+    _ = language.add_phoneme_with_spelling(G, &["g"], &[CONSONANT, DORSAL, VELAR, PLOSIVE, UNASPIRATED, VOICED, OBSTRUENT])?;
+    _ = language.add_phoneme(F, &[CONSONANT, LABIAL, LABIODENTAL, FRICATIVE, UNVOICED, UNASPIRATED, OBSTRUENT])?;
+    _ = language.add_phoneme_with_spelling(V_ASPIR, &["vh"], &[CONSONANT, LABIAL, LABIODENTAL, FRICATIVE, ASPIRATED, VOICED, OBSTRUENT])?;
+    _ = language.add_phoneme(V, &[CONSONANT, LABIAL, LABIODENTAL, FRICATIVE, UNASPIRATED, VOICED, OBSTRUENT])?;
+    _ = language.add_phoneme_with_spelling(THETA, &["th"], &[CONSONANT, CORONAL, DENTAL, FRICATIVE, UNVOICED, UNASPIRATED, OBSTRUENT])?;
+    _ = language.add_phoneme(S, &[CONSONANT, CORONAL, ALVEOLAR, FRICATIVE, UNVOICED, UNASPIRATED, SIBILANT, OBSTRUENT])?;
+    _ = language.add_phoneme_with_spelling(Z_ASPIR, &["zh"], &[CONSONANT, CORONAL, ALVEOLAR, FRICATIVE, VOICED, ASPIRATED, SIBILANT, OBSTRUENT])?;
+    _ = language.add_phoneme(Z, &[CONSONANT, CORONAL, ALVEOLAR, FRICATIVE, UNASPIRATED, VOICED, SIBILANT, OBSTRUENT])?;
+    _ = language.add_phoneme_with_spelling(ESH, &["sh"], &[CONSONANT, CORONAL, POSTALVEOLAR, FRICATIVE, UNVOICED, UNASPIRATED, SIBILANT, OBSTRUENT])?;
+    _ = language.add_phoneme_with_spelling(X, &["ch"], &[CONSONANT, DORSAL, VELAR, FRICATIVE, UNVOICED, UNASPIRATED, OBSTRUENT])?;
+    _ = language.add_phoneme_with_spelling(GAMMA, &["gh"], &[CONSONANT, DORSAL, VELAR, FRICATIVE, VOICED, UNASPIRATED, OBSTRUENT])?; //
+    _ = language.add_phoneme_with_spelling(GAMMA_ASPIR, &["ghh"], &[CONSONANT, DORSAL, VELAR, FRICATIVE, VOICED, ASPIRATED, OBSTRUENT])?; //
+    _ = language.add_phoneme(H, &[CONSONANT, LARYNGEAL, GLOTTAL, FRICATIVE, UNVOICED, UNASPIRATED, OBSTRUENT])?;
+    _ = language.add_phoneme_with_spelling(TIE_ESH_T, &["sht"], &[CONSONANT, CORONAL, POSTALVEOLAR, REV_AFFRICATE, UNVOICED, UNASPIRATED, OBSTRUENT])?;
+    _ = language.add_phoneme_with_spelling(TIE_X_K, &["hk"], &[CONSONANT, DORSAL, VELAR, REV_AFFRICATE, UNVOICED, UNASPIRATED, OBSTRUENT])?;
+    _ = language.add_phoneme_with_spelling(TIE_GAMMA_G, &["hg"], &[CONSONANT, DORSAL, VELAR, REV_AFFRICATE, UNASPIRATED, VOICED, OBSTRUENT])?;
+    _ = language.add_phoneme_with_spelling(VOICELESS_R, &["hr"], &[CONSONANT, CORONAL, ALVEOLAR, APPROXIMANT, NONLATERALAPPROXIMANT, UNASPIRATED, UNVOICED])?;
+    _ = language.add_phoneme_with_spelling(TURNED_R, &["r"], &[CONSONANT, CORONAL, ALVEOLAR, APPROXIMANT, NONLATERALAPPROXIMANT, UNASPIRATED, VOICED])?;
+    _ = language.add_phoneme_with_spelling(J, &["y"], &[CONSONANT, DORSAL, PALATAL, APPROXIMANT, NONLATERALAPPROXIMANT, UNASPIRATED, VOICED])?;
+    _ = language.add_phoneme_with_spelling(BREVE_SMALL_CAP_G, &["gg"], &[CONSONANT, DORSAL, UVULAR, TAP_OR_FLAP, UNASPIRATED, VOICED])?;
+    _ = language.add_phoneme(L, &[CONSONANT, CORONAL, ALVEOLAR, LATERAL, APPROXIMANT, UNASPIRATED, VOICED])?;
+
+    */
 
     Ok(language)
 }

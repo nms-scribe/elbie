@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::rc::Rc;
+use std::collections::hash_map::Keys;
 
 #[derive(Debug, Clone)]
 pub enum Axis {
@@ -943,5 +944,15 @@ impl TableDef {
             | (Self::OneCell(_) | Self::ListTable(_) | Self::SimpleTable(_), TableOption::HideSubcolumnCaptions) => return Err(ElbieError::InvalidOptionForTable(option.clone()))
         }
         Ok(())
+    }
+
+    pub(crate) fn row_sets(&self) -> Option<Keys<'_, &'static str, HeaderDef>> {
+        match self {
+            TableDef::OneCell(_) => None,
+            TableDef::ListTable(table1_ddef) => Some(table1_ddef.rows_by_set.keys()),
+            TableDef::SimpleTable(table2_ddef) => Some(table2_ddef.rows_by_set.keys()),
+            TableDef::TableWithSubcolumns(table3_ddef) => Some(table3_ddef.rows_by_set.keys()),
+            TableDef::TableWithSubcolumnsAndSubrows(table4_ddef) => Some(table4_ddef.rows_by_set.keys()),
+        }
     }
 }

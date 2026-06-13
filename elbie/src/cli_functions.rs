@@ -14,6 +14,7 @@ use crate::validation::ValidationTraceCallback;
 use crate::word::Word;
 use crate::word_table::WordTable;
 use std::process;
+use crate::analysis::AnalysisConfig;
 
 pub(crate) enum ValidateOption {
     Simple,
@@ -307,4 +308,34 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
         eprintln!("Look for errors in Error column.");
         process::exit(1)
     }
+}
+
+
+pub(crate) fn analyze_words(from: &Language, words: WordTable) {
+
+    // TODO: Should be able to set up custom analysis stuff on the language itself.
+    let config = AnalysisConfig::from_language(from);
+
+    if let Err(err) = config.validate(from) {
+        eprintln!("{err}");
+        process::exit(1)
+    }
+
+    // TODO: Analyze and build a vector of clusters, along with: cluster_set, length, index in word (by cluster set), if it's final, and if it's initial.
+    // - a cluster is built if the phoneme is in the cluster set. If it's not, the cluster ends and a new cluster begins.
+
+    let analysis = match config.analyze(words) {
+        Ok(analysis) => analysis,
+        Err(err) => {
+            eprintln!("{err}");
+            process::exit(1);
+        },
+    };
+
+    println!("{analysis}")
+    // TODO: Display the analysis somehow
+
+
+
+
 }

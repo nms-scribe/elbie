@@ -19,6 +19,7 @@ use std::env;
 use std::ffi::OsStr;
 use std::path::Path;
 use std::process;
+use crate::cli_functions::analyze_words;
 
 // Gumdrop kind of makes showing usage difficult. The only way it works is if you have a --help flag on each command, and then only if it's discovered in `parse_args_or_exit`. And I'm not calling that because I want to be able to supply my own arguments. I would prefer to have a help command that takes an optional command name parameter anyway.
 fn show_usage<Command: Options>(program: &str, selected_command: Option<&str>) {
@@ -397,6 +398,46 @@ impl DoIt for ShowInformation {
 }
 
 #[derive(Options)]
+/// Analyze the phoneme patterns in a list of words. This analysis will provide information about clusters of similar phonemes (such as Consonants and Vowels), as well as provide stats on what classes of phonemes appear after each other. Configuration of set names that define the classes is built in code, but a default configuration based on consonants, vowels and the phoneme tables in the language can also be used. Output is a free-form list of tree-based data, it's not a table so it can't be formatted.
+pub struct Analyze {
+
+    /// Read the list of words from CSV files, can be specified multiple times to merge multiple files.
+    file: Vec<String>,
+
+    #[options(free)]
+    /// Words to analyze
+    words: Vec<String>
+}
+
+impl DoIt for Analyze {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(), Box<dyn Error>> {
+        let mut family = family()?;
+
+
+        let source_language = language.or_else(|| family.default_language_name().map(ToOwned::to_owned)).ok_or(ElbieError::NoDefaultLanguage)?;
+
+        family.load_language(&source_language)?;
+
+        let source_language = family.get_language(&source_language)?;
+
+        let mut word_data = WordTable::default();
+
+        word_data.add_words(&self.words);
+
+        for file in &self.file {
+            let data = WordTable::read(file)?;
+            word_data.combine_with(data);
+        }
+
+        analyze_words(source_language,
+                      word_data);
+
+        Ok(())
+    }
+}
+
+
+#[derive(Options)]
 /// Print out this information. Use 'help COMMAND' to get help on a specific command.
 pub struct FamilyShowUsage {
     #[options(free)]
@@ -451,6 +492,8 @@ pub enum FamilyCommand {
     Transform(Transform),
     /// Print the information about the available languages.
     Information(ShowInformation),
+    /// Run analysis on word inpuy to help you build phonotactics
+    Analyze(Analyze),
     /// Print out this information. Use 'help COMMAND' to get help on a specific command.
     Help(FamilyShowUsage)
 }
@@ -471,6 +514,7 @@ impl DoIt for FamilyCommand {
             Self::Lexicon(command) => command.doit(family, language),
             Self::Transform(command) => command.doit(family, language),
             Self::Information(command) => command.doit(family, language),
+            Self::Analyze(command) => command.doit(family, language),
             Self::Help(command) => command.doit(family, language)
         }
     }
