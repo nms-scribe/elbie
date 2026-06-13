@@ -7,6 +7,7 @@ use crate::word_table::WordTable;
 use core::fmt::Display;
 use core::slice::Iter;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fmt;
 use std::rc::Rc;
 
@@ -220,26 +221,29 @@ impl Display for AnalysisResults {
 
 impl<'language> AnalysisConfig<'language> {
     pub(crate) fn from_language(language: &'language Language) -> Self {
-        fn fill_structure_sets(structure_sets: &mut Vec<&str>, table: &TableEntry) {
+        fn fill_structure_sets(structure_sets: &mut BTreeSet<&str>, table: &TableEntry) {
+            // I'm filling a BTreeSet because there's a chance that a row's set is used in multiple tables
+            // (i.e. you have rounded diphthongs as well as monopthongs). So I want to guarantee unique sets.
+            // This does have the side effect of sorting them alphabetically.
             if let Some(rows) = table.definition().row_sets() {
                 #[allow(clippy::iter_over_hash_type, reason = "Order isn't important here.")]
                 for row in rows {
-                    structure_sets.push(*row);
+                    _ = structure_sets.insert(*row);
                 }
             } else {
-                structure_sets.push(table.set());
+                _ = structure_sets.insert(table.set());
             }
         }
 
         let (cluster_sets, structure_sets) = match (language.analysis_cluster_sets(), language.analysis_structure_sets()) {
             (None, None) => {
                 let mut cluster_sets = Vec::new();
-                let mut structure_sets = Vec::new();
+                let mut structure_sets = BTreeSet::new();
                 for table in language.tables() {
                     cluster_sets.push(table.set());
                     fill_structure_sets(&mut structure_sets, table);
                 }
-                (cluster_sets, structure_sets)
+                (cluster_sets, structure_sets.into_iter().collect())
             },
             (None, Some(structure_sets)) => {
                 let mut cluster_sets = Vec::new();
@@ -249,11 +253,11 @@ impl<'language> AnalysisConfig<'language> {
                 (cluster_sets, structure_sets.clone())
             },
             (Some(cluster_sets), None) => {
-                let mut structure_sets = Vec::new();
+                let mut structure_sets = BTreeSet::new();
                 for table in language.tables() {
                     fill_structure_sets(&mut structure_sets, table);
                 }
-                (cluster_sets.clone(), structure_sets)
+                (cluster_sets.clone(), structure_sets.into_iter().collect())
             },
             (Some(cluster_sets), Some(structure_sets)) => (cluster_sets.clone(), structure_sets.clone())
         };
