@@ -67,7 +67,7 @@ impl ClusterFollowers {
 
 #[derive(Default)]
 struct ClusterInfoByStructureClasses {
-    #[allow(clippy::type_complexity, reason = "Yes, you're right, but I don't want to deal with this right now.")]
+    #[expect(clippy::type_complexity, reason = "Yes, you're right, but I don't want to deal with this right now.")]
     clusters: BTreeMap<Vec<&'static str>, (usize, BTreeMap<Vec<Rc<Phoneme>>, usize>)>,
     tree: BTreeMap<&'static str, (usize, ClusterFollowers)>
 }
@@ -148,12 +148,40 @@ impl Display for ClusterSetInfo {
         writeln!(f)?;
 
         let mut total = 0;
-        for (number, count) in counts_per_word {
-            writeln!(f, "{count} words have {number} instances")?;
-            total += count;
+        let mut counts_per_word: Vec<_> = counts_per_word.iter()
+                                                         .map(|(number, count)| {
+                                                             total += count;
+                                                             (number, count, total)
+                                                         })
+                                                         .collect();
+        counts_per_word.sort_by_key(|item| item.0);
+        let mut prev_total_at_least = total;
+        let mut prev_number = 0;
+        for (number, count, running) in counts_per_word {
+            let total_at_least = (total - running) + count;
+            write!(f, "{total_at_least} words have at least {number} instances")?;
+            if number > &0 && (total_at_least != prev_total_at_least) {
+                #[expect(clippy::integer_division, reason = "I'm displaying a rounded percentage anyway, so integer division is fine.")]
+                let percent = (total_at_least * 100) / prev_total_at_least;
+                writeln!(f, ", or {percent}% of words with at least {prev_number} instances.")?;
+            } else {
+                writeln!(f, ", or 100% of words.")?;
+            }
+            prev_total_at_least = total_at_least;
+            prev_number = *number;
         }
         writeln!(f, "total of {total} words analyzed")?;
         writeln!(f)?;
+
+        /*
+        6 words have 0 instances -- 100/100
+        44 words have 1 instances -- 94/94
+        41 words have 2 instances -- 50/50
+        7 words have 3 instances -- 9/9
+        1 words have 4 instances -- 2/2
+        1 words have 7 instances -- 1/1
+        total of 100 words analyzed
+        */
 
         writeln!(f, "## Initial Clusters")?;
         writeln!(f)?;
@@ -226,7 +254,7 @@ impl<'language> AnalysisConfig<'language> {
             // (i.e. you have rounded diphthongs as well as monopthongs). So I want to guarantee unique sets.
             // This does have the side effect of sorting them alphabetically.
             if let Some(rows) = table.definition().row_sets() {
-                #[allow(clippy::iter_over_hash_type, reason = "Order isn't important here.")]
+                #[expect(clippy::iter_over_hash_type, reason = "Order isn't important here.")]
                 for row in rows {
                     _ = structure_sets.insert(*row);
                 }
@@ -287,7 +315,7 @@ impl AnalysisConfig<'_> {
 
     pub(crate) fn validate(&self, language: &Language) -> Result<(), ElbieError> {
         // make sure that the cluster_sets, and the structural_sets are exclusive:
-        #[allow(clippy::iter_over_hash_type, reason = "Order isn't important here.")]
+        #[expect(clippy::iter_over_hash_type, reason = "Order isn't important here.")]
         for phoneme in language.inventory().phonemes().values() {
             Self::validate_set_coverage(language, phoneme, &self.cluster_sets)?;
             Self::validate_set_coverage(language, phoneme, &self.structure_sets)?;
