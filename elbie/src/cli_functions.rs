@@ -290,10 +290,12 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
                                 entry.set_attribute(item.name.clone(), transformed.to_string());
                             }
 
-                            if let Some(orthographies) = &orthographies {
+                            if let Some(validator) = item.validator
+                               && let Some(orthographies) = &orthographies
+                            {
                                 for (i, orthography) in orthographies {
                                     if let Some(orthography) = *orthography {
-                                        let spelled = from.spell_word(&transformed, *i);
+                                        let spelled = validator.spell_word(&transformed, *i);
                                         entry.set_attribute(orthography.to_owned(), spelled);
                                     }
                                 }
