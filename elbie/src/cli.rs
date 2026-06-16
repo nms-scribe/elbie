@@ -302,6 +302,10 @@ pub struct Transform {
     /// Read the list of words from CSV files, can be specified multiple times to merge multiple files.
     file: Vec<String>,
 
+    /// Also emit trasncriptions in the following spelling index (multiple spellings can be included)
+    #[options(no_short)]
+    spelling: Vec<usize>,
+
     #[options(free)]
     /// Words to validate
     words: Vec<String>
@@ -333,6 +337,7 @@ impl DoIt for Transform {
                         &transformations,
                         word_data,
                         self.replace_word.is_some_and(identity),
+                        &self.spelling,
                         &match (self.explain, self.trace) {
                             (true, true) => TransformationOption::ExplainAndTrace,
                             (true, false) => TransformationOption::Explain,

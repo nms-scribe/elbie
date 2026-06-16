@@ -208,7 +208,8 @@ pub(crate) fn transform_and_validate_word(word: &Word, transformation: &Transfor
 }
 
 /// replace_word: if this is true, and there is only one transformation, the original word will be moved into a new attribute, and the transformation creates the word for the word entry. Otherwise, each transformation is added as an attribute and the original word is kept. If there is not exactly one transformation, replace_word will be set to false no matter what the input value is.
-pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransformation], mut words: WordTable, replace_word: bool, option: &TransformationOption, output_format: &Format) {
+pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransformation], mut words: WordTable, replace_word: bool, spellings: &[usize], option: &TransformationOption,
+                              output_format: &Format) {
     const ERROR_ATTR: &str = "Error";
 
     let mut invalid_found = false;
@@ -242,6 +243,18 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
         // override the value of replace_word, so we don't ever do that again
         false
     };
+
+    // if spellings are included
+    let orthographies = from.orthographies();
+    let orthographies: Vec<_> = spellings.iter().map(|i| (*i, orthographies.get(*i).copied())).collect();
+    for (i, orthography) in &orthographies {
+        if let Some(orthography) = *orthography {
+            words.add_attribute(orthography.to_owned());
+        } else {
+            eprintln!("There is no orthography for index {i}");
+        }
+    }
+
     words.add_attribute(ERROR_ATTR.to_owned());
 
     for entry in &mut words.entries_mut() {
@@ -267,6 +280,13 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
                                 entry.replace_word(Some(original_word_attr.to_owned()), transformed.to_string());
                             } else {
                                 entry.set_attribute(item.name.clone(), transformed.to_string());
+                            }
+
+                            for (i, orthography) in &orthographies {
+                                if let Some(orthography) = *orthography {
+                                    let spelled = from.spell_word(&transformed, *i);
+                                    entry.set_attribute(orthography.to_owned(), spelled);
+                                }
                             }
 
                             last_failure = validated.and_then(|valid| (!valid).then(|| "Word was invalid (see trace)".to_owned()))
