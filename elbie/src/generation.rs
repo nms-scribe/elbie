@@ -109,7 +109,7 @@ impl TreeBranches {
                 return branch.body.extend_word(language, rng, is_complete, result);
             }
         }
-        Err(ElbieError::NoCatchAllInEnvironment(self.defined_at))
+        Err(ElbieError::NoCatchAllInEnvironment(self.defined_at, phoneme.name))
     }
 }
 

@@ -44,8 +44,8 @@ pub enum ElbieError {
     UnknownPattern(&'static str),
     #[error("[{0}] No choices could be chosen (Is the choice empty?).")]
     NoChoiceChoices(Location<'static>),
-    #[error("[{0}] No catch-all (PHONEME case) in environment")]
-    NoCatchAllInEnvironment(Location<'static>),
+    #[error("[{0}] No catch-all (PHONEME case) in environment for /{1}/")]
+    NoCatchAllInEnvironment(Location<'static>, &'static str),
 
     // word validation errors //
     #[error("Word is empty")]
