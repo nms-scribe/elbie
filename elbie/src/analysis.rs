@@ -144,7 +144,7 @@ impl Display for ClusterSetInfo {
                    final_,
                    counts_per_word } = self;
 
-        writeln!(f, "## Counts Per Word")?;
+        writeln!(f, "## Cluster Counts Per Word")?;
         writeln!(f)?;
 
         let mut total = 0;
@@ -159,11 +159,11 @@ impl Display for ClusterSetInfo {
         let mut prev_number = 0;
         for (number, count, running) in counts_per_word {
             let total_at_least = (total - running) + count;
-            write!(f, "{total_at_least} words have at least {number} instances")?;
+            write!(f, "{total_at_least} words have at least {number} clusters")?;
             if number > &0 && (total_at_least != prev_total_at_least) {
                 #[expect(clippy::integer_division, reason = "I'm displaying a rounded percentage anyway, so integer division is fine.")]
                 let percent = (total_at_least * 100) / prev_total_at_least;
-                writeln!(f, ", or {percent}% of words with at least {prev_number} instances.")?;
+                writeln!(f, ", or {percent}% of words with at least {prev_number} clusters.")?;
             } else {
                 writeln!(f, ", or 100% of words.")?;
             }

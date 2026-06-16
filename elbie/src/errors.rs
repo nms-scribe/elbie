@@ -42,9 +42,9 @@ pub enum ElbieError {
     PhonemeAfterTerminate,
     #[error("Unknown pattern {0}.")]
     UnknownPattern(&'static str),
-    #[error("No choices could be chosen (Is the choice empty?).")]
+    #[error("[{0}] No choices could be chosen (Is the choice empty?).")]
     NoChoiceChoices(Location<'static>),
-    #[error("No catch-all (PHONEME case) in environment")]
+    #[error("[{0}] No catch-all (PHONEME case) in environment")]
     NoCatchAllInEnvironment(Location<'static>),
 
     // word validation errors //
