@@ -244,16 +244,24 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
         false
     };
 
-    // if spellings are included
-    let orthographies = from.orthographies();
-    let orthographies: Vec<_> = spellings.iter().map(|i| (*i, orthographies.get(*i).copied())).collect();
-    for (i, orthography) in &orthographies {
-        if let Some(orthography) = *orthography {
-            words.add_attribute(orthography.to_owned());
-        } else {
-            eprintln!("There is no orthography for index {i}");
+    // if spellings are included, this only works if we have a language we are validating to.
+    let orthographies = if transformations.len() == 1
+                           && let Some(transformation) = transformations.first()
+                           && let Some(validator) = transformation.validator
+    {
+        let orthographies = validator.orthographies();
+        let orthographies: Vec<_> = spellings.iter().map(|i| (*i, orthographies.get(*i).copied())).collect();
+        for (i, orthography) in &orthographies {
+            if let Some(orthography) = *orthography {
+                words.add_attribute(orthography.to_owned());
+            } else {
+                eprintln!("There is no orthography for index {i}");
+            }
         }
-    }
+        Some(orthographies)
+    } else {
+        None
+    };
 
     words.add_attribute(ERROR_ATTR.to_owned());
 
@@ -282,10 +290,12 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
                                 entry.set_attribute(item.name.clone(), transformed.to_string());
                             }
 
-                            for (i, orthography) in &orthographies {
-                                if let Some(orthography) = *orthography {
-                                    let spelled = from.spell_word(&transformed, *i);
-                                    entry.set_attribute(orthography.to_owned(), spelled);
+                            if let Some(orthographies) = &orthographies {
+                                for (i, orthography) in orthographies {
+                                    if let Some(orthography) = *orthography {
+                                        let spelled = from.spell_word(&transformed, *i);
+                                        entry.set_attribute(orthography.to_owned(), spelled);
+                                    }
                                 }
                             }
 
