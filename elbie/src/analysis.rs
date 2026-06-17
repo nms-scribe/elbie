@@ -4,6 +4,8 @@ use crate::phoneme::Phoneme;
 use crate::phoneme_table_builder::TableEntry;
 use crate::word::Word;
 use crate::word_table::WordTable;
+use convert_case::Case;
+use convert_case::Casing as _;
 use core::fmt::Display;
 use core::slice::Iter;
 use std::collections::BTreeMap;
@@ -39,27 +41,54 @@ impl ClusterFollowers {
         }
     }
 
-    fn indented_fmt(&self, indent: usize, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn pattern_fmt(&self, indent: usize, main_set: &'static str, total_weight: usize, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let Self { in_cluster,
                    beyond_cluster,
                    end_of_word } = self;
 
-        for (set, (count, followers)) in in_cluster {
-            writeln!(f, "{:indent$}[{set}] {count} ->", ' ')?;
-            followers.indented_fmt(indent + 4, f)?;
+        let main_set = main_set.to_case(Case::Constant);
+        if in_cluster.is_empty() {
+            write!(f, "{:indent$}tree.empty({main_set});", ' ')?;
+        } else {
+            writeln!(f, "{:indent$}tree.choice({main_set}, |choice| {{", ' ')?;
+            let mut main_sets: Vec<_> = in_cluster.keys().map(|set| set.to_case(Case::Constant)).collect();
+            main_sets.sort();
+            let main_sets = main_sets.join("_");
+            writeln!(f, "{:indent$}    choice.tree({total_weight}, {main_sets}, |tree| {{", ' ')?;
+            let mut remaining_weight = total_weight;
+            for (set, (count, followers)) in in_cluster {
+                remaining_weight -= count;
+                followers.pattern_fmt(indent + 8, set, *count, f)?;
+            }
+            writeln!(f, "{:indent$}    }});", ' ')?;
+            if remaining_weight > 0 {
+                writeln!(f, "{:indent$}    choice.empty({remaining_weight});", ' ')?;
+            }
+            write!(f, "{:indent$}}});", ' ')?;
+        }
+
+        if !beyond_cluster.is_empty() || end_of_word > &0 {
+            write!(f, "  //")?;
         }
 
         for (cluster_type, (count, sets)) in beyond_cluster {
-            writeln!(f, "{:indent$}NEXT [{cluster_type}] {count} ->", ' ')?;
-            let indent = indent + 4;
+            write!(f, " | NEXT [{cluster_type}] {count} ->")?;
+            let mut at_start = true;
             for (set, set_count) in sets {
-                writeln!(f, "{:indent$}[{set}] {set_count}", ' ')?;
+                if at_start {
+                    at_start = false;
+                } else {
+                    write!(f, ", ")?;
+                }
+                write!(f, " [{set:?}] {set_count}")?;
             }
         }
 
         if end_of_word > &0 {
-            writeln!(f, "{:indent$}DONE <end of word> {end_of_word}", ' ')?;
+            writeln!(f, " | DONE <end of word> {end_of_word}")?;
         }
+
+        writeln!(f)?;
 
         Ok(())
     }
@@ -91,10 +120,14 @@ impl Display for ClusterInfoByStructureClasses {
         writeln!(f, "### Tree")?;
         writeln!(f)?;
         writeln!(f, "```")?;
+        let mut main_sets: Vec<_> = tree.keys().map(|set| set.to_case(Case::Constant)).collect();
+        main_sets.sort();
+        let main_sets = main_sets.join("_");
+        writeln!(f, "        pattern.tree({main_sets}, |tree| {{")?;
         for (set, (count, followers)) in tree {
-            writeln!(f, "[{set}] {count} ->")?;
-            followers.indented_fmt(4, f)?;
+            followers.pattern_fmt(12, set, *count, f)?;
         }
+        writeln!(f, "        }})")?;
         writeln!(f, "```")?;
 
         Ok(())

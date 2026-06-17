@@ -15,6 +15,7 @@ prettytable = { version = "0.10.0", default-features = false } # I don't need an
 gumdrop = "0.8.1"
 constcat = "=0.6.1"
 unicode-normalization = "0.1.25"
+convert_case = "0.11.0"
 
 
 # NMS: Added these for my own purposes
