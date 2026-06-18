@@ -28,19 +28,33 @@ impl Word {
         self.phonemes.last()
     }
 
-    pub fn display_raw(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        for phoneme in &self.phonemes {
-            write!(f, "{}", phoneme.name)?
-        }
-        Ok(())
+    #[must_use]
+    pub fn to_raw_string(&self) -> String {
+        format!("{}", RawWord(self))
+    }
+
+    #[must_use]
+    pub const fn to_raw_display(&'_ self) -> RawWord<'_> {
+        RawWord(self)
     }
 }
 
 impl Display for Word {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         write!(f, "/")?;
-        self.display_raw(f)?;
+        write!(f, "{}", RawWord(self))?;
         write!(f, "/")?;
+        Ok(())
+    }
+}
+
+pub struct RawWord<'word>(&'word Word);
+
+impl Display for RawWord<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        for phoneme in &self.0.phonemes {
+            write!(f, "{}", phoneme.name)?
+        }
         Ok(())
     }
 }
