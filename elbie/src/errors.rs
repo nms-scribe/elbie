@@ -67,6 +67,14 @@ pub enum ElbieError {
     #[error("Phoneme tables are limited to a maximum of four axes.")]
     TooManyAxisses,
 
+    // lexicon errors
+    #[error("No 'definition' field found.")]
+    NoDefinitionFieldFound,
+    #[error("Error parsing word {0}: {1}")]
+    LexiconParsingError(usize, Box<Self>),
+    #[error("No definition found at row {0}")]
+    NoDefinitionFoundAt(usize),
+
     // transformation errors
     #[error("Transformation rule '{0}' created an overlapping splice.")]
     TransformationCreatedOverlappingReplacements(&'static str),
@@ -95,7 +103,9 @@ pub enum ElbieError {
 
     // api access errors
     #[error("Only simple transformations can be made with this function call.")]
-    TransformationSetsNotAllowedHere
+    TransformationSetsNotAllowedHere,
+    #[error("Orthography index {0} is not available.")]
+    UnknownOrthography(usize)
 }
 
 #[deprecated(since = "0.2.2", note = "Use `ElbieError` instead.")]

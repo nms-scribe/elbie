@@ -221,4 +221,18 @@ impl Family {
 
         Ok((transformed, validated))
     }
+
+    pub fn spell_word(&mut self, word: &str, source: &str, orthography: usize) -> Result<String, ElbieError> {
+        self.load_language(source)?;
+        let language = self.get_language(source)?;
+
+        if orthography >= language.orthographies().len() {
+            return Err(ElbieError::UnknownOrthography(orthography));
+        }
+
+        let word = language.read_word(word)?;
+        let word = language.spell_word(&word, orthography);
+
+        Ok(word)
+    }
 }

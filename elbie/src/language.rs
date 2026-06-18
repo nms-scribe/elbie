@@ -38,7 +38,6 @@ use crate::validation::ValidationTraceCallback;
 use crate::word::Word;
 use crate::word_table::WordTable;
 use core::cmp::Ordering;
-use core::error::Error;
 use core::iter;
 use core::iter::Peekable;
 use core::slice::Iter;
@@ -440,16 +439,16 @@ impl Language {
         Ok(grid)
     }
 
-    pub(crate) fn load_lexicon(&self, words: &WordTable, primary_orthography: usize, style: &LexiconStyle) -> Result<Lexicon, Box<dyn Error>> {
-        let definition_field = words.find_attribute(|a| a.to_lowercase() == "definition").ok_or_else(|| "No 'definition' field found.".to_owned())?;
+    pub(crate) fn load_lexicon(&self, words: &WordTable, primary_orthography: usize, style: &LexiconStyle) -> Result<Lexicon, ElbieError> {
+        let definition_field = words.find_attribute(|a| a.to_lowercase() == "definition").ok_or(ElbieError::NoDefinitionFieldFound)?;
 
         let mut result = Lexicon::new(style, self.orthographies.clone(), primary_orthography);
 
         for (row, entry) in words.entries().enumerate() {
             let word = &entry.word();
-            let word = self.read_word(word).map_err(|e| format!("Error parsing word {row}: {e}"))?;
+            let word = self.read_word(word).map_err(|e| ElbieError::LexiconParsingError(row, e.into()))?;
             let spelling = (0..self.orthographies.len()).map(|i| self.spell_word(&word, i)).collect();
-            let entry = LexiconEntry::new(word, spelling, entry.get_attribute(definition_field).ok_or_else(|| format!("No definition found at row {row}"))?.to_owned());
+            let entry = LexiconEntry::new(word, spelling, entry.get_attribute(definition_field).ok_or(ElbieError::NoDefinitionFoundAt(row))?.to_owned());
 
             result.push_entry(entry);
         }
