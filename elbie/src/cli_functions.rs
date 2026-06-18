@@ -62,7 +62,7 @@ pub(crate) fn generate_words(grid_style: Option<&Format>, language: &Language, c
     grid.into_output(grid_style.unwrap_or(&Format::Plain)).print_to_stdout();
 }
 
-fn validate_word(language: &Language, word: &Word, explain: bool, trace_cb: Option<&ValidationTraceCallback>) -> Result<Result<(), ()>, ElbieError> {
+pub(crate) fn validate_word(language: &Language, word: &Word, explain: bool, trace_cb: Option<&ValidationTraceCallback>) -> Result<Result<(), ()>, ElbieError> {
     match language.check_word(word, trace_cb)? {
         Err(()) => Ok(Err(())),
         Ok(validated) => {

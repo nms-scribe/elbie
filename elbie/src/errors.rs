@@ -91,7 +91,11 @@ pub enum ElbieError {
     #[error("Phoneme /{0}/ is found in both {1} and {2}.")]
     AnalysisSetIsNonExclusive(&'static str, &'static str, &'static str),
     #[error("Phoneme /{0}/ is not found in any of the sets: {1}")]
-    AnalysisSetCoverageIsIncomplete(&'static str, String)
+    AnalysisSetCoverageIsIncomplete(&'static str, String),
+
+    // api access errors
+    #[error("Only simple transformations can be made with this function call.")]
+    TransformationSetsNotAllowedHere
 }
 
 #[deprecated(since = "0.2.2", note = "Use `ElbieError` instead.")]

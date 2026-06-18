@@ -4,6 +4,7 @@ use crate::transformation::PreparedTransformation;
 use crate::transformation::Transformation;
 use crate::transformation::TransformationEntry;
 use crate::transformation::TransformationSet;
+use crate::word::Word;
 use std::collections::HashMap;
 
 type LanguageCreator = Box<dyn FnOnce() -> Result<Language, ElbieError>>;
@@ -193,5 +194,31 @@ impl Family {
         let mut result = Vec::new();
         self.extend_transformations(from, name, load_validators, &mut result)?;
         Ok(result)
+    }
+
+    // I need some tools to do this stuff programattically
+    pub fn transform_word(&mut self, word: &str, source: &str, target: &str, validate: bool) -> Result<(Word, Option<bool>), ElbieError> {
+        self.load_transformation(source, target)?;
+        let source = self.get_language(source)?;
+        let transformations = self.get_transformations(source.name(), target, validate)?;
+        let transformer = if transformations.len() == 1
+                             && let Some(transformation) = transformations.first()
+        {
+            transformation
+        } else {
+            return Err(ElbieError::TransformationSetsNotAllowedHere);
+        };
+
+        // override the value of replace_word, so we don't ever do that again
+        let word = source.read_word(word)?;
+        let transformed = transformer.transformation.transform(&word, None)?;
+
+        let validated = if let Some(validator) = transformer.validator {
+            Some(validator.check_word(&transformed, None)?.is_ok())
+        } else {
+            None
+        };
+
+        Ok((transformed, validated))
     }
 }
