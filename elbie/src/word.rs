@@ -27,14 +27,19 @@ impl Word {
     pub(crate) fn last(&self) -> Option<&Rc<Phoneme>> {
         self.phonemes.last()
     }
+
+    pub fn display_raw(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        for phoneme in &self.phonemes {
+            write!(f, "{}", phoneme.name)?
+        }
+        Ok(())
+    }
 }
 
 impl Display for Word {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         write!(f, "/")?;
-        for phoneme in &self.phonemes {
-            write!(f, "{}", phoneme.name)?
-        }
+        self.display_raw(f)?;
         write!(f, "/")?;
         Ok(())
     }
