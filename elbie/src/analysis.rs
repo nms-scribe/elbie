@@ -41,6 +41,33 @@ impl ClusterFollowers {
         }
     }
 
+    fn beyond_fmt(beyond_cluster: &BTreeMap<&'static str, (usize, BTreeMap<&'static str, usize>)>, end_of_word: usize, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        if beyond_cluster.is_empty() && end_of_word == 0 {
+            Ok(())
+        } else {
+            write!(f, " // NEXT: ")?;
+            for (cluster_type, (count, sets)) in beyond_cluster {
+                write!(f, "({count}) [{cluster_type}] (")?;
+                let mut at_start = true;
+                for (set, set_count) in sets {
+                    if at_start {
+                        at_start = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, " [{set:?}] {set_count}")?;
+                }
+                write!(f, ")")?;
+            }
+
+            if end_of_word > 0 {
+                write!(f, "({end_of_word}) DONE")
+            } else {
+                Ok(())
+            }
+        }
+    }
+
     fn pattern_fmt(&self, indent: usize, main_set: &'static str, total_weight: usize, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let Self { in_cluster,
                    beyond_cluster,
@@ -51,46 +78,38 @@ impl ClusterFollowers {
             write!(f, "{:indent$}tree.empty({main_set});", ' ')?;
         } else {
             writeln!(f, "{:indent$}tree.choice({main_set}, |choice| {{", ' ')?;
-            let mut main_sets: Vec<_> = in_cluster.keys().map(|set| set.to_case(Case::Constant)).collect();
-            main_sets.sort();
-            let main_sets = main_sets.join("_");
-            writeln!(f, "{:indent$}    choice.tree({total_weight}, {main_sets}, |tree| {{", ' ')?;
             let mut remaining_weight = total_weight;
-            for (set, (count, followers)) in in_cluster {
+
+            if in_cluster.len() == 1
+               && let Some((set, (count, followers))) = in_cluster.first_key_value()
+               && followers.in_cluster.is_empty()
+            {
                 remaining_weight -= count;
-                followers.pattern_fmt(indent + 8, set, *count, f)?;
+                let set = set.to_case(Case::Constant);
+                write!(f, "{:indent$}    choice.set({count}, {set});", ' ')?;
+                Self::beyond_fmt(&followers.beyond_cluster, followers.end_of_word, f)?;
+                writeln!(f)?;
+            } else {
+                let mut main_sets: Vec<_> = in_cluster.keys().map(|set| set.to_case(Case::Constant)).collect();
+                main_sets.sort();
+                let main_sets = main_sets.join("_");
+                writeln!(f, "{:indent$}    choice.tree({total_weight}, {main_sets}, |tree| {{", ' ')?;
+                for (set, (count, followers)) in in_cluster {
+                    remaining_weight -= count;
+                    followers.pattern_fmt(indent + 8, set, *count, f)?;
+                }
+                writeln!(f, "{:indent$}    }});", ' ')?;
             }
-            writeln!(f, "{:indent$}    }});", ' ')?;
+
             if remaining_weight > 0 {
                 writeln!(f, "{:indent$}    choice.empty({remaining_weight});", ' ')?;
             }
             write!(f, "{:indent$}}});", ' ')?;
         }
 
-        if !beyond_cluster.is_empty() || end_of_word > &0 {
-            write!(f, "  //")?;
-        }
+        Self::beyond_fmt(beyond_cluster, *end_of_word, f)?;
 
-        for (cluster_type, (count, sets)) in beyond_cluster {
-            write!(f, " | NEXT [{cluster_type}] {count} ->")?;
-            let mut at_start = true;
-            for (set, set_count) in sets {
-                if at_start {
-                    at_start = false;
-                } else {
-                    write!(f, ", ")?;
-                }
-                write!(f, " [{set:?}] {set_count}")?;
-            }
-        }
-
-        if end_of_word > &0 {
-            writeln!(f, " | DONE <end of word> {end_of_word}")?;
-        }
-
-        writeln!(f)?;
-
-        Ok(())
+        writeln!(f)
     }
 }
 
@@ -120,6 +139,7 @@ impl Display for ClusterInfoByStructureClasses {
         writeln!(f, "### Tree")?;
         writeln!(f)?;
         writeln!(f, "```")?;
+
         let mut main_sets: Vec<_> = tree.keys().map(|set| set.to_case(Case::Constant)).collect();
         main_sets.sort();
         let main_sets = main_sets.join("_");
@@ -138,15 +158,16 @@ impl ClusterInfoByStructureClasses {
     fn add_cluster(&mut self, phonemes: Vec<Rc<Phoneme>>, next_out_of_cluster: Option<&Rc<Phoneme>>, config: &AnalysisConfig) -> Result<(), ElbieError> {
         let key = phonemes.iter().map(|phoneme| config.find_structural_set_for_phoneme(phoneme)).collect::<Result<Vec<_>, _>>()?;
 
+        let next_out_of_cluster = next_out_of_cluster.map(|phoneme| {
+                                                         let cluster_type = config.find_cluster_set_for_phoneme(phoneme)?;
+                                                         let set = config.find_structural_set_for_phoneme(phoneme)?;
+                                                         Ok((cluster_type, set))
+                                                     })
+                                                     .transpose()?;
+
         // build the tree stuff...
         let mut keys = key.iter();
         if let Some(first) = keys.next() {
-            let next_out_of_cluster = next_out_of_cluster.map(|phoneme| {
-                                                             let cluster_type = config.find_cluster_set_for_phoneme(phoneme)?;
-                                                             let set = config.find_structural_set_for_phoneme(phoneme)?;
-                                                             Ok((cluster_type, set))
-                                                         })
-                                                         .transpose()?;
             let value = self.tree.entry(first).or_default();
             value.0 += 1;
             value.1.follow_with(&mut keys, next_out_of_cluster)
