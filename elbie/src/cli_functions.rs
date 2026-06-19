@@ -294,7 +294,11 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
                            && let Some(transformation) = transformations.first()
                            && let Some(validator) = transformation.validator
     {
-        Some(OrthographyIndex::calculate_orthographies(spellings, validator)?)
+        let orthographies = OrthographyIndex::calculate_orthographies(spellings, validator)?;
+        for (_, orthography) in &orthographies {
+            words.add_attribute((*orthography).to_owned());
+        }
+        Some(orthographies)
     } else if spellings.is_empty() {
         None
     } else {
