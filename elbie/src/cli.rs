@@ -655,7 +655,7 @@ pub fn run_family<S: AsRef<str>, FamilyCreator: FnOnce() -> Result<Family, Elbie
     run_family_with_output(args, family, &mut stdout()).expect("Error writing to stdout")
 }
 
-pub fn run_family_with_output<S: AsRef<str>, FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(args: &[S], family: FamilyCreator, output: &mut io::Stdout) -> Result<(), io::Error> {
+pub fn run_family_with_output<S: AsRef<str>, FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(args: &[S], family: FamilyCreator, output: &mut impl Write) -> Result<(), io::Error> {
     match FamilyArguments::parse_args_default(args) {
         Ok(arguments) => run_command(arguments.creator.or_else(|| arguments.comment.then(|| "Elbie".to_owned())), arguments.language, arguments.command, family, output),
         Err(err) => {
@@ -676,7 +676,7 @@ pub fn run_language<S: AsRef<str>, Creator: FnOnce() -> Result<Language, ElbieEr
     run_language_with_output(args, name, language, &mut stdout()).expect("Error writing to stdout");
 }
 
-fn run_language_with_output<S: AsRef<str>, Creator: FnOnce() -> Result<Language, ElbieError> + 'static>(args: &[S], name: &'static str, language: Creator, output: &mut io::Stdout)
+fn run_language_with_output<S: AsRef<str>, Creator: FnOnce() -> Result<Language, ElbieError> + 'static>(args: &[S], name: &'static str, language: Creator, output: &mut impl Write)
                                                                                                         -> Result<(), io::Error> {
     match LanguageArguments::parse_args_default(args) {
         Ok(arguments) => run_command(arguments.creator.or_else(|| arguments.comment.then(|| "Elbie".to_owned())),
