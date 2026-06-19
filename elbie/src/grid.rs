@@ -221,10 +221,10 @@ impl TableOutput {
             Self::CSV(records) => {
                 let mut builder = csv::WriterBuilder::new();
                 _ = builder.quote_style(csv::QuoteStyle::Always);
-                let mut writer = builder.from_writer(io::stdout());
+                let mut writer = builder.from_writer(output);
 
                 for record in records {
-                    writer.write_record(&record).expect("Could not write CSV to stdout");
+                    writer.write_record(&record).expect("Could not write CSV to output");
                 }
                 Ok(())
             }
