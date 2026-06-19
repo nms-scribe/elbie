@@ -1,3 +1,4 @@
+use crate::cli_functions::OrthographyIndex;
 use crate::cli_functions::TransformationOption;
 use crate::cli_functions::ValidateOption;
 use crate::cli_functions::analyze_words;
@@ -226,6 +227,7 @@ pub struct FormatLexicon {
 
     #[options(required)]
     /// Orthography index (0-based) to use for generating main entries.
+    // TODO: Should be able to support multiple spellings as with transformation.
     spelling: usize,
 
     /// Changes the format of output. Values include "plain", "terminal", "markdown", "html", "json", and "csv". "plain" and "terminal" have the same output when `--style` is "list".
@@ -307,9 +309,9 @@ pub struct Transform {
     /// Read the list of words from CSV files, can be specified multiple times to merge multiple files.
     file: Vec<String>,
 
-    /// Also emit trasncriptions in the following spelling index (multiple spellings can be included)
+    /// Also emit trasncriptions in the following orthography index (multiple orthographies can be included, specify "all" to show all orthographies)
     #[options(no_short)]
-    spelling: Vec<usize>,
+    spelling: Vec<OrthographyIndex>,
 
     #[options(free)]
     /// Words to validate

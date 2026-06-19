@@ -14,6 +14,9 @@ use crate::transformation::TransformationTraceCallback;
 use crate::validation::ValidationTraceCallback;
 use crate::word::Word;
 use crate::word_table::WordTable;
+use core::error::Error;
+use core::num::ParseIntError;
+use core::str::FromStr;
 use std::io;
 use std::io::Write;
 use std::process;
@@ -209,10 +212,49 @@ pub(crate) fn transform_and_validate_word(word: &Word, transformation: &Transfor
     }
 }
 
+pub(crate) enum OrthographyIndex {
+    Index(usize),
+    All
+}
+
+impl FromStr for OrthographyIndex {
+    type Err = ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.parse() {
+            Ok(index) => Ok(Self::Index(index)),
+            Err(_) if s == "all" => Ok(Self::All),
+            Err(err) => Err(err)
+        }
+    }
+}
+
+impl OrthographyIndex {
+    fn calculate_orthographies(spellings: &[Self], validator: &Language) -> Result<Vec<(usize, &'static str)>, ElbieError> {
+        let mut spelling_indexes = Vec::new();
+        let orthographies = validator.orthographies();
+        for orthography_index in spellings {
+            match orthography_index {
+                Self::Index(index) => spelling_indexes.push(*index),
+                Self::All => {
+                    spelling_indexes = orthographies.iter().enumerate().map(|(i, _)| i).collect();
+                    break;
+                }
+            }
+        }
+
+        spelling_indexes.into_iter().try_fold(Vec::new(), |mut result, i| {
+                                        let name = orthographies.get(i).copied().ok_or(ElbieError::UnknownOrthography(i))?;
+                                        result.push((i, name));
+                                        Ok(result)
+                                    })
+    }
+}
+
 /// replace_word: if this is true, and there is only one transformation, the original word will be moved into a new attribute, and the transformation creates the word for the word entry. Otherwise, each transformation is added as an attribute and the original word is kept. If there is not exactly one transformation, replace_word will be set to false no matter what the input value is.
-pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransformation], mut words: WordTable, replace_word: bool, spellings: &[usize], option: &TransformationOption,
+pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransformation], mut words: WordTable, replace_word: bool, spellings: &[OrthographyIndex], option: &TransformationOption,
                               output_format: &Format, output: &mut impl Write)
-                              -> Result<(), io::Error> {
+                              -> Result<(), Box<dyn Error>> {
     const ERROR_ATTR: &str = "Error";
 
     let mut invalid_found = false;
@@ -252,17 +294,11 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
                            && let Some(transformation) = transformations.first()
                            && let Some(validator) = transformation.validator
     {
-        let orthographies = validator.orthographies();
-        let orthographies: Vec<_> = spellings.iter().map(|i| (*i, orthographies.get(*i).copied())).collect();
-        for (i, orthography) in &orthographies {
-            if let Some(orthography) = *orthography {
-                words.add_attribute(orthography.to_owned());
-            } else {
-                eprintln!("There is no orthography for index {i}");
-            }
-        }
-        Some(orthographies)
+        Some(OrthographyIndex::calculate_orthographies(spellings, validator)?)
+    } else if spellings.is_empty() {
+        None
     } else {
+        eprintln!("!!! Spellings were requested, but the transformation does not validate, or there are too many transformations in the set.");
         None
     };
 
@@ -297,10 +333,8 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
                                && let Some(orthographies) = &orthographies
                             {
                                 for (i, orthography) in orthographies {
-                                    if let Some(orthography) = *orthography {
-                                        let spelled = validator.spell_word(&transformed, *i);
-                                        entry.set_attribute(orthography.to_owned(), spelled);
-                                    }
+                                    let spelled = validator.spell_word(&transformed, *i);
+                                    entry.set_attribute((*orthography).to_owned(), spelled);
                                 }
                             }
 
