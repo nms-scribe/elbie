@@ -14,6 +14,8 @@ use crate::transformation::TransformationTraceCallback;
 use crate::validation::ValidationTraceCallback;
 use crate::word::Word;
 use crate::word_table::WordTable;
+use std::io;
+use std::io::Write;
 use std::process;
 
 pub(crate) enum ValidateOption {
@@ -30,7 +32,7 @@ pub(crate) enum TransformationOption {
     ExplainAndTrace
 }
 
-pub(crate) fn generate_words(grid_style: Option<&Format>, language: &Language, count: usize) {
+pub(crate) fn generate_words(grid_style: Option<&Format>, language: &Language, count: usize, output: &mut impl Write) -> Result<(), io::Error> {
     let mut grid = Grid::new(TableClass::ElbieWords, format!("Generated {count} words for {}", language.name()));
 
     // FUTURE: Should I have a header?
@@ -59,7 +61,7 @@ pub(crate) fn generate_words(grid_style: Option<&Format>, language: &Language, c
 
         grid.push_body_row(row);
     }
-    grid.into_output(grid_style.unwrap_or(&Format::Plain)).print_to_stdout();
+    grid.into_output(grid_style.unwrap_or(&Format::Plain)).print(output)
 }
 
 pub(crate) fn validate_word(language: &Language, word: &Word, explain: bool, trace_cb: Option<&ValidationTraceCallback>) -> Result<Result<(), ()>, ElbieError> {
@@ -78,7 +80,7 @@ pub(crate) fn validate_word(language: &Language, word: &Word, explain: bool, tra
     }
 }
 
-pub(crate) fn validate_words(language: &Language, mut words: WordTable, option: &ValidateOption, output_format: &Format) {
+pub(crate) fn validate_words(language: &Language, mut words: WordTable, option: &ValidateOption, output_format: &Format, output: &mut impl Write) -> Result<(), io::Error> {
     const VALIDATED_ATTR: &str = "Validated";
 
     let mut invalid_count = 0;
@@ -124,20 +126,22 @@ pub(crate) fn validate_words(language: &Language, mut words: WordTable, option: 
         }
     }
 
-    words.print_to_stdout(output_format);
+    words.print(output_format, output)?;
 
     if invalid_count > 0 {
         eprintln!("!!!! {invalid_count} invalid words found");
         process::exit(1);
     }
+
+    Ok(())
 }
 
-pub(crate) fn show_phonemes(grid_style: Option<&Format>, language: &Language, table: Option<&String>) {
+pub(crate) fn show_phonemes(grid_style: Option<&Format>, language: &Language, table: Option<&String>, output: &mut impl Write) -> Result<(), io::Error> {
     let style = grid_style.unwrap_or(&Format::Terminal { spans: true });
     let result = match table {
         Some(table) => match language.build_phoneme_table(table) {
             Ok(Some(grid)) => {
-                grid.into_output(style).print_to_stdout();
+                grid.into_output(style).print(output)?;
                 Ok(())
             },
             Ok(None) => {
@@ -149,9 +153,9 @@ pub(crate) fn show_phonemes(grid_style: Option<&Format>, language: &Language, ta
         None => match language.build_all_phoneme_tables() {
             Ok(grids) => {
                 for grid in grids {
-                    println!("{}", grid.1.caption());
-                    grid.1.into_output(style).print_to_stdout();
-                    println!();
+                    writeln!(output, "{}", grid.1.caption())?;
+                    grid.1.into_output(style).print(output)?;
+                    writeln!(output)?;
                 }
 
                 Ok(())
@@ -164,13 +168,13 @@ pub(crate) fn show_phonemes(grid_style: Option<&Format>, language: &Language, ta
         eprintln!("!!! Couldn't display phonemes: {err}");
         process::exit(1)
     }
+
+    Ok(())
 }
 
-pub(crate) fn show_spelling(grid_style: Option<&Format>, language: &Language, columns: usize) {
+pub(crate) fn show_spelling(grid_style: Option<&Format>, language: &Language, columns: usize, output: &mut impl Write) -> Result<(), io::Error> {
     match language.display_spelling(columns) {
-        Ok(grid) => {
-            grid.into_output(grid_style.unwrap_or(&Format::Terminal { spans: false })).print_to_stdout();
-        },
+        Ok(grid) => grid.into_output(grid_style.unwrap_or(&Format::Terminal { spans: false })).print(output),
         Err(err) => {
             eprintln!("!!! Couldn't display spelling: {err}");
             process::exit(1)
@@ -178,15 +182,13 @@ pub(crate) fn show_spelling(grid_style: Option<&Format>, language: &Language, co
     }
 }
 
-pub(crate) fn format_lexicon(format: &Format, style: &LexiconStyle, language: &Language, path: &WordTable, ortho_index: usize) {
+pub(crate) fn format_lexicon(format: &Format, style: &LexiconStyle, language: &Language, path: &WordTable, ortho_index: usize, output: &mut impl Write) -> Result<(), io::Error> {
     if ortho_index >= language.orthographies().len() {
         panic!("Language only has {} orthographies.", language.orthographies().len())
     }
 
     match language.load_lexicon(path, ortho_index, style) {
-        Ok(lexicon) => {
-            lexicon.print_to_stdout(format);
-        },
+        Ok(lexicon) => lexicon.print(format, output),
         Err(err) => {
             eprintln!("!!! Couldn't process lexicon: {err}");
             process::exit(1)
@@ -209,7 +211,8 @@ pub(crate) fn transform_and_validate_word(word: &Word, transformation: &Transfor
 
 /// replace_word: if this is true, and there is only one transformation, the original word will be moved into a new attribute, and the transformation creates the word for the word entry. Otherwise, each transformation is added as an attribute and the original word is kept. If there is not exactly one transformation, replace_word will be set to false no matter what the input value is.
 pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransformation], mut words: WordTable, replace_word: bool, spellings: &[usize], option: &TransformationOption,
-                              output_format: &Format) {
+                              output_format: &Format, output: &mut impl Write)
+                              -> Result<(), io::Error> {
     const ERROR_ATTR: &str = "Error";
 
     let mut invalid_found = false;
@@ -334,15 +337,17 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
         words.remove_attribute(ERROR_ATTR);
     }
 
-    words.print_to_stdout(output_format);
+    words.print(output_format, output)?;
 
     if invalid_found {
         eprintln!("Look for errors in Error column.");
         process::exit(1)
     }
+
+    Ok(())
 }
 
-pub(crate) fn analyze_words(from: &Language, words: &WordTable) {
+pub(crate) fn analyze_words(from: &Language, words: &WordTable, output: &mut impl Write) -> Result<(), io::Error> {
     // TODO: Should be able to set up custom analysis stuff on the language itself.
     let config = AnalysisConfig::from_language(from);
 
@@ -362,6 +367,6 @@ pub(crate) fn analyze_words(from: &Language, words: &WordTable) {
         }
     };
 
-    println!("{analysis}")
+    writeln!(output, "{analysis}")
     // TODO: Display the analysis somehow
 }

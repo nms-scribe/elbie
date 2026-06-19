@@ -10,6 +10,8 @@ use core::iter;
 use core::mem;
 use csv::Reader;
 use std::collections::HashMap;
+use std::io;
+use std::io::Write;
 use std::path::Path;
 
 pub(crate) struct WordTableEntry {
@@ -132,7 +134,7 @@ impl WordTable {
         }
     }
 
-    pub(crate) fn print_to_stdout(self, format: &Format) {
+    pub(crate) fn print(self, format: &Format, output: &mut impl Write) -> Result<(), io::Error> {
         let mut grid = Grid::new(TableClass::ElbieWords, "Result".to_owned());
 
         for entry in self.entries {
@@ -146,7 +148,7 @@ impl WordTable {
 
         grid.set_headers(iter::once(ColumnHeader::new("Word".to_owned(), 1)).chain(self.attribute_names.into_iter().map(|a| ColumnHeader::new(a, 1))).collect());
 
-        let output = grid.into_output(format);
-        output.print_to_stdout();
+        let result = grid.into_output(format);
+        result.print(output)
     }
 }

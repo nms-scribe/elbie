@@ -173,6 +173,7 @@ pub mod cli;
 mod test;
 
 pub use constcat;
+use std::io::stdout;
 
 // Old paths: remove once I'm sure I've fixed all of my languages... Or, maybe just wait until I increase the version number.
 #[deprecated(since = "0.2.2", note = "Use `elbie::errors::LanguageError` instead.")]
@@ -203,7 +204,12 @@ pub type EnvironmentChoice = phonotactics::EnvironmentChoice;
 pub type Word = word::Word;
 
 #[deprecated(since = "0.2.2", note = "use `elbie::cli::run_language` instead (includes changes to arguments).")]
+/**
+# Panics
+
+Panics if there's an error writing to stdout.
+*/
 pub fn run_main<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Args, language: Result<language::Language, errors::ElbieError>) {
     #[expect(deprecated)]
-    language_cli::run(args, language);
+    language_cli::run(args, language, &mut stdout()).expect("Error writing output");
 }

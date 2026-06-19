@@ -14,6 +14,7 @@ use prettytable::format::consts::FORMAT_BOX_CHARS;
 use prettytable::format::consts::FORMAT_CLEAN;
 use std::fmt;
 use std::io;
+use std::io::Write;
 
 /*
 NOTE: On my decision for text output tables:
@@ -212,11 +213,11 @@ impl TableOutput {
     //    }
     //}
 
-    pub(crate) fn print_to_stdout(self) {
+    pub(crate) fn print(self, output: &mut impl Write) -> Result<(), io::Error> {
         match self {
-            Self::Pretty(table) => table.printstd(),
-            Self::HTML(buffer) => println!("{}", buffer.finish()),
-            Self::JSON(json_value) => println!("{}", json_value.pretty(2)),
+            Self::Pretty(table) => table.print(output).map(|_| ()),
+            Self::HTML(buffer) => writeln!(output, "{}", buffer.finish()),
+            Self::JSON(json_value) => writeln!(output, "{}", json_value.pretty(2)),
             Self::CSV(records) => {
                 let mut builder = csv::WriterBuilder::new();
                 _ = builder.quote_style(csv::QuoteStyle::Always);
@@ -225,6 +226,7 @@ impl TableOutput {
                 for record in records {
                     writer.write_record(&record).expect("Could not write CSV to stdout");
                 }
+                Ok(())
             }
         }
     }

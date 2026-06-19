@@ -18,31 +18,35 @@ use core::error::Error;
 use gumdrop::Options;
 use std::env;
 use std::ffi::OsStr;
+use std::io;
+use std::io::Write;
+use std::io::stdout;
 use std::path::Path;
 use std::process;
 
 // Gumdrop kind of makes showing usage difficult. The only way it works is if you have a --help flag on each command, and then only if it's discovered in `parse_args_or_exit`. And I'm not calling that because I want to be able to supply my own arguments. I would prefer to have a help command that takes an optional command name parameter anyway.
-fn show_usage<Command: Options>(program: &str, selected_command: Option<&str>) {
+fn show_usage<Command: Options>(program: &str, selected_command: Option<&str>, output: &mut impl Write) -> Result<(), io::Error> {
     let sub_commands = Command::command_list();
     match (selected_command, sub_commands) {
-        (None, None) => println!("usage: {program} [ARGUMENTS]"),
-        (None, Some(_)) => println!("usage: {program} [ARGUMENTS] [COMMAND]"),
-        (Some(subcommand), None) => println!("usage: {program} {subcommand} [ARGUMENTS]"),
-        (Some(subcommand), Some(_)) => println!("usage: {program} {subcommand} [ARGUMENTS] [COMMAND]")
+        (None, None) => writeln!(output, "usage: {program} [ARGUMENTS]")?,
+        (None, Some(_)) => writeln!(output, "usage: {program} [ARGUMENTS] [COMMAND]")?,
+        (Some(subcommand), None) => writeln!(output, "usage: {program} {subcommand} [ARGUMENTS]")?,
+        (Some(subcommand), Some(_)) => writeln!(output, "usage: {program} {subcommand} [ARGUMENTS] [COMMAND]")?
     }
-    println!();
+    writeln!(output)?;
     // FUTURE: It would be nice to have some way to control this formatting as well.
     // FUTURE: Also, to be able to tell if the Options have positional, required, or optional arguments so I can change the usage header above.
-    println!("{}", Command::usage());
-    println!();
+    writeln!(output, "{}", Command::usage())?;
+    writeln!(output,)?;
     if let Some(commands) = sub_commands {
-        println!("Available commands:");
-        println!("{commands}")
+        writeln!(output, "Available commands:")?;
+        writeln!(output, "{commands}")?
     }
+    Ok(())
 }
 
 trait DoIt {
-    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(), Box<dyn Error>>;
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>, output: &mut impl Write) -> Result<(), Box<dyn Error>>;
 }
 
 #[derive(Options)]
@@ -63,7 +67,7 @@ pub struct GenerateWords {
 }
 
 impl DoIt for GenerateWords {
-    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(), Box<dyn Error>> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>, output: &mut impl Write) -> Result<(), Box<dyn Error>> {
         let grid_style = if self.no_spans {
             &self.format.with_no_spans()
         } else {
@@ -76,7 +80,7 @@ impl DoIt for GenerateWords {
 
         let language = family.get_language_or_default(language.as_deref())?;
 
-        generate_words(Some(grid_style), language, self.count);
+        generate_words(Some(grid_style), language, self.count, output)?;
 
         Ok(())
     }
@@ -107,7 +111,7 @@ pub struct ValidateWords {
 }
 
 impl DoIt for ValidateWords {
-    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(), Box<dyn Error>> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>, output: &mut impl Write) -> Result<(), Box<dyn Error>> {
         let mut family = family()?;
 
         family.load_language_or_default(language.as_deref())?;
@@ -131,7 +135,8 @@ impl DoIt for ValidateWords {
                            (false, true) => ValidateOption::Trace,
                            (false, false) => ValidateOption::Simple
                        },
-                       &self.format);
+                       &self.format,
+                       output)?;
 
         Ok(())
     }
@@ -155,7 +160,7 @@ pub struct ShowPhonemes {
 }
 
 impl DoIt for ShowPhonemes {
-    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(), Box<dyn Error>> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>, output: &mut impl Write) -> Result<(), Box<dyn Error>> {
         let grid_style = if self.no_spans {
             &self.format.with_no_spans()
         } else {
@@ -168,7 +173,7 @@ impl DoIt for ShowPhonemes {
 
         let language = family.get_language_or_default(language.as_deref())?;
 
-        show_phonemes(Some(grid_style), language, self.table.as_ref());
+        show_phonemes(Some(grid_style), language, self.table.as_ref(), output)?;
 
         Ok(())
     }
@@ -193,7 +198,7 @@ pub struct ShowSpelling {
 }
 
 impl DoIt for ShowSpelling {
-    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(), Box<dyn Error>> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>, output: &mut impl Write) -> Result<(), Box<dyn Error>> {
         let grid_style = if self.no_spans {
             &self.format.with_no_spans()
         } else {
@@ -206,7 +211,7 @@ impl DoIt for ShowSpelling {
 
         let language = family.get_language_or_default(language.as_deref())?;
 
-        show_spelling(Some(grid_style), language, self.columns);
+        show_spelling(Some(grid_style), language, self.columns, output)?;
 
         Ok(())
     }
@@ -239,7 +244,7 @@ pub struct FormatLexicon {
 }
 
 impl DoIt for FormatLexicon {
-    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(), Box<dyn Error>> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>, output: &mut impl Write) -> Result<(), Box<dyn Error>> {
         let grid_style = if self.no_spans {
             &self.format.with_no_spans()
         } else {
@@ -265,7 +270,7 @@ impl DoIt for FormatLexicon {
 
         let word_data = word_data.ok_or("Please specify at least one file to load.")?;
 
-        format_lexicon(grid_style, &self.style, language, &word_data, self.spelling);
+        format_lexicon(grid_style, &self.style, language, &word_data, self.spelling, output)?;
 
         Ok(())
     }
@@ -312,7 +317,7 @@ pub struct Transform {
 }
 
 impl DoIt for Transform {
-    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(), Box<dyn Error>> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>, output: &mut impl Write) -> Result<(), Box<dyn Error>> {
         let mut family = family()?;
 
         let source_language = language.or_else(|| family.default_language_name().map(ToOwned::to_owned)).ok_or(ElbieError::NoDefaultLanguage)?;
@@ -344,7 +349,8 @@ impl DoIt for Transform {
                             (false, true) => TransformationOption::Trace,
                             (false, false) => TransformationOption::Simple
                         },
-                        &self.format);
+                        &self.format,
+                        output)?;
 
         Ok(())
     }
@@ -356,7 +362,7 @@ impl DoIt for Transform {
 pub struct ShowInformation {}
 
 impl DoIt for ShowInformation {
-    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, _: Option<String>) -> Result<(), Box<dyn Error>> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, _: Option<String>, output: &mut impl Write) -> Result<(), Box<dyn Error>> {
         let family = family()?;
 
         let mut languages = family.language_keys();
@@ -369,15 +375,15 @@ impl DoIt for ShowInformation {
                 None
             };
             if default.is_some() {
-                println!("LANGUAGES: (* = default)")
+                writeln!(output, "LANGUAGES: (* = default)")?
             } else {
-                println!("LANGUAGES:");
+                writeln!(output, "LANGUAGES:")?;
             }
             for language in &languages {
                 if Some(language.as_str()) == default {
-                    println!("{language} *")
+                    writeln!(output, "{language} *")?
                 } else {
-                    println!("{language}")
+                    writeln!(output, "{language}")?
                 }
             }
         }
@@ -387,13 +393,13 @@ impl DoIt for ShowInformation {
             transformations.sort();
             if !languages.is_empty() {
                 // need a space
-                println!();
+                writeln!(output)?;
             }
-            println!("TRANSFORMATIONS:");
+            writeln!(output, "TRANSFORMATIONS:")?;
             for (from, to) in transformations {
-                println!("{from} 🡺 {to}");
+                writeln!(output, "{from} 🡺 {to}")?;
                 if let Some(list) = family.transformation_set_contents(&from, &to)? {
-                    println!("  set of {}", list.join(", "))
+                    writeln!(output, "  set of {}", list.join(", "))?
                 }
             }
         }
@@ -414,7 +420,7 @@ pub struct Analyze {
 }
 
 impl DoIt for Analyze {
-    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(), Box<dyn Error>> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>, output: &mut impl Write) -> Result<(), Box<dyn Error>> {
         let mut family = family()?;
 
         let source_language = language.or_else(|| family.default_language_name().map(ToOwned::to_owned)).ok_or(ElbieError::NoDefaultLanguage)?;
@@ -432,7 +438,7 @@ impl DoIt for Analyze {
             word_data.combine_with(data);
         }
 
-        analyze_words(source_language, &word_data);
+        analyze_words(source_language, &word_data, output)?;
 
         Ok(())
     }
@@ -447,30 +453,30 @@ pub struct FamilyShowUsage {
 }
 
 impl DoIt for FamilyShowUsage {
-    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, _: FamilyCreator, _: Option<String>) -> Result<(), Box<dyn Error>> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, _: FamilyCreator, _: Option<String>, output: &mut impl Write) -> Result<(), Box<dyn Error>> {
         let exe_name = env::current_exe().ok().as_deref().and_then(Path::file_name).map(OsStr::display).as_ref().map(ToString::to_string);
         let program = exe_name.as_deref().unwrap_or("elbie");
 
         let selected_command = self.command.as_deref();
         if let Some(command) = selected_command {
             match command {
-                "generate" => show_usage::<GenerateWords>(program, Some(command)),
-                "validate" => show_usage::<ValidateWords>(program, Some(command)),
-                "phonemes" => show_usage::<ShowPhonemes>(program, Some(command)),
-                "spelling" => show_usage::<ShowSpelling>(program, Some(command)),
-                "lexicon" => show_usage::<FormatLexicon>(program, Some(command)),
-                "transform" => show_usage::<Transform>(program, Some(command)),
-                "information" => show_usage::<ShowInformation>(program, Some(command)),
-                "help" => show_usage::<Self>(program, Some(command)),
+                "generate" => show_usage::<GenerateWords>(program, Some(command), output)?,
+                "validate" => show_usage::<ValidateWords>(program, Some(command), output)?,
+                "phonemes" => show_usage::<ShowPhonemes>(program, Some(command), output)?,
+                "spelling" => show_usage::<ShowSpelling>(program, Some(command), output)?,
+                "lexicon" => show_usage::<FormatLexicon>(program, Some(command), output)?,
+                "transform" => show_usage::<Transform>(program, Some(command), output)?,
+                "information" => show_usage::<ShowInformation>(program, Some(command), output)?,
+                "help" => show_usage::<Self>(program, Some(command), output)?,
                 command => {
                     eprintln!("Unknown command '{command}'");
                     eprintln!();
-                    show_usage::<FamilyArguments>(program, None);
+                    show_usage::<FamilyArguments>(program, None, output)?;
                     process::exit(1);
                 }
             }
         } else {
-            show_usage::<FamilyArguments>(program, None);
+            show_usage::<FamilyArguments>(program, None, output)?;
         }
 
         Ok(())
@@ -506,17 +512,17 @@ impl Default for FamilyCommand {
 }
 
 impl DoIt for FamilyCommand {
-    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(), Box<dyn Error>> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>, output: &mut impl Write) -> Result<(), Box<dyn Error>> {
         match self {
-            Self::Generate(command) => command.doit(family, language),
-            Self::Validate(command) => command.doit(family, language),
-            Self::Phonemes(command) => command.doit(family, language),
-            Self::Spelling(command) => command.doit(family, language),
-            Self::Lexicon(command) => command.doit(family, language),
-            Self::Transform(command) => command.doit(family, language),
-            Self::Information(command) => command.doit(family, language),
-            Self::Analyze(command) => command.doit(family, language),
-            Self::Help(command) => command.doit(family, language)
+            Self::Generate(command) => command.doit(family, language, output),
+            Self::Validate(command) => command.doit(family, language, output),
+            Self::Phonemes(command) => command.doit(family, language, output),
+            Self::Spelling(command) => command.doit(family, language, output),
+            Self::Lexicon(command) => command.doit(family, language, output),
+            Self::Transform(command) => command.doit(family, language, output),
+            Self::Information(command) => command.doit(family, language, output),
+            Self::Analyze(command) => command.doit(family, language, output),
+            Self::Help(command) => command.doit(family, language, output)
         }
     }
 }
@@ -547,28 +553,28 @@ pub struct LanguageShowUsage {
 }
 
 impl DoIt for LanguageShowUsage {
-    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, _: FamilyCreator, _: Option<String>) -> Result<(), Box<dyn Error>> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, _: FamilyCreator, _: Option<String>, output: &mut impl Write) -> Result<(), Box<dyn Error>> {
         let exe_name = env::current_exe().ok().as_deref().and_then(Path::file_name).map(OsStr::display).as_ref().map(ToString::to_string);
         let program = exe_name.as_deref().unwrap_or("elbie");
 
         let selected_command = self.command.as_deref();
         if let Some(command) = selected_command {
             match command {
-                "generate" => show_usage::<GenerateWords>(program, Some(command)),
-                "validate" => show_usage::<ValidateWords>(program, Some(command)),
-                "phonemes" => show_usage::<ShowPhonemes>(program, Some(command)),
-                "spelling" => show_usage::<ShowSpelling>(program, Some(command)),
-                "lexicon" => show_usage::<FormatLexicon>(program, Some(command)),
-                "help" => show_usage::<Self>(program, Some(command)),
+                "generate" => show_usage::<GenerateWords>(program, Some(command), output)?,
+                "validate" => show_usage::<ValidateWords>(program, Some(command), output)?,
+                "phonemes" => show_usage::<ShowPhonemes>(program, Some(command), output)?,
+                "spelling" => show_usage::<ShowSpelling>(program, Some(command), output)?,
+                "lexicon" => show_usage::<FormatLexicon>(program, Some(command), output)?,
+                "help" => show_usage::<Self>(program, Some(command), output)?,
                 command => {
                     eprintln!("Unknown command '{command}'");
                     eprintln!();
-                    show_usage::<LanguageArguments>(program, None);
+                    show_usage::<LanguageArguments>(program, None, output)?;
                     process::exit(1);
                 }
             }
         } else {
-            show_usage::<LanguageArguments>(program, None);
+            show_usage::<LanguageArguments>(program, None, output)?;
         }
 
         Ok(())
@@ -598,14 +604,14 @@ impl Default for LanguageCommand {
 }
 
 impl DoIt for LanguageCommand {
-    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>) -> Result<(), Box<dyn Error>> {
+    fn doit<FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(&self, family: FamilyCreator, language: Option<String>, output: &mut impl Write) -> Result<(), Box<dyn Error>> {
         match self {
-            Self::Generate(command) => command.doit(family, language),
-            Self::Validate(command) => command.doit(family, language),
-            Self::Phonemes(command) => command.doit(family, language),
-            Self::Spelling(command) => command.doit(family, language),
-            Self::Lexicon(command) => command.doit(family, language),
-            Self::Help(command) => command.doit(family, language)
+            Self::Generate(command) => command.doit(family, language, output),
+            Self::Validate(command) => command.doit(family, language, output),
+            Self::Phonemes(command) => command.doit(family, language, output),
+            Self::Spelling(command) => command.doit(family, language, output),
+            Self::Lexicon(command) => command.doit(family, language, output),
+            Self::Help(command) => command.doit(family, language, output)
         }
     }
 }
@@ -622,24 +628,33 @@ pub struct LanguageArguments {
     command: Option<LanguageCommand>
 }
 
-fn run_command<FamilyCreator: FnOnce() -> Result<Family, ElbieError>, Command: DoIt + Default>(comment: Option<String>, language: Option<String>, command: Option<Command>, family: FamilyCreator) {
+fn run_command<FamilyCreator: FnOnce() -> Result<Family, ElbieError>, Command: DoIt + Default>(comment: Option<String>, language: Option<String>, command: Option<Command>, family: FamilyCreator,
+                                                                                               output: &mut impl Write)
+                                                                                               -> Result<(), io::Error> {
     if let Some(comment) = comment {
-        println!("<!-- Content auto-generated by {comment} -->")
+        writeln!(output, "<!-- Content auto-generated by {comment} -->")?
     }
 
-    let result = command.unwrap_or_default().doit(family, language);
+    let result = command.unwrap_or_default().doit(family, language, output);
 
     if let Err(err) = result {
         eprintln!("!!! While running command: {err}");
         process::exit(1)
     }
+    Ok(())
 }
 
-/// The first argument (program name) should not be included.
+/**
+The first argument (program name) should not be included.
+
+# Panics
+
+Panics if there's an error writing to stdout.
+*/
 pub fn run_family<S: AsRef<str>, FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(args: &[S], family: FamilyCreator) {
     match FamilyArguments::parse_args_default(args) {
         Ok(arguments) => {
-            run_command(arguments.creator.or_else(|| arguments.comment.then(|| "Elbie".to_owned())), arguments.language, arguments.command, family);
+            run_command(arguments.creator.or_else(|| arguments.comment.then(|| "Elbie".to_owned())), arguments.language, arguments.command, family, &mut stdout()).expect("Error writing to stdout");
         },
         Err(err) => {
             eprintln!("{err}");
@@ -648,15 +663,25 @@ pub fn run_family<S: AsRef<str>, FamilyCreator: FnOnce() -> Result<Family, Elbie
     }
 }
 
-/// Use this to run a command line that only works with one language. The arguments are the same as the usual, except that there is no language option, and the transform command is not available.
+/**
+Use this to run a command line that only works with one language. The arguments are the same as the usual, except that there is no language option, and the transform command is not available.
+
+# Panics
+
+Panics if there's an error writing to stdout.
+*/
 pub fn run_language<S: AsRef<str>, Creator: FnOnce() -> Result<Language, ElbieError> + 'static>(args: &[S], name: &'static str, language: Creator) {
     match LanguageArguments::parse_args_default(args) {
         Ok(arguments) => {
-            run_command(arguments.creator.or_else(|| arguments.comment.then(|| "Elbie".to_owned())), Some(name.to_owned()), arguments.command, move || {
-                let mut family = Family::default();
-                family.default_language(name, language)?;
-                Ok(family)
-            });
+            run_command(arguments.creator.or_else(|| arguments.comment.then(|| "Elbie".to_owned())),
+                        Some(name.to_owned()),
+                        arguments.command,
+                        move || {
+                            let mut family = Family::default();
+                            family.default_language(name, language)?;
+                            Ok(family)
+                        },
+                        &mut stdout()).expect("Error writing to stdout");
         },
         Err(err) => {
             eprintln!("{err}");

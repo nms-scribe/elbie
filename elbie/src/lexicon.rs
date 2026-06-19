@@ -10,6 +10,8 @@ use crate::word::Word;
 use core::fmt::Write as _;
 use core::str::FromStr;
 use html_builder::Html5 as _;
+use std::io;
+use std::io::Write;
 
 pub(crate) enum LexiconStyle {
     Table,
@@ -234,28 +236,26 @@ impl LexiconList {
         table.into_output(style)
     }
 
-    pub(crate) fn print_to_stdout(self, style: &Format) {
+    pub(crate) fn print(self, style: &Format, output: &mut impl Write) -> Result<(), io::Error> {
         match style {
             // NOTE: The Plain, Terminal, and Markdown lexicons should be in paragraph format, so I'm not using a TableWriter for those.
             // (The HTML output can be styled to look like paragraph format if you really want it that way)
             Format::Plain | Format::Terminal { .. } => {
                 let mut result = String::new();
                 self.into_string::<PlainLexiconWriter>(&mut result);
-                print!("{result}")
+                write!(output, "{result}")
             },
             Format::Markdown => {
                 let mut result = String::new();
                 self.into_string::<MarkdownLexiconWriter>(&mut result);
-                print!("{result}")
+                write!(output, "{result}")
             },
             Format::HTML { .. } => {
                 let mut result = String::new();
                 self.into_string::<HTMLLexiconWriter>(&mut result);
-                print!("{result}")
+                write!(output, "{result}")
             },
-            Format::JSON | Format::CSV => {
-                self.into_table(style).print_to_stdout();
-            }
+            Format::JSON | Format::CSV => self.into_table(style).print(output)
         }
     }
 }
@@ -280,14 +280,12 @@ impl Lexicon {
         }
     }
 
-    pub(crate) fn print_to_stdout(self, style: &Format) {
+    pub(crate) fn print(self, style: &Format, output: &mut impl Write) -> Result<(), io::Error> {
         match self {
-            Self::List(lexicon_list) => {
-                lexicon_list.print_to_stdout(style);
-            },
+            Self::List(lexicon_list) => lexicon_list.print(style, output),
             Self::Table(lexicon_table) => {
-                let output = lexicon_table.into_output(style);
-                output.print_to_stdout();
+                let result = lexicon_table.into_output(style);
+                result.print(output)
             }
         }
     }
