@@ -652,10 +652,12 @@ The first argument (program name) should not be included.
 Panics if there's an error writing to stdout.
 */
 pub fn run_family<S: AsRef<str>, FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(args: &[S], family: FamilyCreator) {
+    run_family_with_output(args, family, &mut stdout()).expect("Error writing to stdout")
+}
+
+pub fn run_family_with_output<S: AsRef<str>, FamilyCreator: FnOnce() -> Result<Family, ElbieError>>(args: &[S], family: FamilyCreator, output: &mut io::Stdout) -> Result<(), io::Error> {
     match FamilyArguments::parse_args_default(args) {
-        Ok(arguments) => {
-            run_command(arguments.creator.or_else(|| arguments.comment.then(|| "Elbie".to_owned())), arguments.language, arguments.command, family, &mut stdout()).expect("Error writing to stdout");
-        },
+        Ok(arguments) => run_command(arguments.creator.or_else(|| arguments.comment.then(|| "Elbie".to_owned())), arguments.language, arguments.command, family, output),
         Err(err) => {
             eprintln!("{err}");
             process::exit(1)
@@ -671,18 +673,21 @@ Use this to run a command line that only works with one language. The arguments 
 Panics if there's an error writing to stdout.
 */
 pub fn run_language<S: AsRef<str>, Creator: FnOnce() -> Result<Language, ElbieError> + 'static>(args: &[S], name: &'static str, language: Creator) {
+    run_language_with_output(args, name, language, &mut stdout()).expect("Error writing to stdout");
+}
+
+fn run_language_with_output<S: AsRef<str>, Creator: FnOnce() -> Result<Language, ElbieError> + 'static>(args: &[S], name: &'static str, language: Creator, output: &mut io::Stdout)
+                                                                                                        -> Result<(), io::Error> {
     match LanguageArguments::parse_args_default(args) {
-        Ok(arguments) => {
-            run_command(arguments.creator.or_else(|| arguments.comment.then(|| "Elbie".to_owned())),
-                        Some(name.to_owned()),
-                        arguments.command,
-                        move || {
-                            let mut family = Family::default();
-                            family.default_language(name, language)?;
-                            Ok(family)
-                        },
-                        &mut stdout()).expect("Error writing to stdout");
-        },
+        Ok(arguments) => run_command(arguments.creator.or_else(|| arguments.comment.then(|| "Elbie".to_owned())),
+                                     Some(name.to_owned()),
+                                     arguments.command,
+                                     move || {
+                                         let mut family = Family::default();
+                                         family.default_language(name, language)?;
+                                         Ok(family)
+                                     },
+                                     output),
         Err(err) => {
             eprintln!("{err}");
             process::exit(1)
