@@ -97,6 +97,10 @@ impl WordTable {
                   entries })
     }
 
+    pub(crate) const fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
     pub(crate) fn entries_mut(&mut self) -> impl Iterator<Item = &mut WordTableEntry> {
         self.entries.iter_mut()
     }

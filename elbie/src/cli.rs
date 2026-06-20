@@ -128,6 +128,10 @@ impl DoIt for ValidateWords {
             word_data.combine_with(data);
         }
 
+        if word_data.is_empty() {
+            return Err("Please specify words to validate.".into());
+        }
+
         validate_words(language,
                        word_data,
                        &match (self.explain, self.trace) {
@@ -340,6 +344,10 @@ impl DoIt for Transform {
             word_data.combine_with(data);
         }
 
+        if word_data.is_empty() {
+            return Err("Please specify words to transform.".into());
+        }
+
         transform_words(source_language,
                         &transformations,
                         word_data,
@@ -438,6 +446,10 @@ impl DoIt for Analyze {
         for file in &self.file {
             let data = WordTable::read(file)?;
             word_data.combine_with(data);
+        }
+
+        if word_data.is_empty() {
+            return Err("Please specify words to analyze.".into());
         }
 
         analyze_words(source_language, &word_data, output)?;
