@@ -325,6 +325,14 @@ impl Rule {
         // sort splices first, to make finding the overlaps a little easier. (We'll need them sorted anyway.)
         splices.sort_by_key(|s| s.start_index);
 
+        // Sometimes, there's a rule that would change a phoneme in the exact same way in two different situations.
+        // Example: /s/ becomes /z/ next to any voiced consonant, so VOICED+/s/ > VOICED+/z/ and /s/+VOICED > /z/+VOICED.
+        // Overlaps can be avoided by splitting the rule into two rules, but that could actually cause a problem, since
+        // now, /s/ + /s/ + VOICED could become /z/ + /z/ + VOICED, even though the first /s/ wasn't covered by the rule.
+        // There are still ways around it (a temporary phoneme might work).
+        // However, if I deduplicate the splices before checking for overlaps, then suddenly the rule above will work.
+        splices.dedup_by(|a, b| b.start_index == a.start_index && b.length == a.length && b.replace == a.replace);
+
         // now find all overlaps.
         for window in splices.windows(2) {
             // Using if..let to avoid having to index the element. This should always be true.
