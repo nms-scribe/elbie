@@ -172,6 +172,10 @@ impl Inventory {
 
         Ok(())
     }
+
+    pub(crate) fn has_phoneme(&self, phoneme: &Rc<Phoneme>) -> bool {
+        self.phonemes.get(phoneme.name).is_some_and(|p| p == phoneme)
+    }
 }
 
 impl InventoryLoader for Inventory {

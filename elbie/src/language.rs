@@ -307,6 +307,13 @@ impl Language {
     }
 
     pub(crate) fn check_word(&self, word: &Word, trace: Option<&ValidationTraceCallback>) -> Result<Result<Vec<ValidWordElement>, ()>, ElbieError> {
+        // first, verify that the phonemes are valid for the language. In theory this should be caught by validation, but this should be
+        // an actual error.
+        for phoneme in word.phonemes() {
+            if !self.inventory.has_phoneme(phoneme) {
+                return Err(ElbieError::UnknownPhoneme(phoneme.name));
+            }
+        }
         self.patterns().validate(self, word, trace)
     }
 
