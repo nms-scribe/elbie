@@ -17,9 +17,7 @@ use crate::word_table::WordTable;
 use core::error::Error;
 use core::num::ParseIntError;
 use core::str::FromStr;
-use std::io;
 use std::io::Write;
-use std::process;
 
 pub(crate) enum ValidateOption {
     Simple,
@@ -35,7 +33,7 @@ pub(crate) enum TransformationOption {
     ExplainAndTrace
 }
 
-pub(crate) fn generate_words(grid_style: Option<&Format>, language: &Language, count: usize, output: &mut impl Write) -> Result<(), io::Error> {
+pub(crate) fn generate_words(grid_style: Option<&Format>, language: &Language, count: usize, output: &mut impl Write) -> Result<(), Box<dyn Error>> {
     let mut grid = Grid::new(TableClass::ElbieWords, format!("Generated {count} words for {}", language.name()));
 
     // FUTURE: Should I have a header?
@@ -43,28 +41,22 @@ pub(crate) fn generate_words(grid_style: Option<&Format>, language: &Language, c
     for _ in 0..count {
         let mut row = GridRow::new(TRBodyClass::BodyRow);
 
-        match language.make_word() {
-            Ok(word) => {
-                for orthography in 0..language.orthographies().len() {
-                    row.push_cell(Cell::content(language.spell_word(&word, orthography), None));
-                }
-                row.push_cell(Cell::content(format!("{word}"), None));
+        let word = language.make_word()?;
 
-                // the following is a sanity check. It might catch some logic errors, but really it's just GIGO.
-                if let Err(err) = language.check_word(&word, None /* eat message, no need to report */) {
-                    eprintln!("-- !!!! invalid word: {err}");
-                    process::exit(1);
-                }
-            },
-            Err(err) => {
-                eprintln!("!!! Couldn't make word: {err}");
-                process::exit(1);
-            }
+        for orthography in 0..language.orthographies().len() {
+            row.push_cell(Cell::content(language.spell_word(&word, orthography), None));
+        }
+        row.push_cell(Cell::content(format!("{word}"), None));
+
+        // the following is a sanity check. It might catch some logic errors, but really it's just GIGO.
+        if matches!(language.check_word(&word, None /* eat message, no need to report */)?, Err(())) {
+            return Err(format!("Generated word {word} was invalid").into());
         }
 
         grid.push_body_row(row);
     }
-    grid.into_output(grid_style.unwrap_or(&Format::Plain)).print(output)
+    grid.into_output(grid_style.unwrap_or(&Format::Plain)).print(output)?;
+    Ok(())
 }
 
 pub(crate) fn validate_word(language: &Language, word: &Word, explain: bool, trace_cb: Option<&ValidationTraceCallback>) -> Result<Result<(), ()>, ElbieError> {
@@ -83,7 +75,7 @@ pub(crate) fn validate_word(language: &Language, word: &Word, explain: bool, tra
     }
 }
 
-pub(crate) fn validate_words(language: &Language, mut words: WordTable, option: &ValidateOption, output_format: &Format, output: &mut impl Write) -> Result<(), io::Error> {
+pub(crate) fn validate_words(language: &Language, mut words: WordTable, option: &ValidateOption, output_format: &Format, output: &mut impl Write) -> Result<(), Box<dyn Error>> {
     const VALIDATED_ATTR: &str = "Validated";
 
     let mut invalid_count = 0;
@@ -100,7 +92,7 @@ pub(crate) fn validate_words(language: &Language, mut words: WordTable, option: 
     }
     words.add_attribute(VALIDATED_ATTR.to_owned());
 
-    for entry in &mut words.entries_mut() {
+    for (row, entry) in &mut words.entries_mut().enumerate() {
         match language.read_word(entry.word()) {
             Ok(word) => {
                 // Make sure word is in phonemic format
@@ -116,15 +108,11 @@ pub(crate) fn validate_words(language: &Language, mut words: WordTable, option: 
                         entry.set_attribute(VALIDATED_ATTR.to_owned(), "!! Invalid".to_owned());
                         invalid_count += 1;
                     },
-                    Err(err) => {
-                        eprintln!("!!!! Can't validate word: {err}");
-                        process::exit(1)
-                    }
+                    Err(err) => return Err(format!("Can't validate word at row {row}: {err}").into())
                 }
             },
             Err(err) => {
-                eprintln!("!!!! Can't read word: {err}");
-                process::exit(1);
+                return Err(format!("Can't read word at row {row}: {err}").into());
             }
         }
     }
@@ -132,71 +120,49 @@ pub(crate) fn validate_words(language: &Language, mut words: WordTable, option: 
     words.print(output_format, output)?;
 
     if invalid_count > 0 {
-        eprintln!("!!!! {invalid_count} invalid words found");
-        process::exit(1);
+        return Err(format!("{invalid_count} invalid words found").into());
     }
 
     Ok(())
 }
 
-pub(crate) fn show_phonemes(grid_style: Option<&Format>, language: &Language, table: Option<&String>, output: &mut impl Write) -> Result<(), io::Error> {
+pub(crate) fn show_phonemes(grid_style: Option<&Format>, language: &Language, table: Option<&String>, output: &mut impl Write) -> Result<(), Box<dyn Error>> {
     let style = grid_style.unwrap_or(&Format::Terminal { spans: true });
-    let result = match table {
-        Some(table) => match language.build_phoneme_table(table) {
-            Ok(Some(grid)) => {
+    if let Some(table) = table {
+        match language.build_phoneme_table(table)? {
+            Some(grid) => {
                 grid.into_output(style).print(output)?;
-                Ok(())
             },
-            Ok(None) => {
+            None => {
                 eprintln!("No phoneme table named {table}. Try singular or lower-case?");
-                Ok(())
-            },
-            Err(err) => Err(err)
-        },
-        None => match language.build_all_phoneme_tables() {
-            Ok(grids) => {
-                for grid in grids {
-                    writeln!(output, "{}", grid.1.caption())?;
-                    grid.1.into_output(style).print(output)?;
-                    writeln!(output)?;
-                }
-
-                Ok(())
-            },
-            Err(err) => Err(err)
+            }
         }
-    };
-
-    if let Err(err) = result {
-        eprintln!("!!! Couldn't display phonemes: {err}");
-        process::exit(1)
+    } else {
+        let grids = language.build_all_phoneme_tables()?;
+        for grid in grids {
+            writeln!(output, "{}", grid.1.caption())?;
+            grid.1.into_output(style).print(output)?;
+            writeln!(output)?;
+        }
     }
 
     Ok(())
 }
 
-pub(crate) fn show_spelling(grid_style: Option<&Format>, language: &Language, columns: usize, output: &mut impl Write) -> Result<(), io::Error> {
-    match language.display_spelling(columns) {
-        Ok(grid) => grid.into_output(grid_style.unwrap_or(&Format::Terminal { spans: false })).print(output),
-        Err(err) => {
-            eprintln!("!!! Couldn't display spelling: {err}");
-            process::exit(1)
-        }
-    }
+pub(crate) fn show_spelling(grid_style: Option<&Format>, language: &Language, columns: usize, output: &mut impl Write) -> Result<(), Box<dyn Error>> {
+    let grid = language.display_spelling(columns)?;
+    grid.into_output(grid_style.unwrap_or(&Format::Terminal { spans: false })).print(output)?;
+    Ok(())
 }
 
-pub(crate) fn format_lexicon(format: &Format, style: &LexiconStyle, language: &Language, path: &WordTable, ortho_index: usize, output: &mut impl Write) -> Result<(), io::Error> {
+pub(crate) fn format_lexicon(format: &Format, style: &LexiconStyle, language: &Language, path: &WordTable, ortho_index: usize, output: &mut impl Write) -> Result<(), Box<dyn Error>> {
     if ortho_index >= language.orthographies().len() {
         panic!("Language only has {} orthographies.", language.orthographies().len())
     }
 
-    match language.load_lexicon(path, ortho_index, style) {
-        Ok(lexicon) => lexicon.print(format, output),
-        Err(err) => {
-            eprintln!("!!! Couldn't process lexicon: {err}");
-            process::exit(1)
-        }
-    }
+    let lexicon = language.load_lexicon(path, ortho_index, style)?;
+    lexicon.print(format, output)?;
+    Ok(())
 }
 
 pub(crate) fn transform_and_validate_word(word: &Word, transformation: &Transformation, validator: Option<&Language>, explain: bool, transformation_trace_cb: Option<&TransformationTraceCallback>,
@@ -254,7 +220,7 @@ impl OrthographyIndex {
 /// replace_word: if this is true, and there is only one transformation, the original word will be moved into a new attribute, and the transformation creates the word for the word entry. Otherwise, each transformation is added as an attribute and the original word is kept. If there is not exactly one transformation, replace_word will be set to false no matter what the input value is.
 pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransformation], mut words: WordTable, replace_word: bool, spellings: &[OrthographyIndex], option: &TransformationOption,
                               output_format: &Format, output: &mut impl Write)
-                              -> Result<(), Box<dyn Error>> {
+                              -> Result<bool, Box<dyn Error>> {
     const ERROR_ATTR: &str = "Error";
 
     let mut invalid_found = false;
@@ -346,8 +312,7 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
                         },
                         Err(err) => {
                             // these should be errors in programming the transformation and validator, not just an invalid word.
-                            eprintln!("!!! Error transforming and validating word {word}: {err}");
-                            process::exit(1)
+                            return Err(format!("Error transforming and validating word {word}: {err}").into());
                         }
                     }
                 }
@@ -379,32 +344,24 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
 
     if invalid_found {
         eprintln!("Look for errors in Error column.");
-        process::exit(1)
+        Ok(false)
+    } else {
+        Ok(true)
     }
-
-    Ok(())
 }
 
-pub(crate) fn analyze_words(from: &Language, words: &WordTable, output: &mut impl Write) -> Result<(), io::Error> {
+pub(crate) fn analyze_words(from: &Language, words: &WordTable, output: &mut impl Write) -> Result<(), Box<dyn Error>> {
     // TODO: Should be able to set up custom analysis stuff on the language itself.
     let config = AnalysisConfig::from_language(from);
 
-    if let Err(err) = config.validate(from) {
-        eprintln!("{err}");
-        process::exit(1)
-    }
+    config.validate(from)?;
 
     // TODO: Analyze and build a vector of clusters, along with: cluster_set, length, index in word (by cluster set), if it's final, and if it's initial.
     // - a cluster is built if the phoneme is in the cluster set. If it's not, the cluster ends and a new cluster begins.
 
-    let analysis = match config.analyze(words) {
-        Ok(analysis) => analysis,
-        Err(err) => {
-            eprintln!("{err}");
-            process::exit(1);
-        }
-    };
+    let analysis = config.analyze(words)?;
 
-    writeln!(output, "{analysis}")
-    // TODO: Display the analysis somehow
+    writeln!(output, "{analysis}")?;
+
+    Ok(())
 }

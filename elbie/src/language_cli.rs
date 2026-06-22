@@ -9,6 +9,7 @@ use crate::format::Format;
 use crate::language::Language;
 use crate::lexicon::LexiconStyle;
 use crate::word_table::WordTable;
+use core::error::Error;
 use std::env;
 use std::ffi::OsStr;
 use std::io;
@@ -155,7 +156,7 @@ pub(crate) fn show_usage(program: &str, output: &mut impl Write) -> Result<(), i
     writeln!(output, "      display this information.")
 }
 
-pub fn run<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Args, language: Result<Language, ElbieError>, output: &mut impl Write) -> Result<(), io::Error> {
+pub fn run<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Args, language: Result<Language, ElbieError>, output: &mut impl Write) -> Result<(), Box<dyn Error>> {
     let arguments = parse_args(&mut args.skip(1));
 
     if let Some(comment) = arguments.comment {
@@ -184,7 +185,8 @@ pub fn run<ArgItem: AsRef<str>, Args: Iterator<Item = ArgItem>>(args: &mut Args,
                 Command::ShowUsage => {
                     let exe_name = env::current_exe().ok().as_deref().and_then(Path::file_name).map(OsStr::display).as_ref().map(ToString::to_string);
                     let program = exe_name.as_deref().unwrap_or_else(|| language.name());
-                    show_usage(program, output)
+                    show_usage(program, output)?;
+                    Ok(())
                 }
             }
         },
