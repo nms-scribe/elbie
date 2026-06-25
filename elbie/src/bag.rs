@@ -124,7 +124,11 @@ impl<ItemType: Clone + Ord> Bag<ItemType> {
         self.0.choose(rng)
     }
 
-    pub(crate) fn list(&self) -> Vec<ItemType> {
+    pub(crate) fn items(&self) -> &[ItemType] {
+        &self.0
+    }
+
+    pub(crate) fn to_vec(&self) -> Vec<ItemType> {
         self.0.clone()
     }
 

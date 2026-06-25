@@ -343,7 +343,7 @@ pub(crate) fn transform_words(from: &Language, transformations: &[PreparedTransf
     words.print(output_format, output)?;
 
     if invalid_found {
-        eprintln!("Look for errors in Error column.");
+        eprintln!("!!! Look for errors in Error column.");
         Ok(false)
     } else {
         Ok(true)

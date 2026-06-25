@@ -175,6 +175,10 @@ impl Language {
         self.add_phoneme_with_spelling_behavior(phoneme, behaviors, classes)
     }
 
+    pub fn get_phonemes_in_set(&self, set: &'static str) -> Result<&[Rc<Phoneme>], ElbieError> {
+        Ok(self.inventory.get_set(set)?.items())
+    }
+
     /// # Panics
     /// Panics if requested orthography index is out of range
     pub(crate) fn spell_phoneme(&self, phoneme: &Rc<Phoneme>, orthography: usize, result: &mut String, next: Option<&mut Peekable<Iter<Rc<Phoneme>>>>) {
@@ -377,8 +381,8 @@ impl Language {
     }
 
     pub(crate) fn build_phoneme_table(&self, table_name: &String) -> Result<Option<Grid>, ElbieError> {
+        // FUTURE: Make that a constant
         if table_name == "uncategorized" {
-            // FUTURE: Make that a constant
             // we need to build all of the tables to find the uncategorized phonemes
             let all_tables = self.build_all_phoneme_tables()?;
             Ok(all_tables.into_iter().find_map(|(id, grid)| {
@@ -401,7 +405,7 @@ impl Language {
 
     pub(crate) fn display_spelling(&self, columns: usize) -> Result<Grid, ElbieError> {
         let phonemes: Bag<Rc<Phoneme>> = self.inventory.get_set(PHONEME)?.clone();
-        let phonemes = phonemes.list();
+        let phonemes = phonemes.to_vec();
 
         let mut grid = Grid::new(TableClass::ElbieOrthography, format!("Spelling for {}", self.name));
 
