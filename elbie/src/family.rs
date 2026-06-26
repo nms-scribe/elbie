@@ -222,6 +222,18 @@ impl Family {
         Ok((transformed, validated))
     }
 
+    pub fn validate_word(&mut self, word: &str, source: &str) -> Result<(Word, bool), ElbieError> {
+        self.load_language(source)?;
+        let source = self.get_language(source)?;
+
+        // override the value of replace_word, so we don't ever do that again
+        let word = source.read_word(word)?;
+
+        let validated = source.check_word(&word, None)?.is_ok();
+
+        Ok((word, validated))
+    }
+
     pub fn spell_word(&mut self, word: &str, source: &str, orthography: usize) -> Result<String, ElbieError> {
         self.load_language(source)?;
         let language = self.get_language(source)?;
